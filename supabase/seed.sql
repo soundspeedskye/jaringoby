@@ -1,0 +1,4 @@
+-- Production holiday rows are intentionally not hard-coded in the repository.
+-- Load an officially published Korean holiday dataset into
+-- holiday_calendar_versions / korean_holidays before creating challenges.
+-- Database tests create their own clearly-labelled deterministic fixture.
