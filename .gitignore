@@ -1,0 +1,58 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editor and local tool state
+.idea/
+*.swp
+*.swo
+*~
+**/.claude/
+
+# Local environment and credentials
+**/.env
+**/.env.*
+!**/.env.example
+*.jks
+*.keystore
+*.p8
+*.p12
+*.pem
+*.key
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+
+# Dependencies
+**/node_modules/
+.pnpm-store/
+.yarn/cache/
+
+# Logs and caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+**/.cache/
+**/.eslintcache
+**/*.tsbuildinfo
+**/.metro-health-check*
+
+# Expo and JavaScript build output
+**/.expo/
+**/dist/
+**/web-build/
+**/coverage/
+**/expo-env.d.ts
+
+# Expo prebuild output
+mobile/ios/
+mobile/android/
+
+# Local screenshots and QA artifacts
+mobile/artifacts/
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+supabase/volumes/
