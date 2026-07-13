@@ -1,0 +1,410 @@
+<div id="jaringoby-glass-sheet">
+  <style>
+    #jaringoby-glass-sheet {
+      --cream: #FDF6E3;
+      --green: #2F715D;
+      --green-soft: #6D9A88;
+      --yellow: #F0B92E;
+      --coral: #E98762;
+      --ink: #343128;
+      --muted: #817C71;
+      --line: rgba(106, 98, 78, 0.16);
+      width: 100%;
+      color: var(--ink);
+      font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #jaringoby-glass-sheet * { box-sizing: border-box; }
+    #jaringoby-glass-sheet .phone {
+      position: relative;
+      width: min(100%, 420px);
+      margin-inline: auto;
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+      border-radius: 42px;
+      background:
+        radial-gradient(circle at 8% 70%, rgba(233, 135, 98, 0.19), transparent 27%),
+        radial-gradient(circle at 92% 78%, rgba(47, 113, 93, 0.17), transparent 26%),
+        var(--cream);
+      box-shadow: 0 22px 54px color-mix(in srgb, var(--ink) 14%, transparent);
+    }
+    #jaringoby-glass-sheet .phone::before,
+    #jaringoby-glass-sheet .phone::after {
+      position: absolute;
+      z-index: 0;
+      border-radius: 50%;
+      filter: blur(34px);
+      content: "";
+      pointer-events: none;
+    }
+    #jaringoby-glass-sheet .phone::before {
+      top: 410px;
+      left: -42px;
+      width: 150px;
+      height: 150px;
+      background: rgba(240, 185, 46, 0.25);
+    }
+    #jaringoby-glass-sheet .phone::after {
+      right: -38px;
+      bottom: 90px;
+      width: 170px;
+      height: 170px;
+      background: rgba(47, 113, 93, 0.19);
+    }
+    #jaringoby-glass-sheet .status-bar {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 19px 31px 13px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .status-dots {
+      display: flex;
+      gap: 7px;
+    }
+    #jaringoby-glass-sheet .status-dots i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+    #jaringoby-glass-sheet .hero {
+      position: relative;
+      z-index: 1;
+      margin: 0 20px;
+      padding: 24px 24px 43px;
+      border-radius: 29px;
+      background: var(--green);
+      color: var(--cream);
+      box-shadow: 0 13px 28px rgba(28, 69, 56, 0.2);
+    }
+    #jaringoby-glass-sheet .hero-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+    }
+    #jaringoby-glass-sheet .hero h3 {
+      margin: 12px 0 23px;
+      font-size: 27px;
+      font-weight: 500;
+      letter-spacing: -0.035em;
+    }
+    #jaringoby-glass-sheet .hero-main {
+      display: grid;
+      grid-template-columns: 136px minmax(0, 1fr);
+      gap: 21px;
+      align-items: center;
+    }
+    #jaringoby-glass-sheet .ring {
+      display: grid;
+      place-items: center;
+      width: 132px;
+      height: 132px;
+      border-radius: 50%;
+      background: conic-gradient(var(--yellow) 0 40%, var(--green-soft) 40% 100%);
+    }
+    #jaringoby-glass-sheet .ring-inner {
+      display: grid;
+      place-items: center;
+      width: 94px;
+      height: 94px;
+      border-radius: 50%;
+      background: var(--green);
+      text-align: center;
+    }
+    #jaringoby-glass-sheet .ring-inner strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 17px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .ring-inner span { font-size: 13px; }
+    #jaringoby-glass-sheet .limit-copy { min-width: 0; }
+    #jaringoby-glass-sheet .join {
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .limit-copy strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 28px;
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      white-space: nowrap;
+    }
+    #jaringoby-glass-sheet .caption {
+      font-size: 13px;
+      color: color-mix(in srgb, var(--cream) 82%, transparent);
+    }
+    #jaringoby-glass-sheet .base {
+      display: inline-flex;
+      margin-top: 11px;
+      padding: 5px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      font-size: 11px;
+    }
+    #jaringoby-glass-sheet .sheet {
+      position: relative;
+      z-index: 2;
+      margin-top: -23px;
+      padding: 11px 26px 17px;
+      border: 1px solid rgba(255, 255, 255, 0.68);
+      border-bottom: 0;
+      border-radius: 34px 34px 0 0;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.64), rgba(253, 246, 227, 0.43)),
+        rgba(253, 246, 227, 0.3);
+      box-shadow:
+        0 -18px 45px rgba(64, 57, 43, 0.13),
+        inset 0 1px 0 rgba(255, 255, 255, 0.88),
+        inset 1px 0 0 rgba(255, 255, 255, 0.42);
+      backdrop-filter: blur(26px) saturate(145%);
+      -webkit-backdrop-filter: blur(26px) saturate(145%);
+    }
+    #jaringoby-glass-sheet .sheet::before {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 76%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.96), transparent);
+      content: "";
+      transform: translateX(-50%);
+    }
+    #jaringoby-glass-sheet .handle {
+      width: 38px;
+      height: 5px;
+      margin: 0 auto 14px;
+      border-radius: 999px;
+      background: rgba(52, 49, 40, 0.2);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.66);
+    }
+    #jaringoby-glass-sheet .calculation {
+      padding: 13px 15px 13px 17px;
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-left: 4px solid var(--coral);
+      border-radius: 0 16px 16px 0;
+      background: rgba(255, 255, 255, 0.36);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+    }
+    #jaringoby-glass-sheet .calculation b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .calculation p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    #jaringoby-glass-sheet .members-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 21px 0 4px;
+    }
+    #jaringoby-glass-sheet .members-head h3 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .members-head span {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    #jaringoby-glass-sheet .member {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr) auto;
+      gap: 13px;
+      align-items: center;
+      min-height: 78px;
+      border-bottom: 1px solid var(--line);
+    }
+    #jaringoby-glass-sheet .member:last-child { border-bottom: 0; }
+    #jaringoby-glass-sheet .avatar {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border: 1px solid rgba(255, 255, 255, 0.74);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.42);
+      box-shadow:
+        0 5px 12px rgba(65, 57, 42, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.78);
+      font-size: 21px;
+    }
+    #jaringoby-glass-sheet .member-copy { min-width: 0; }
+    #jaringoby-glass-sheet .member-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+      font-size: 15px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .late-badge {
+      padding: 3px 6px;
+      border: 1px solid rgba(233, 135, 98, 0.2);
+      border-radius: 999px;
+      background: rgba(233, 135, 98, 0.12);
+      color: color-mix(in srgb, var(--coral) 80%, var(--ink));
+      font-size: 10px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .member-detail {
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #jaringoby-glass-sheet .remaining {
+      min-width: 72px;
+      text-align: right;
+    }
+    #jaringoby-glass-sheet .remaining strong {
+      display: block;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .remaining span {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    #jaringoby-glass-sheet .glass-nav {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: 12px;
+      padding: 10px 9px;
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-radius: 23px;
+      background: rgba(255, 255, 255, 0.3);
+      box-shadow:
+        0 8px 18px rgba(62, 55, 41, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    #jaringoby-glass-sheet .nav-item {
+      display: grid;
+      justify-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    #jaringoby-glass-sheet .nav-item.active {
+      color: var(--green);
+      font-weight: 500;
+    }
+    #jaringoby-glass-sheet .nav-item i {
+      width: 17px;
+      height: 17px;
+    }
+    @media (max-width: 390px) {
+      #jaringoby-glass-sheet .hero {
+        margin-inline: 13px;
+        padding-inline: 18px;
+      }
+      #jaringoby-glass-sheet .hero-main {
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 14px;
+      }
+      #jaringoby-glass-sheet .ring {
+        width: 108px;
+        height: 108px;
+      }
+      #jaringoby-glass-sheet .ring-inner {
+        width: 76px;
+        height: 76px;
+      }
+      #jaringoby-glass-sheet .limit-copy strong { font-size: 23px; }
+      #jaringoby-glass-sheet .sheet { padding-inline: 19px; }
+    }
+  </style>
+
+  <section class="phone" aria-label="글래스 바텀시트를 적용한 자린고비 챌린지 메인 화면">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    </div>
+
+    <section class="hero" aria-label="챌린지 진행 요약">
+      <div class="hero-head">
+        <span>WEEKDAY QUEST</span>
+        <span>D-2</span>
+      </div>
+      <h3>5만원 방어 작전</h3>
+      <div class="hero-main">
+        <div class="ring" role="img" aria-label="30,000원 중 12,000원 사용, 18,000원 남음">
+          <div class="ring-inner"><div><strong>18,000</strong><span>남음</span></div></div>
+        </div>
+        <div class="limit-copy">
+          <div class="join">수요일 중도 합류</div>
+          <strong>30,000원</strong>
+          <div class="caption">내 적용한도</div>
+          <div class="base">기준금액 50,000원</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sheet" aria-label="한도 계산과 멤버 목록 바텀시트">
+      <div class="handle" aria-hidden="true"></div>
+
+      <section class="calculation" aria-label="내 한도 계산">
+        <b>내 한도 계산</b>
+        <p>수요일 합류 · 공휴일 0일<br>50,000 × 3일 ÷ 5일 = 30,000원</p>
+      </section>
+
+      <section aria-label="함께하는 멤버">
+        <div class="members-head">
+          <h3>함께하는 멤버</h3>
+          <span>3명</span>
+        </div>
+
+        <article class="member">
+          <div class="avatar" aria-hidden="true">🌿</div>
+          <div class="member-copy">
+            <div class="member-name">👑 민지</div>
+            <div class="member-detail">커피 4,500원</div>
+          </div>
+          <div class="remaining"><strong>25,500</strong><span>남음</span></div>
+        </article>
+
+        <article class="member">
+          <div class="avatar" aria-hidden="true">🙂</div>
+          <div class="member-copy">
+            <div class="member-name">나 <span class="late-badge">중도 합류</span></div>
+            <div class="member-detail">12,000원 사용 · 수요일 합류</div>
+          </div>
+          <div class="remaining"><strong>18,000</strong><span>남음</span></div>
+        </article>
+
+        <article class="member">
+          <div class="avatar" aria-hidden="true">🐿️</div>
+          <div class="member-copy">
+            <div class="member-name">정우</div>
+            <div class="member-detail">점심 9,000원</div>
+          </div>
+          <div class="remaining"><strong>12,000</strong><span>남음</span></div>
+        </article>
+      </section>
+
+      <nav class="glass-nav" aria-label="하단 메뉴">
+        <span class="nav-item active"><i data-lucide="home" aria-hidden="true"></i><span>챌린지</span></span>
+        <span class="nav-item"><i data-lucide="list" aria-hidden="true"></i><span>내 지출</span></span>
+        <span class="nav-item"><i data-lucide="smile" aria-hidden="true"></i><span>내 정보</span></span>
+      </nav>
+    </section>
+  </section>
+</div>
