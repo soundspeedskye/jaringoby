@@ -1,6 +1,6 @@
 # 방(Room) 모델 재설계 — 설계 문서
 
-> 상태: **설계 중 (구현 전)**. 스키마·코드 착수 전에 아래 "열린 결정"을 확정한다.
+> 상태: **구현 완료 (§6 1~6단계, 2026-07-22)**. 스키마·RPC 원격 배포 완료, 앱 전 계층 전환 완료.
 > 배경: 현재 시스템은 "챌린지 1개 = 1회성" 전제. 이를 **방(상위) + 주차별 챌린지(반복)** 로 재설계한다.
 > 유리한 점: 원격 DB에 실데이터가 없어 **데이터 이전 불필요** — 스키마를 자유롭게 다시 짤 수 있다.
 
@@ -149,29 +149,34 @@ create table public.period_members (
 - 첫 주차/중간 주차 모두 period는 항상 "월~금 full week"; 개인별 proration이 mid-week 시작을 처리.
 - 한도 = `기준금액 × (합류일 이후 유효 평일) / (그 주 평일수)`. 기존 공식 그대로.
 
-## 5.5 다음 세션 시작점 (구현 착수 상태)
+## 5.5 구현 확정 사항 (구현 중 결정)
 
-- **D1–D7 전부 확정** (위 §5). 설계 논의 완료, 구현 미착수.
-- **마이그레이션 전략: (a) 전면 교체** — 기존 `challenges*` 스키마를 append-only 새 마이그레이션에서 drop하고 room/period로 재구축. (초기 마이그레이션 재작성/원격 리셋은 하지 않음.)
-- **원격 DB 상태**: 초기 스키마(`20260710062707_initial_jaringoby_schema.sql`) 배포 완료. 공휴일 시드 45행 적재 완료(`kr-2026-2027`, is_current). 실사용 데이터 없음(테스트 계정 1개 + 프로필 백필만).
-- **재사용 가능**: 권한 판정·한도 공식(`base × 유효일/선택일`)·정산(finalize)·phase 계산(`status_view`)·late-join proration 로직. 새로 짜는 건 room/period **구조와 배선**.
-- **착수 지점**: §6 1단계 — 새 마이그레이션 파일 작성. 먼저 SQL을 사용자에게 보여 리뷰 → 드라이런 → 사용자가 직접 `db push`. (DB 비밀번호 필요 명령은 assistant가 실행 불가.)
-- **이번 세션 커밋 완료**: config/domain/data/providers/ui/screens/backend/docs 8개 커밋(main). push 안 함.
+설계 스케치(§4 "확정 아님")에서 구현하며 확정한 것들:
 
-## 6. 구현 단계 (제안)
+- **`holiday_version_id`는 periods에만** — 방은 무기한인데 공휴일 데이터는 연 단위 발행이라 방에 고정하면 낡은 버전에 묶임. 주차 생성 시점의 current 버전을 주차별로 스냅샷(§3.2와 일치).
+- **`rooms.capacity` 유지 (1–10, 기본 10)** — 기존 제품 제약과 `capacity_full` 알림 유지.
+- **`period_archives` 없음** — 계산 조건은 periods/period_days가 그대로 보존하므로 방 단위 스냅샷 불필요. 멤버별 `period_results`만 두고 `room_id`를 비정규화해 누적 뷰가 room×user로 바로 집계.
+- **period_member 행은 유효일 ≥ 1일 때만 생성** — 쉬는 주(D5)와 "금요일 공휴일 합류" 케이스가 결과·왕관·streak을 오염시키지 않는 단일 규칙.
+- **D3 소급 판정은 day 단위** — 합류일이 한도에 포함되므로 같은 날 합류 전 시각의 지출도 유효(`occurred_on >= joined_on`). 기존 timestamp 판정에서 완화.
+- **오프라인 주차 귀속 규칙 (§7 해소)** — 지출은 큐에 담길 때의 주차에 귀속. 그 주차 C(토 12:00) 전에 서버 확인 실패 시 `CUTOFF_EXPIRED` 영구 실패, 다음 주차로 이월하지 않음.
+- **pg_cron 보정 (§7 해소)** — `roll_rooms_forward`가 매분 "이번 주 주차 없는 열린 방"을 스캔해 자가 치유. 방 하나의 실패는 서브트랜잭션으로 격리하고 `period.create_failed` audit 기록.
+- **주차 합류 알림** — 방 멤버십(room_members) 변화만 비교. 주차 자동 전개(period_members)를 비교하면 매주 월요일 거짓 알림 발생.
+- **DatePicker 주말 비활성** — 주차가 월~금이므로 min(합류일∨월요일)/max(금요일) 범위 제한으로 구현. 공휴일은 제출 시 검증.
 
-되돌리기 어려운 순서대로. 각 단계는 독립 검증.
+## 6. 구현 단계 (완료)
 
-1. **스키마 마이그레이션(신규)** — rooms/periods/... 생성, expenses.period_id 전환. 기존 challenge* 객체는 제거 또는 대체. → 드라이런 후 push.
-2. **RPC 재작성** — create_room / join_room / preview_room_invite / add_expense(period 기준) / 주차 생성·정산 함수 / 누적 뷰.
-3. **도메인 로직** — 평일 캘린더(`createWeekdayCalendar`), 주차 타임라인, 한도. 단위테스트.
-4. **데이터 계층** — repository/types를 room·period 기준으로 재작성. 오프라인 큐 영향 검토.
-5. **화면** — 방 생성/초대/홈(이번 주차)/지출/지난 주차/누적 통계. DatePicker 주말 비활성.
-6. **정리** — 하드코딩 공휴일 표 삭제(서버 조회로 대체), 데모 시드 재작성.
+되돌리기 어려운 순서대로. 각 단계는 독립 검증. **전부 완료 (2026-07-22).**
+
+1. ✅ **스키마 마이그레이션** — `20260722090000_room_period_redesign.sql`. challenge* 전면 교체, rooms/periods/... 생성, expenses.period_id 전환, RLS·스토리지·realtime 재배선. 원격 push 완료.
+2. ✅ **RPC 재작성** — `20260722120000_room_period_rpcs.sql`. create_room / join_room / preview_room_invite / add_expense(period) / 주차 생성(`create_period_core`+`upsert_period_member` 단일 일할 경로) / 정산(`finalize_period_core`) / cron 2종 / `room_member_stats` 뷰. 원격 push 완료.
+3. ✅ **도메인 로직** — `week.ts`(주 헬퍼) + `period.ts`(`createWeekdayCalendar`·`createPeriodTimeline`·`createPeriodMemberPlan`). 단위테스트 50건(문서 예시·이중차감·D5·D6·floor 나눗셈 포함).
+4. ✅ **데이터 계층** — types/repository/supabase/local/offline-queue 전면 재작성. 데모 모드가 cron 동작(주차 생성·정산·통계)을 재현.
+5. ✅ **화면** — 방 생성(날짜 선택 제거)/초대/홈(이번 주차)/지출/지난 주차/누적 통계 카드. DatePicker 주말 비활성.
+6. ✅ **정리** — 하드코딩 공휴일 표 삭제, 데모 시드 재작성, challenge 네이밍 제거(`/room/*` 라우트, `PeriodPhase`/`PeriodTimeline`, 죽은 도메인 코드 삭제).
 
 ## 7. 리스크 / 검토 필요
 
-- **오프라인 큐**: 지출이 period_id에 묶이는데, 오프라인 중 주차가 바뀌면 어느 주차에 귀속되는지 규칙 필요.
-- **pg_cron 신뢰성**: 자동 생성이 누락되면 그 주 챌린지가 안 열림 → 보정(수동 생성 fallback) 필요.
-- **누적 통계 성능**: 방·주차가 쌓이면 뷰 집계 비용. 필요 시 materialized view.
-- **범위**: 이건 현재 코드베이스의 상당 부분을 재작성하는 작업. 기존에 정리해 둔 로직(권한·한도·정산)은 재사용 가능하나 배선은 대부분 새로 짬.
+- ~~**오프라인 큐**~~: 해소 — §5.5 "오프라인 주차 귀속 규칙".
+- ~~**pg_cron 신뢰성**~~: 해소 — §5.5 "pg_cron 보정".
+- **누적 통계 성능**: 방·주차가 쌓이면 뷰 집계 비용. 필요 시 materialized view. (미해소 — 데이터 쌓인 뒤 재검토)
+- ~~**범위**~~: 완료 — 권한·한도·정산 로직 재사용, 배선 전면 재작성.
