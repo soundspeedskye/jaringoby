@@ -17,12 +17,13 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   AppSnapshot,
-  Challenge,
-  ChallengeMember,
   Comment,
-  CreateChallengeInput,
+  CreateRoomInput,
   Expense,
   InvitePreview,
+  Period,
+  Room,
+  RoomMember,
 } from '@/data/types';
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -40,7 +41,8 @@ vi.mock('@react-native-community/netinfo', () => ({
   },
 }));
 
-const FUTURE_CHALLENGE = challengeFixture('2099-01-01', '2099-01-05');
+// 2099-01-05 is a Monday: the fixture period runs Mon 01-05 … Fri 01-09.
+const FUTURE_PERIOD = periodFixture('2099-01-05');
 
 describe('OfflineQueueRepository', () => {
   let ids: number;
@@ -52,7 +54,7 @@ describe('OfflineQueueRepository', () => {
   it('restores a durable optimistic expense after restart and replays it once', async () => {
     const storage = new MemoryStorage();
     const photos = new MemoryPhotoStore();
-    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
     const firstNetwork = new FakeNetwork(false);
     const first = repository(base, storage, firstNetwork, photos);
 
@@ -82,7 +84,7 @@ describe('OfflineQueueRepository', () => {
 
   it('never exposes a cached account snapshot when authentication is invalid', async () => {
     const storage = new MemoryStorage();
-    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
     const first = repository(base, storage, new FakeNetwork(false), new MemoryPhotoStore());
 
     await first.load();
@@ -94,7 +96,7 @@ describe('OfflineQueueRepository', () => {
   });
 
   it('does not load or replay until the authenticated user is explicitly known', async () => {
-    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
     const queue = new OfflineQueueRepository(base, {
       storage: new MemoryStorage(),
       network: new FakeNetwork(true),
@@ -108,7 +110,7 @@ describe('OfflineQueueRepository', () => {
 
   it('keeps the mutation queue readable when the optional snapshot cache read fails', async () => {
     const storage = new MemoryStorage();
-    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
     const first = repository(base, storage, new FakeNetwork(false), new MemoryPhotoStore());
     await first.load();
     await first.addExpense(expenseInput('cache-read-failure'));
@@ -122,7 +124,7 @@ describe('OfflineQueueRepository', () => {
   it('never replays an old account queue when the session is signed out or switched', async () => {
     const storage = new MemoryStorage();
     const network = new FakeNetwork(false);
-    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
     const queue = repository(base, storage, network, new MemoryPhotoStore());
 
     await queue.load();
@@ -135,14 +137,14 @@ describe('OfflineQueueRepository', () => {
     expect(await queue.getQueueOperations()).toEqual([]);
 
     base.loadError = null;
-    base.replaceSnapshot(snapshotFixture('user-b', FUTURE_CHALLENGE));
+    base.replaceSnapshot(snapshotFixture('user-b', FUTURE_PERIOD));
     queue.setActiveUserId('user-b');
     await queue.load();
     await queue.flushNow();
     expect(base.addExpenseCalls).toBe(0);
     expect(await queue.getQueueOperations()).toEqual([]);
 
-    base.replaceSnapshot(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    base.replaceSnapshot(snapshotFixture('user-a', FUTURE_PERIOD));
     queue.setActiveUserId('user-a');
     network.online = false;
     await queue.load();
@@ -150,7 +152,7 @@ describe('OfflineQueueRepository', () => {
   });
 
   it('rebases a version conflict before explicitly reapplying the local patch', async () => {
-    const initial = snapshotFixture('user-a', FUTURE_CHALLENGE);
+    const initial = snapshotFixture('user-a', FUTURE_PERIOD);
     initial.expenses.push(expenseFixture({ id: 'expense-1', memo: 'server-v1', version: 1 }));
     const base = new FakeRepository(initial);
     const network = new FakeNetwork(false);
@@ -171,7 +173,7 @@ describe('OfflineQueueRepository', () => {
   });
 
   it('keeps server amounts official while projecting pending update and delete changes', async () => {
-    const initial = snapshotFixture('user-a', FUTURE_CHALLENGE);
+    const initial = snapshotFixture('user-a', FUTURE_PERIOD);
     initial.expenses.push(expenseFixture({ id: 'expense-aggregate', amount: 10_000, version: 1 }));
     const base = new FakeRepository(initial);
     const queue = repository(base, new MemoryStorage(), new FakeNetwork(false), new MemoryPhotoStore());
@@ -203,9 +205,9 @@ describe('OfflineQueueRepository', () => {
   });
 
   it('finalizes an unreceived expense at the adjustment cutoff even while offline', async () => {
-    const cutoffChallenge = challengeFixture('2026-01-01', '2026-01-01');
-    let now = Date.parse('2026-01-02T02:00:00.000Z');
-    const base = new FakeRepository(snapshotFixture('user-a', cutoffChallenge));
+    const cutoffPeriod = periodFixture('2026-01-05');
+    let now = Date.parse('2026-01-10T02:00:00.000Z');
+    const base = new FakeRepository(snapshotFixture('user-a', cutoffPeriod));
     const queue = repository(
       base,
       new MemoryStorage(),
@@ -215,8 +217,8 @@ describe('OfflineQueueRepository', () => {
     );
 
     await queue.load();
-    await queue.addExpense(expenseInput('cutoff-request', cutoffChallenge.id));
-    now = Date.parse('2026-01-02T04:00:00.000Z');
+    await queue.addExpense(expenseInput('cutoff-request', cutoffPeriod.id));
+    now = Date.parse('2026-01-10T04:00:00.000Z');
     await queue.flushNow();
 
     const [expired] = await queue.getQueueOperations();
@@ -227,12 +229,12 @@ describe('OfflineQueueRepository', () => {
   });
 
   it('converts an already-failed expense to a permanent cutoff failure', async () => {
-    const cutoffChallenge = challengeFixture('2026-01-01', '2026-01-01');
-    let now = Date.parse('2026-01-02T02:00:00.000Z');
-    const initial = snapshotFixture('user-a', cutoffChallenge);
+    const cutoffPeriod = periodFixture('2026-01-05');
+    let now = Date.parse('2026-01-10T02:00:00.000Z');
+    const initial = snapshotFixture('user-a', cutoffPeriod);
     initial.expenses.push(expenseFixture({
       id: 'expense-cutoff-conflict',
-      challengeId: cutoffChallenge.id,
+      periodId: cutoffPeriod.id,
       version: 1,
     }));
     const base = new FakeRepository(initial);
@@ -248,7 +250,7 @@ describe('OfflineQueueRepository', () => {
     await queue.updateExpense('expense-cutoff-conflict', { memo: '내 변경' });
     base.replaceExpense(expenseFixture({
       id: 'expense-cutoff-conflict',
-      challengeId: cutoffChallenge.id,
+      periodId: cutoffPeriod.id,
       memo: '서버 변경',
       version: 2,
     }));
@@ -258,7 +260,7 @@ describe('OfflineQueueRepository', () => {
       failure: { code: 'VERSION_CONFLICT' },
     });
 
-    now = Date.parse('2026-01-02T04:00:00.000Z');
+    now = Date.parse('2026-01-10T04:00:00.000Z');
     await queue.flushNow();
     const [expired] = await queue.getQueueOperations();
     expect(expired).toMatchObject({
@@ -271,7 +273,7 @@ describe('OfflineQueueRepository', () => {
   it('pins an in-flight replay to the account that owns the operation', async () => {
     const storage = new MemoryStorage();
     const network = new FakeNetwork(false);
-    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
     const queue = repository(base, storage, network, new MemoryPhotoStore());
 
     await queue.load();
@@ -292,7 +294,7 @@ describe('OfflineQueueRepository', () => {
   });
 
   it('finishes old-photo cleanup when an update response was lost', async () => {
-    const initial = snapshotFixture('user-a', FUTURE_CHALLENGE);
+    const initial = snapshotFixture('user-a', FUTURE_PERIOD);
     initial.expenses.push(expenseFixture({
       id: 'expense-photo-update',
       photoPath: 'user-a/old-photo.jpg',
@@ -306,12 +308,12 @@ describe('OfflineQueueRepository', () => {
     await queue.updateExpense('expense-photo-update', { photoUri: 'file:///picker/new-photo.jpg' });
     base.replaceExpense(expenseFixture({
       id: 'expense-photo-update',
-      photoPath: `${FUTURE_CHALLENGE.id}/user-a/expense-update-generated-1-photo-1`,
+      photoPath: `${FUTURE_PERIOD.id}/user-a/expense-update-generated-1-photo-1`,
       version: 2,
     }));
     const reconciled = await queue.load();
     expect(reconciled.expenses.find((expense) => expense.id === 'expense-photo-update')).toMatchObject({
-      photoPath: `${FUTURE_CHALLENGE.id}/user-a/expense-update-generated-1-photo-1`,
+      photoPath: `${FUTURE_PERIOD.id}/user-a/expense-update-generated-1-photo-1`,
       syncStatus: 'SYNCED',
     });
     await expect(queue.updateExpense('expense-photo-update', { memo: '다음 변경' }))
@@ -325,7 +327,7 @@ describe('OfflineQueueRepository', () => {
   });
 
   it('passes a deterministic photo path to a live update replay', async () => {
-    const initial = snapshotFixture('user-a', FUTURE_CHALLENGE);
+    const initial = snapshotFixture('user-a', FUTURE_PERIOD);
     initial.expenses.push(expenseFixture({ id: 'expense-photo-live', photoPath: 'user-a/old.jpg', version: 1 }));
     const base = new FakeRepository(initial);
     const network = new FakeNetwork(false);
@@ -337,12 +339,12 @@ describe('OfflineQueueRepository', () => {
     await queue.flushNow();
 
     expect(base.expectedPhotoPaths).toEqual([
-      `${FUTURE_CHALLENGE.id}/user-a/expense-update-generated-1-photo-1`,
+      `${FUTURE_PERIOD.id}/user-a/expense-update-generated-1-photo-1`,
     ]);
   });
 
   it('finishes photo cleanup when a delete response was lost', async () => {
-    const initial = snapshotFixture('user-a', FUTURE_CHALLENGE);
+    const initial = snapshotFixture('user-a', FUTURE_PERIOD);
     initial.expenses.push(expenseFixture({
       id: 'expense-photo-delete',
       photoPath: 'user-a/deleted-photo.jpg',
@@ -372,7 +374,7 @@ describe('OfflineQueueRepository', () => {
     const storage = new MemoryStorage();
     const photos = new MemoryPhotoStore();
     const queue = repository(
-      new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE)),
+      new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD)),
       storage,
       new FakeNetwork(false),
       photos,
@@ -389,7 +391,7 @@ describe('OfflineQueueRepository', () => {
     const storage = new MemoryStorage();
     const photos = new MemoryPhotoStore();
     const network = new FakeNetwork(false);
-    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_CHALLENGE));
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
     const queue = repository(base, storage, network, photos);
 
     await queue.load();
@@ -543,11 +545,11 @@ class FakeRepository implements AppRepository {
     return this.load();
   }
 
-  async createChallenge(_input: CreateChallengeInput): Promise<Challenge> {
+  async createRoom(_input: CreateRoomInput): Promise<Room> {
     throw new Error('not implemented');
   }
 
-  async increaseCapacity(_challengeId: string, _capacity: number): Promise<Challenge> {
+  async increaseCapacity(_roomId: string, _capacity: number): Promise<Room> {
     throw new Error('not implemented');
   }
 
@@ -555,7 +557,15 @@ class FakeRepository implements AppRepository {
     throw new Error('not implemented');
   }
 
-  async joinChallenge(_inviteCode: string, _joinedAt?: string): Promise<ChallengeMember> {
+  async joinRoom(_inviteCode: string, _joinedAt?: string): Promise<RoomMember> {
+    throw new Error('not implemented');
+  }
+
+  async leaveRoom(_roomId: string, _successorUserId?: string): Promise<void> {
+    throw new Error('not implemented');
+  }
+
+  async closeRoom(_roomId: string): Promise<Room> {
     throw new Error('not implemented');
   }
 
@@ -568,7 +578,7 @@ class FakeRepository implements AppRepository {
     const expense = expenseFixture({
       id: `server-${input.clientRequestId}`,
       clientRequestId: input.clientRequestId,
-      challengeId: input.challengeId,
+      periodId: input.periodId,
       amount: input.amount,
       category: input.category,
       memo: input.memo,
@@ -633,52 +643,72 @@ class FakeRepository implements AppRepository {
   }
 }
 
-function snapshotFixture(userId: string, challenge: Challenge): AppSnapshot {
+function snapshotFixture(userId: string, period: Period): AppSnapshot {
   return {
     currentUserId: userId,
     profiles: [{ id: userId, nickname: userId, avatar: '🙂' }],
-    challenges: [clone(challenge)],
-    members: [{
-      challengeId: challenge.id,
+    rooms: [{
+      id: period.roomId,
+      ownerId: 'user-a',
+      name: '테스트 방',
+      inviteCode: 'ABC234',
+      baseAmount: 50_000,
+      capacity: 4,
+      status: 'OPEN',
+      createdAt: `${period.weekStart}T00:00:00.000Z`,
+    }],
+    roomMembers: [{
+      roomId: period.roomId,
       userId,
-      joinedAt: `${challenge.startDate}T00:00:00.000Z`,
-      joinedDate: challenge.startDate,
+      role: 'OWNER',
+      status: 'ACTIVE',
+      joinedAt: `${period.weekStart}T00:00:00.000Z`,
+    }],
+    periods: [clone(period)],
+    periodMembers: [{
+      periodId: period.id,
+      userId,
+      joinedAt: `${period.weekStart}T00:00:00.000Z`,
+      joinedDate: period.weekStart,
+      eligibleDayCount: 5,
       appliedLimit: 50_000,
       status: 'ACTIVE',
       isLateJoiner: false,
     }],
+    periodResults: [],
+    memberStats: [],
     expenses: [],
     comments: [],
     processedRequestIds: [],
   };
 }
 
-function challengeFixture(startDate: string, endDate: string): Challenge {
+function periodFixture(weekStart: string): Period {
+  const weekEnd = `${weekStart.slice(0, 8)}${String(Number(weekStart.slice(8)) + 4).padStart(2, '0')}`;
   return {
-    id: `challenge-${startDate}`,
-    ownerId: 'user-a',
-    name: '테스트 챌린지',
-    inviteCode: 'ABC123',
-    startDate: startDate as Challenge['startDate'],
-    endDate: endDate as Challenge['endDate'],
-    selectedDates: [startDate as Challenge['startDate']],
+    id: `period-${weekStart}`,
+    roomId: `room-${weekStart}`,
+    weekIndex: 1,
+    weekStart: weekStart as Period['weekStart'],
+    weekEnd: weekEnd as Period['weekEnd'],
+    selectedDayCount: 5,
+    validDayCount: 5,
     holidayDates: [],
-    holidaySnapshotVersion: 'test',
-    baseLimit: 50_000,
-    capacity: 4,
+    holidayVersionId: 'test',
     phase: 'ACTIVE',
-    createdAt: `${startDate}T00:00:00.000Z`,
+    isRestWeek: false,
+    createdAt: `${weekStart}T00:00:00.000Z`,
   };
 }
 
-function expenseInput(requestId: string, challengeId = FUTURE_CHALLENGE.id): AddExpenseInput {
+function expenseInput(requestId: string, periodId = FUTURE_PERIOD.id): AddExpenseInput {
   return {
-    challengeId,
+    periodId,
     amount: 10_000,
     category: '점심',
     memo: '테스트',
     photoUri: 'file:///picker/photo.jpg',
-    occurredAt: '2099-01-02T03:00:00.000Z',
+    occurredAt: '2099-01-06T03:00:00.000Z',
     clientRequestId: requestId,
   };
 }
@@ -687,7 +717,7 @@ function expenseFixture(overrides: Partial<Expense> = {}): Expense {
   return {
     id: 'expense-default',
     clientRequestId: 'request-default',
-    challengeId: FUTURE_CHALLENGE.id,
+    periodId: FUTURE_PERIOD.id,
     userId: 'user-a',
     amount: 10_000,
     category: '점심',

@@ -2,12 +2,12 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   AppSnapshot,
-  Challenge,
-  ChallengeMember,
   Comment,
-  CreateChallengeInput,
+  CreateRoomInput,
   Expense,
   InvitePreview,
+  Room,
+  RoomMember,
 } from '@/data/types';
 
 export type Unsubscribe = () => void;
@@ -20,10 +20,12 @@ export type UpdateExpenseOptions = {
 export interface AppRepository {
   load(): Promise<AppSnapshot>;
   resetDemo(): Promise<AppSnapshot>;
-  createChallenge(input: CreateChallengeInput): Promise<Challenge>;
-  increaseCapacity(challengeId: string, capacity: number): Promise<Challenge>;
+  createRoom(input: CreateRoomInput): Promise<Room>;
+  increaseCapacity(roomId: string, capacity: number): Promise<Room>;
   previewInvite(inviteCode: string): Promise<InvitePreview>;
-  joinChallenge(inviteCode: string, joinedAt?: string): Promise<ChallengeMember>;
+  joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember>;
+  leaveRoom(roomId: string, successorUserId?: string): Promise<void>;
+  closeRoom(roomId: string): Promise<Room>;
   addExpense(input: AddExpenseInput): Promise<Expense>;
   updateExpense(
     expenseId: string,

@@ -7,26 +7,31 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   AppSnapshot,
-  Challenge,
-  ChallengeMember,
   Comment,
-  CreateChallengeInput,
+  CreateRoomInput,
   Expense,
   InvitePreview,
+  Period,
+  PeriodMember,
+  PeriodResult,
   Profile,
+  Room,
+  RoomMember,
+  RoomMemberStats,
 } from '@/data/types';
-import type { ChallengePhase, ExpenseCategory, LocalDate, MemberStatus } from '@/domain/types';
+import type { ExpenseCategory, LocalDate, MemberStatus, PeriodPhase } from '@/domain/types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
 const MAX_EXPENSE_PHOTO_BYTES = 10 * 1024 * 1024;
 const REALTIME_TABLES = [
-  'challenges',
-  'challenge_members',
+  'rooms',
+  'room_members',
+  'periods',
+  'period_members',
+  'period_results',
   'expenses',
   'comments',
-  'challenge_archives',
-  'challenge_member_results',
 ] as const;
 
 const CATEGORY_TO_DATABASE: Record<ExpenseCategory, DatabaseExpenseCategory> = {
@@ -56,39 +61,80 @@ type ProfileRow = {
   avatar_path: string | null;
 };
 
-type ChallengeStatusRow = {
+type RoomRow = {
   id: string;
   name: string;
   owner_id: string;
-  start_on: string;
-  end_on: string;
   base_amount: number | string;
   capacity: number;
+  status: 'open' | 'closed';
+  created_at: string;
+  closed_at: string | null;
+};
+
+type RoomMemberRow = {
+  room_id: string;
+  user_id: string;
+  role: 'owner' | 'member';
+  status: 'active' | 'left' | 'removed' | 'account_deleted';
+  joined_at: string;
+};
+
+type PeriodStatusRow = {
+  id: string;
+  room_id: string;
+  week_index: number;
+  week_start: string;
+  week_end: string;
+  selected_day_count: number;
+  valid_day_count: number;
   holiday_version_id: string;
   finalized_at: string | null;
-  finalizes_at: string;
   created_at: string;
   state: 'waiting' | 'active' | 'adjustment' | 'settling' | 'archived';
 };
 
-type ChallengeDayRow = {
-  challenge_id: string;
-  challenge_on: string;
+type PeriodDayRow = {
+  period_id: string;
+  day_on: string;
   is_holiday: boolean;
 };
 
-type ChallengeMemberRow = {
-  challenge_id: string;
+type PeriodMemberRow = {
+  period_id: string;
   user_id: string;
   status: 'active' | 'left' | 'removed' | 'account_deleted';
   joined_at: string;
   joined_on: string;
-  applied_limit: number | string;
   is_late_join: boolean;
+  eligible_day_count: number;
+  applied_limit: number | string;
+};
+
+type PeriodResultRow = {
+  period_id: string;
+  room_id: string;
+  user_id: string;
+  nickname_snapshot: string;
+  applied_limit: number | string;
+  spent_amount: number | string;
+  remaining_amount: number | string;
+  achieved: boolean;
+  is_crown: boolean;
+  finalized_at: string;
+};
+
+type RoomMemberStatsRow = {
+  room_id: string;
+  user_id: string;
+  participated_week_count: number;
+  achieved_week_count: number;
+  crown_count: number;
+  current_streak: number;
 };
 
 type InviteCodeRow = {
-  challenge_id: string;
+  room_id: string;
   code: string;
   is_active: boolean;
 };
@@ -96,7 +142,7 @@ type InviteCodeRow = {
 type ExpenseRow = {
   id: string;
   client_request_id: string;
-  challenge_id: string | null;
+  period_id: string | null;
   user_id: string;
   amount: number | string;
   category: DatabaseExpenseCategory;
@@ -123,7 +169,7 @@ type CommentRow = {
 };
 
 type PreferenceRow = {
-  challenge_id: string;
+  room_id: string;
   is_hidden: boolean;
 };
 
@@ -231,41 +277,40 @@ export class SupabaseRepository implements AppRepository {
     throw new RepositoryError('NOT_DEMO_MODE', '실서비스 데이터는 데모 초기화 대상이 아니에요.');
   }
 
-  async createChallenge(input: CreateChallengeInput): Promise<Challenge> {
+  async createRoom(input: CreateRoomInput): Promise<Room> {
     await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId ?? makeUuid());
-    const { data, error } = await this.client.rpc('create_challenge', {
+    const { data, error } = await this.client.rpc('create_room', {
       p_name: input.name.trim(),
-      p_start_on: input.startDate,
-      p_end_on: input.endDate,
-      p_base_amount: input.baseLimit,
+      p_base_amount: input.baseAmount,
       p_capacity: input.capacity,
-      p_holiday_version: null,
       p_client_request_id: requestId,
     });
-    if (error) throw translateError(error, '챌린지를 만들지 못했어요.');
+    if (error) throw translateError(error, '방을 만들지 못했어요.');
 
-    const id = requiredString(firstObject(data)?.id, '생성된 챌린지 ID');
+    const payload = firstObject(data);
+    const roomPayload = asObject(payload?.room);
+    const id = requiredString(roomPayload?.id, '생성된 방 ID');
     const snapshot = await this.reloadAndNotify();
-    return clone(requireChallenge(snapshot, id));
+    return clone(requireRoom(snapshot, id));
   }
 
-  async increaseCapacity(challengeId: string, capacity: number): Promise<Challenge> {
+  async increaseCapacity(roomId: string, capacity: number): Promise<Room> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('update_challenge_settings', {
-      p_challenge_id: challengeId,
+    const { error } = await this.client.rpc('update_room_settings', {
+      p_room_id: roomId,
       p_name: null,
       p_capacity: capacity,
     });
     if (error) throw translateError(error, '정원을 변경하지 못했어요.');
     const snapshot = await this.reloadAndNotify();
-    return clone(requireChallenge(snapshot, challengeId));
+    return clone(requireRoom(snapshot, roomId));
   }
 
   async previewInvite(inviteCode: string): Promise<InvitePreview> {
     await this.requireUserId();
     const normalized = inviteCode.trim().toUpperCase();
-    const { data, error } = await this.client.rpc('preview_invite', { p_invite_code: normalized });
+    const { data, error } = await this.client.rpc('preview_room_invite', { p_invite_code: normalized });
     if (error) throw translateError(error, '참여 코드를 확인하지 못했어요.');
 
     const payload = firstObject(data);
@@ -275,35 +320,53 @@ export class SupabaseRepository implements AppRepository {
     return mapInvitePreview(normalized, payload);
   }
 
-  async joinChallenge(inviteCode: string): Promise<ChallengeMember> {
+  async joinRoom(inviteCode: string): Promise<RoomMember> {
     await this.requireUserId();
     const normalized = inviteCode.trim().toUpperCase();
-    const { data, error } = await this.client.rpc('join_challenge', { p_invite_code: normalized });
-    if (error) throw translateError(error, '챌린지에 참여하지 못했어요.');
+    const { data, error } = await this.client.rpc('join_room', { p_invite_code: normalized });
+    if (error) throw translateError(error, '방에 참여하지 못했어요.');
 
     const payload = firstObject(data);
     if (!payload || payload.ok !== true) {
       throw inviteError(typeof payload?.error_code === 'string' ? payload.error_code : 'INVALID_CODE');
     }
     const memberPayload = asObject(payload.member);
-    const challengeId = requiredString(memberPayload?.challenge_id, '참여 챌린지 ID');
+    const roomId = requiredString(memberPayload?.room_id, '참여 방 ID');
     const userId = requiredString(memberPayload?.user_id, '참여 사용자 ID');
     const snapshot = await this.reloadAndNotify();
-    const member = snapshot.members.find(
-      (item) => item.challengeId === challengeId && item.userId === userId,
+    const member = snapshot.roomMembers.find(
+      (item) => item.roomId === roomId && item.userId === userId,
     );
     if (!member) throw new RepositoryError('INVALID_RESPONSE', '참여 결과를 다시 불러오지 못했어요.');
     return clone(member);
+  }
+
+  async leaveRoom(roomId: string, successorUserId?: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('leave_room', {
+      p_room_id: roomId,
+      p_successor_user_id: successorUserId ?? null,
+    });
+    if (error) throw translateError(error, '방에서 나가지 못했어요.');
+    await this.reloadAndNotify();
+  }
+
+  async closeRoom(roomId: string): Promise<Room> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('close_room', { p_room_id: roomId });
+    if (error) throw translateError(error, '방을 닫지 못했어요.');
+    const snapshot = await this.reloadAndNotify();
+    return clone(requireRoom(snapshot, roomId));
   }
 
   async addExpense(input: AddExpenseInput): Promise<Expense> {
     const userId = await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId);
     const photoPath = input.photoUri
-      ? await this.uploadExpensePhoto(input.photoUri, input.challengeId, userId, requestId)
+      ? await this.uploadExpensePhoto(input.photoUri, input.periodId, userId, requestId)
       : null;
     const { data, error } = await this.client.rpc('add_expense', {
-      p_challenge_id: input.challengeId ?? null,
+      p_period_id: input.periodId ?? null,
       p_amount: input.amount,
       p_category: CATEGORY_TO_DATABASE[input.category],
       p_occurred_at: input.occurredAt,
@@ -328,8 +391,8 @@ export class SupabaseRepository implements AppRepository {
   ): Promise<Expense> {
     const userId = await this.requireUserId();
     const current = await this.findCurrentExpense(expenseId);
-    if (patch.challengeId !== undefined && patch.challengeId !== current.challengeId) {
-      throw new RepositoryError('IMMUTABLE_FIELD', '등록한 챌린지는 변경할 수 없어요.');
+    if (patch.periodId !== undefined && patch.periodId !== current.periodId) {
+      throw new RepositoryError('IMMUTABLE_FIELD', '등록한 주차는 변경할 수 없어요.');
     }
     if (patch.clientRequestId !== undefined && patch.clientRequestId !== current.clientRequestId) {
       throw new RepositoryError('IMMUTABLE_FIELD', '요청 식별자는 변경할 수 없어요.');
@@ -342,7 +405,7 @@ export class SupabaseRepository implements AppRepository {
       if (patch.photoUri) {
         photoPath = await this.uploadExpensePhoto(
           patch.photoUri,
-          current.challengeId,
+          current.periodId,
           userId,
           `${expenseId}-v${expectedVersion + 1}-${hash32(patch.photoUri).toString(16)}`,
           options?.expectedPhotoPath,
@@ -444,9 +507,13 @@ export class SupabaseRepository implements AppRepository {
 
     const [
       profilesResult,
-      challengesResult,
-      daysResult,
-      membersResult,
+      roomsResult,
+      roomMembersResult,
+      periodsResult,
+      periodDaysResult,
+      periodMembersResult,
+      periodResultsResult,
+      statsResult,
       invitesResult,
       expensesResult,
       commentsResult,
@@ -454,31 +521,49 @@ export class SupabaseRepository implements AppRepository {
     ] = await Promise.all([
       this.client.from('profiles').select('id,nickname,avatar_path'),
       this.client
-        .from('challenge_status_view')
-        .select('id,name,owner_id,start_on,end_on,base_amount,capacity,holiday_version_id,finalized_at,finalizes_at,created_at,state')
+        .from('rooms')
+        .select('id,name,owner_id,base_amount,capacity,status,created_at,closed_at')
         .order('created_at', { ascending: false }),
-      this.client.from('challenge_days').select('challenge_id,challenge_on,is_holiday'),
       this.client
-        .from('challenge_members')
-        .select('challenge_id,user_id,status,joined_at,joined_on,applied_limit,is_late_join')
+        .from('room_members')
+        .select('room_id,user_id,role,status,joined_at')
         .order('joined_at', { ascending: true }),
-      this.client.from('invite_codes').select('challenge_id,code,is_active').eq('is_active', true),
+      this.client
+        .from('period_status_view')
+        .select('id,room_id,week_index,week_start,week_end,selected_day_count,valid_day_count,holiday_version_id,finalized_at,created_at,state')
+        .order('week_start', { ascending: false }),
+      this.client.from('period_days').select('period_id,day_on,is_holiday'),
+      this.client
+        .from('period_members')
+        .select('period_id,user_id,status,joined_at,joined_on,is_late_join,eligible_day_count,applied_limit')
+        .order('joined_at', { ascending: true }),
+      this.client
+        .from('period_results')
+        .select('period_id,room_id,user_id,nickname_snapshot,applied_limit,spent_amount,remaining_amount,achieved,is_crown,finalized_at'),
+      this.client
+        .from('room_member_stats')
+        .select('room_id,user_id,participated_week_count,achieved_week_count,crown_count,current_streak'),
+      this.client.from('invite_codes').select('room_id,code,is_active').eq('is_active', true),
       this.client
         .from('expenses')
-        .select('id,client_request_id,challenge_id,user_id,amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version')
+        .select('id,client_request_id,period_id,user_id,amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version')
         .order('created_at', { ascending: false }),
       this.client
         .from('comments')
         .select('id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version')
         .order('created_at', { ascending: true }),
-      this.client.from('user_challenge_preferences').select('challenge_id,is_hidden'),
+      this.client.from('user_room_preferences').select('room_id,is_hidden'),
     ]);
 
     const results = [
       profilesResult,
-      challengesResult,
-      daysResult,
-      membersResult,
+      roomsResult,
+      roomMembersResult,
+      periodsResult,
+      periodDaysResult,
+      periodMembersResult,
+      periodResultsResult,
+      statsResult,
       invitesResult,
       expensesResult,
       commentsResult,
@@ -488,9 +573,13 @@ export class SupabaseRepository implements AppRepository {
     if (failed?.error) throw translateError(failed.error, '앱 데이터를 불러오지 못했어요.');
 
     const profileRows = rows<ProfileRow>(profilesResult.data);
-    const challengeRows = rows<ChallengeStatusRow>(challengesResult.data);
-    const dayRows = rows<ChallengeDayRow>(daysResult.data);
-    const memberRows = rows<ChallengeMemberRow>(membersResult.data);
+    const roomRows = rows<RoomRow>(roomsResult.data);
+    const roomMemberRows = rows<RoomMemberRow>(roomMembersResult.data);
+    const periodRows = rows<PeriodStatusRow>(periodsResult.data);
+    const periodDayRows = rows<PeriodDayRow>(periodDaysResult.data);
+    const periodMemberRows = rows<PeriodMemberRow>(periodMembersResult.data);
+    const periodResultRows = rows<PeriodResultRow>(periodResultsResult.data);
+    const statsRows = rows<RoomMemberStatsRow>(statsResult.data);
     const inviteRows = rows<InviteCodeRow>(invitesResult.data);
     const expenseRows = rows<ExpenseRow>(expensesResult.data);
     const commentRows = rows<CommentRow>(commentsResult.data);
@@ -511,29 +600,43 @@ export class SupabaseRepository implements AppRepository {
     ]);
     this.scheduleSignedUrlRefresh(expenseSignedUrls.size + avatarSignedUrls.size > 0);
 
-    const hiddenArchivedIds = new Set(
-      preferenceRows.filter((row) => row.is_hidden).map((row) => row.challenge_id),
+    const hiddenClosedIds = new Set(
+      preferenceRows.filter((row) => row.is_hidden).map((row) => row.room_id),
     );
-    const daysByChallenge = groupBy(dayRows, (row) => row.challenge_id);
-    const inviteByChallenge = new Map(
-      inviteRows.filter((row) => row.is_active).map((row) => [row.challenge_id, row.code]),
+    const inviteByRoom = new Map(
+      inviteRows.filter((row) => row.is_active).map((row) => [row.room_id, row.code]),
     );
-    const challenges = challengeRows
-      .filter((row) => row.state !== 'archived' || !hiddenArchivedIds.has(row.id))
-      .map((row) => mapChallenge(row, daysByChallenge.get(row.id) ?? [], inviteByChallenge.get(row.id)));
-    const visibleChallengeIds = new Set(challenges.map((challenge) => challenge.id));
+    const rooms = roomRows
+      .filter((row) => row.status !== 'closed' || !hiddenClosedIds.has(row.id))
+      .map((row) => mapRoom(row, inviteByRoom.get(row.id)));
+    const visibleRoomIds = new Set(rooms.map((room) => room.id));
+    const daysByPeriod = groupBy(periodDayRows, (row) => row.period_id);
+    const periods = periodRows
+      .filter((row) => visibleRoomIds.has(row.room_id))
+      .map((row) => mapPeriod(row, daysByPeriod.get(row.id) ?? []));
+    const visiblePeriodIds = new Set(periods.map((period) => period.id));
     const visibleExpenseRows = expenseRows.filter(
-      (row) => !row.challenge_id || visibleChallengeIds.has(row.challenge_id),
+      (row) => !row.period_id || visiblePeriodIds.has(row.period_id),
     );
     const visibleExpenseIds = new Set(visibleExpenseRows.map((row) => row.id));
 
     return {
       currentUserId: userId,
       profiles: profileRows.map((row) => mapProfile(row, avatarSignedUrls)),
-      challenges,
-      members: memberRows
-        .filter((row) => visibleChallengeIds.has(row.challenge_id))
-        .map(mapMember),
+      rooms,
+      roomMembers: roomMemberRows
+        .filter((row) => visibleRoomIds.has(row.room_id))
+        .map(mapRoomMember),
+      periods,
+      periodMembers: periodMemberRows
+        .filter((row) => visiblePeriodIds.has(row.period_id))
+        .map(mapPeriodMember),
+      periodResults: periodResultRows
+        .filter((row) => visiblePeriodIds.has(row.period_id))
+        .map(mapPeriodResult),
+      memberStats: statsRows
+        .filter((row) => visibleRoomIds.has(row.room_id))
+        .map(mapStats),
       expenses: visibleExpenseRows.map((row) => mapExpense(row, expenseSignedUrls)),
       comments: commentRows.filter((row) => visibleExpenseIds.has(row.expense_id)).map(mapComment),
       processedRequestIds: [
@@ -652,7 +755,7 @@ export class SupabaseRepository implements AppRepository {
 
   private async uploadExpensePhoto(
     uri: string,
-    challengeId: string | undefined,
+    periodId: string | undefined,
     userId: string,
     objectStem: string,
     expectedPath?: string,
@@ -662,7 +765,7 @@ export class SupabaseRepository implements AppRepository {
       throw new RepositoryError('PHOTO_TOO_LARGE', '지출 사진은 10MB 이하여야 해요.');
     }
     const path = expectedPath ??
-      `${challengeId ?? 'personal'}/${userId}/${safeObjectStem(objectStem)}.${file.extension}`;
+      `${periodId ?? 'personal'}/${userId}/${safeObjectStem(objectStem)}.${file.extension}`;
     const { error } = await this.client.storage.from('expense-photos').upload(path, file.buffer, {
       cacheControl: '3600',
       contentType: file.contentType,
@@ -714,39 +817,85 @@ function mapProfile(row: ProfileRow, signedUrls: Map<string, string>): Profile {
   };
 }
 
-function mapChallenge(
-  row: ChallengeStatusRow,
-  days: ChallengeDayRow[],
-  inviteCode?: string,
-): Challenge {
-  const sortedDays = [...days].sort((left, right) => left.challenge_on.localeCompare(right.challenge_on));
+function mapRoom(row: RoomRow, inviteCode?: string): Room {
   return {
     id: row.id,
     ownerId: row.owner_id,
     name: row.name,
     inviteCode: inviteCode ?? '',
-    startDate: asLocalDate(row.start_on),
-    endDate: asLocalDate(row.end_on),
-    selectedDates: sortedDays.map((day) => asLocalDate(day.challenge_on)),
-    holidayDates: sortedDays.filter((day) => day.is_holiday).map((day) => asLocalDate(day.challenge_on)),
-    holidaySnapshotVersion: row.holiday_version_id,
-    baseLimit: safeNumber(row.base_amount, '기준 금액'),
+    baseAmount: safeNumber(row.base_amount, '기준 금액'),
     capacity: row.capacity,
-    phase: mapPhase(row.state),
+    status: row.status === 'closed' ? 'CLOSED' : 'OPEN',
     createdAt: row.created_at,
-    archivedAt: row.state === 'archived' ? row.finalized_at ?? row.finalizes_at : undefined,
+    closedAt: row.closed_at ?? undefined,
   };
 }
 
-function mapMember(row: ChallengeMemberRow): ChallengeMember {
+function mapRoomMember(row: RoomMemberRow): RoomMember {
   return {
-    challengeId: row.challenge_id,
+    roomId: row.room_id,
+    userId: row.user_id,
+    role: row.role === 'owner' ? 'OWNER' : 'MEMBER',
+    status: mapMemberStatus(row.status),
+    joinedAt: row.joined_at,
+  };
+}
+
+function mapPeriod(row: PeriodStatusRow, days: PeriodDayRow[]): Period {
+  const sortedDays = [...days].sort((left, right) => left.day_on.localeCompare(right.day_on));
+  return {
+    id: row.id,
+    roomId: row.room_id,
+    weekIndex: row.week_index,
+    weekStart: asLocalDate(row.week_start),
+    weekEnd: asLocalDate(row.week_end),
+    selectedDayCount: row.selected_day_count,
+    validDayCount: row.valid_day_count,
+    holidayDates: sortedDays.filter((day) => day.is_holiday).map((day) => asLocalDate(day.day_on)),
+    holidayVersionId: row.holiday_version_id,
+    phase: mapPhase(row.state),
+    isRestWeek: row.valid_day_count === 0,
+    finalizedAt: row.finalized_at ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function mapPeriodMember(row: PeriodMemberRow): PeriodMember {
+  return {
+    periodId: row.period_id,
     userId: row.user_id,
     joinedAt: row.joined_at,
     joinedDate: asLocalDate(row.joined_on),
+    eligibleDayCount: row.eligible_day_count,
     appliedLimit: safeNumber(row.applied_limit, '적용 한도'),
     status: mapMemberStatus(row.status),
     isLateJoiner: row.is_late_join,
+  };
+}
+
+function mapPeriodResult(row: PeriodResultRow): PeriodResult {
+  return {
+    periodId: row.period_id,
+    roomId: row.room_id,
+    userId: row.user_id,
+    nickname: row.nickname_snapshot,
+    appliedLimit: safeNumber(row.applied_limit, '적용 한도'),
+    spentAmount: safeNumber(row.spent_amount, '지출 합계'),
+    remainingAmount: safeSignedNumber(row.remaining_amount, '잔액'),
+    achieved: row.achieved,
+    isCrown: row.is_crown,
+    finalizedAt: row.finalized_at,
+  };
+}
+
+function mapStats(row: RoomMemberStatsRow): RoomMemberStats {
+  return {
+    roomId: row.room_id,
+    userId: row.user_id,
+    participatedWeekCount: row.participated_week_count,
+    achievedWeekCount: row.achieved_week_count,
+    crownCount: row.crown_count,
+    currentStreak: row.current_streak,
   };
 }
 
@@ -755,7 +904,7 @@ function mapExpense(row: ExpenseRow, signedUrls: Map<string, string>): Expense {
   return {
     id: row.id,
     clientRequestId: row.client_request_id,
-    challengeId: row.challenge_id ?? undefined,
+    periodId: row.period_id ?? undefined,
     userId: row.user_id,
     amount: safeNumber(row.amount, '지출 금액'),
     category: CATEGORY_FROM_DATABASE[row.category],
@@ -788,39 +937,46 @@ function mapComment(row: CommentRow): Comment {
 }
 
 function mapInvitePreview(code: string, payload: JsonObject): InvitePreview {
-  const challenge = asObject(payload.challenge);
+  const room = asObject(payload.room);
   const join = asObject(payload.join);
-  if (!challenge || !join) throw new RepositoryError('INVALID_RESPONSE', '초대 정보 형식이 올바르지 않아요.');
-  const holidays = Array.isArray(payload.holidays) ? payload.holidays : [];
+  if (!room || !join) throw new RepositoryError('INVALID_RESPONSE', '초대 정보 형식이 올바르지 않아요.');
+  const period = asObject(payload.current_period);
+  const holidays = Array.isArray(period?.holidays) ? period.holidays : [];
   return {
     code,
-    challengeId: requiredString(challenge.id, '챌린지 ID'),
-    name: requiredString(challenge.name, '챌린지 이름'),
-    startDate: asLocalDate(requiredString(challenge.start_on, '시작일')),
-    endDate: asLocalDate(requiredString(challenge.end_on, '종료일')),
-    baseLimit: safeNumber(challenge.base_amount, '기준 금액'),
-    capacity: safeNumber(challenge.capacity, '정원'),
-    memberCount: safeNumber(challenge.member_count, '현재 인원'),
-    totalSelectedDays: safeNumber(challenge.selected_day_count, '선택 일수'),
-    effectiveDayCount: safeNumber(challenge.valid_day_count, '유효 일수'),
-    holidayDates: holidays
-      .map(asObject)
-      .filter((holiday): holiday is JsonObject => Boolean(holiday))
-      .map((holiday) => asLocalDate(requiredString(holiday.date, '공휴일'))),
+    roomId: requiredString(room.id, '방 ID'),
+    name: requiredString(room.name, '방 이름'),
+    baseAmount: safeNumber(room.base_amount, '기준 금액'),
+    capacity: safeNumber(room.capacity, '정원'),
+    memberCount: safeNumber(room.member_count, '현재 인원'),
+    currentPeriod: period
+      ? {
+          id: requiredString(period.id, '주차 ID'),
+          weekStart: asLocalDate(requiredString(period.week_start, '주차 시작일')),
+          weekEnd: asLocalDate(requiredString(period.week_end, '주차 종료일')),
+          selectedDayCount: safeNumber(period.selected_day_count, '선택 일수'),
+          validDayCount: safeNumber(period.valid_day_count, '유효 일수'),
+          holidayDates: holidays
+            .map(asObject)
+            .filter((holiday): holiday is JsonObject => Boolean(holiday))
+            .map((holiday) => asLocalDate(requiredString(holiday.date, '공휴일'))),
+        }
+      : undefined,
     joinedDate: asLocalDate(requiredString(join.joined_on, '합류일')),
-    remainingEffectiveDays: safeNumber(join.eligible_day_count, '남은 유효 일수'),
+    eligibleDayCount: safeNumber(join.eligible_day_count, '남은 유효 일수'),
     appliedLimit: safeNumber(join.applied_limit, '적용 한도'),
     isLateJoiner: join.is_late_join === true,
+    participatesThisWeek: join.participates_this_week === true,
     canJoin: join.can_join === true,
   };
 }
 
-function mapPhase(state: ChallengeStatusRow['state']): ChallengePhase {
+function mapPhase(state: PeriodStatusRow['state']): PeriodPhase {
   if (state === 'settling') return 'SETTLEMENT';
-  return state.toUpperCase() as ChallengePhase;
+  return state.toUpperCase() as PeriodPhase;
 }
 
-function mapMemberStatus(status: ChallengeMemberRow['status']): MemberStatus {
+function mapMemberStatus(status: RoomMemberRow['status']): MemberStatus {
   return status.toUpperCase() as MemberStatus;
 }
 
@@ -900,18 +1056,23 @@ function translateError(error: unknown, fallback: string): RepositoryError {
 
 function policyErrorMessage(message: string): string | null {
   if (message.includes('authentication required')) return '로그인이 필요해요.';
-  if (message.includes('challenge name')) return '챌린지 이름을 확인해 주세요.';
-  if (message.includes('challenge start date cannot be in the past')) return '시작일은 오늘보다 이전일 수 없어요.';
-  if (message.includes('holiday dataset does not cover')) return '선택한 기간의 공휴일 데이터가 아직 준비되지 않았어요.';
+  if (message.includes('room name')) return '방 이름을 확인해 주세요.';
+  if (message.includes('holiday dataset does not cover')) return '이번 주 공휴일 데이터가 아직 준비되지 않았어요.';
   if (message.includes('published korean holiday dataset')) return '공휴일 데이터가 아직 준비되지 않았어요.';
   if (message.includes('capacity can only increase')) return '정원은 현재보다 크게, 최대 10명까지 설정할 수 있어요.';
+  if (message.includes('closed rooms are read-only') || message.includes('closed rooms do not open')) {
+    return '닫힌 방은 읽기 전용이에요.';
+  }
   if (message.includes('expense adjustment deadline')) return '지출 보정 마감이 지나 수정할 수 없어요.';
   if (message.includes('writable only during active and adjustment')) return '현재는 지출을 입력하거나 수정할 수 없는 기간이에요.';
-  if (message.includes('expense time is outside')) return '챌린지 기간과 내 합류 시각 안의 지출만 등록할 수 있어요.';
-  if (message.includes('excluded holiday')) return '공휴일 지출은 챌린지 한도에 포함할 수 없어요.';
+  if (message.includes('active period membership')) return '이번 주차 참여자만 지출을 기록할 수 있어요.';
+  if (message.includes('active room membership')) return '방 참여자만 쓸 수 있어요.';
+  if (message.includes('expense time is outside')) return '주차 기간과 내 합류일 안의 지출만 등록할 수 있어요.';
+  if (message.includes('excluded holiday')) return '공휴일 지출은 주차 한도에 포함할 수 없어요.';
   if (message.includes('uploaded photo is required') || message.includes('photo upload')) return '마감 전에 지출 사진 1장 업로드를 완료해 주세요.';
+  if (message.includes('room owner must select')) return '방장이 나가려면 다른 참여자에게 방장을 넘겨야 해요.';
   if (message.includes('comment edit window')) return '댓글은 작성 후 5분 안에만 수정할 수 있어요.';
-  if (message.includes('comment is read-only')) return '완료된 챌린지의 댓글은 읽기 전용이에요.';
+  if (message.includes('comment is read-only')) return '정산이 끝난 주차의 댓글은 읽기 전용이에요.';
   if (message.includes('comment body')) return '댓글은 앞뒤 공백을 제외하고 1~500자로 입력해 주세요.';
   return null;
 }
@@ -920,12 +1081,11 @@ function inviteError(code: string): RepositoryError {
   const messages: Record<string, string> = {
     INVALID_CODE: '참여 코드를 확인해 주세요.',
     RATE_LIMITED: '코드를 너무 자주 확인했어요. 10분 뒤 다시 시도해 주세요.',
-    CHALLENGE_CLOSED: '이미 참여가 마감된 챌린지예요.',
+    ROOM_CLOSED: '이미 닫힌 방이에요.',
     CAPACITY_FULL: '방 정원이 가득 찼어요.',
-    NO_ELIGIBLE_DAYS: '남은 유효 챌린지 날짜가 없어요.',
-    ALREADY_PARTICIPATED: '이미 참여했거나 참여했던 챌린지예요.',
+    ALREADY_PARTICIPATED: '이미 참여했거나 참여했던 방이에요.',
   };
-  return new RepositoryError(code, messages[code] ?? '챌린지에 참여할 수 없어요.');
+  return new RepositoryError(code, messages[code] ?? '방에 참여할 수 없어요.');
 }
 
 function isAlreadyExistsError(error: unknown): boolean {
@@ -974,10 +1134,10 @@ function requireVersion(version: number | undefined, entity: string): number {
   return version as number;
 }
 
-function requireChallenge(snapshot: AppSnapshot, id: string): Challenge {
-  const challenge = snapshot.challenges.find((item) => item.id === id);
-  if (!challenge) throw new RepositoryError('NOT_FOUND', '챌린지를 찾을 수 없어요.');
-  return challenge;
+function requireRoom(snapshot: AppSnapshot, id: string): Room {
+  const room = snapshot.rooms.find((item) => item.id === id);
+  if (!room) throw new RepositoryError('NOT_FOUND', '방을 찾을 수 없어요.');
+  return room;
 }
 
 function requireExpense(snapshot: AppSnapshot, id: string): Expense {
@@ -1015,6 +1175,15 @@ function requiredString(value: unknown, label: string): string {
 }
 
 function safeNumber(value: unknown, label: string): number {
+  const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(number)) {
+    throw new RepositoryError('INVALID_RESPONSE', `${label} 응답이 올바르지 않아요.`);
+  }
+  return number;
+}
+
+/** remaining_amount can legitimately be negative when a member overspends. */
+function safeSignedNumber(value: unknown, label: string): number {
   const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
   if (!Number.isSafeInteger(number)) {
     throw new RepositoryError('INVALID_RESPONSE', `${label} 응답이 올바르지 않아요.`);

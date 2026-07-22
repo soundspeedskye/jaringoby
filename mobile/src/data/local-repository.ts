@@ -6,31 +6,47 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   AppSnapshot,
-  Challenge,
-  ChallengeMember,
   Comment,
-  CreateChallengeInput,
+  CreateRoomInput,
   Expense,
   InvitePreview,
+  Period,
+  PeriodMember,
+  PeriodResult,
+  Room,
+  RoomMember,
+  RoomMemberStats,
 } from '@/data/types';
 import {
   assertKrwAmount,
-  calculateAppliedLimit,
-  createChallengeCalendar,
-  createChallengeTimeline,
   createKoreanHolidaySnapshot,
+  createPeriodMemberPlan,
+  createPeriodTimeline,
+  createWeekdayCalendar,
   evaluateCommentMutationPermission,
-  evaluateExpenseEligibility,
   evaluateExpenseMutationPermission,
-  evaluateJoinPermission,
-  getChallengePhase,
+  evaluateExpenseEligibility,
+  getPeriodPhase,
+  getWeekStart,
   isExpenseCategory,
+  isWeekday,
   normalizeCommentBody,
+  resolveFirstWeekStart,
   toSeoulLocalDate,
   validateCommentBody,
+  type LocalDate,
+  type WeekdayCalendar,
 } from '@/domain';
 
-const STORAGE_KEY = 'jaringoby.snapshot.v2';
+// v3: 방(Room)+주차(Period) 모델. 이전 challenge 스냅샷과 호환되지 않는다.
+const STORAGE_KEY = 'jaringoby.snapshot.v3';
+
+// 데모 모드는 서버 공휴일 데이터가 없으므로 공휴일 없는 주로 동작한다.
+const DEMO_HOLIDAYS = createKoreanHolidaySnapshot({
+  version: 'demo-empty',
+  capturedAt: '2026-01-01T00:00:00+09:00',
+  dates: [],
+});
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -45,6 +61,10 @@ function inviteCode(): string {
   return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
+function seoulStartOfDay(date: LocalDate): string {
+  return `${date}T00:00:00+09:00`;
+}
+
 export class LocalRepository implements AppRepository {
   private snapshot: AppSnapshot | null = null;
   private listeners = new Set<(snapshot: AppSnapshot) => void>();
@@ -53,132 +73,110 @@ export class LocalRepository implements AppRepository {
     if (this.snapshot) return clone(this.snapshot);
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     this.snapshot = stored ? (JSON.parse(stored) as AppSnapshot) : createDemoSnapshot();
-    this.refreshPhases(this.snapshot);
+    this.refreshState(this.snapshot);
     await this.persist();
     return clone(this.snapshot);
   }
 
   async resetDemo(): Promise<AppSnapshot> {
     this.snapshot = createDemoSnapshot();
+    this.refreshState(this.snapshot);
     await this.persist();
     return clone(this.snapshot);
   }
 
-  async createChallenge(input: CreateChallengeInput): Promise<Challenge> {
+  async createRoom(input: CreateRoomInput): Promise<Room> {
     const state = await this.requireState();
     if (input.clientRequestId) {
-      const duplicate = state.challenges.find(
-        (challenge) => challenge.ownerId === state.currentUserId && challenge.clientRequestId === input.clientRequestId,
+      const duplicate = state.rooms.find(
+        (room) => room.ownerId === state.currentUserId && room.clientRequestId === input.clientRequestId,
       );
       if (duplicate) return clone(duplicate);
     }
     const name = input.name.trim();
-    if (!name || name.length > 30) throw new Error('챌린지 이름은 1~30자로 입력해 주세요.');
+    if (!name || name.length > 40) throw new Error('방 이름은 1~40자로 입력해 주세요.');
     try {
-      assertKrwAmount(input.baseLimit);
+      assertKrwAmount(input.baseAmount);
     } catch {
       throw new Error('기준금액은 1원 이상의 원 단위 정수로 입력해 주세요.');
     }
     if (!Number.isInteger(input.capacity) || input.capacity < 1 || input.capacity > 10) {
       throw new Error('정원은 1~10명으로 설정해 주세요.');
     }
-    const timeline = createChallengeTimeline({ startDate: input.startDate, endDate: input.endDate });
-    const today = toSeoulLocalDate(Date.now());
-    if (input.startDate < today) throw new Error('시작일은 오늘보다 이전일 수 없어요.');
-    if (input.selectedDates.some((date) => date < input.startDate || date > input.endDate)) {
-      throw new Error('선택일은 챌린지 기간 안에 있어야 해요.');
-    }
-    const holidaySnapshot = createKoreanHolidaySnapshot({
-      version: `kr-local-${input.startDate}`,
-      capturedAt: Date.now(),
-      dates: input.holidayDates,
-    });
-    const calendar = createChallengeCalendar({ selectedDates: input.selectedDates, holidaySnapshot });
-    const challengeId = id('challenge');
+
     const now = new Date().toISOString();
-    const challenge: Challenge = {
-      ...input,
-      name,
-      selectedDates: [...calendar.selectedDates],
-      holidayDates: [...calendar.excludedHolidayDates],
-      id: challengeId,
+    const today = toSeoulLocalDate(Date.now());
+    const room: Room = {
+      id: id('room'),
       ownerId: state.currentUserId,
+      name,
       inviteCode: inviteCode(),
-      holidaySnapshotVersion: holidaySnapshot.version,
-      phase: getChallengePhase(timeline, Date.now()),
+      baseAmount: input.baseAmount,
+      capacity: input.capacity,
+      status: 'OPEN',
       createdAt: now,
       clientRequestId: input.clientRequestId,
     };
-    const appliedLimit = calculateAppliedLimit({
-      baseAmount: input.baseLimit,
-      totalSelectedDays: calendar.totalSelectedDays,
-      remainingEffectiveDays: calendar.effectiveDates.length,
-    });
-    const member: ChallengeMember = {
-      challengeId,
+    state.rooms.unshift(room);
+    state.roomMembers.push({
+      roomId: room.id,
       userId: state.currentUserId,
-      joinedAt: now,
-      joinedDate: input.startDate,
-      appliedLimit,
+      role: 'OWNER',
       status: 'ACTIVE',
-      isLateJoiner: false,
-    };
-    state.challenges.unshift(challenge);
-    state.members.push(member);
+      joinedAt: now,
+    });
+
+    // D6: 평일 생성이면 이번 주(오늘부터 일할), 주말 생성이면 다음 주 월요일.
+    const period = this.createPeriodFor(state, room, resolveFirstWeekStart(today), 1);
+    this.upsertPeriodMember(state, room, period, state.currentUserId, today, now);
+
     if (input.clientRequestId) state.processedRequestIds.push(input.clientRequestId);
     await this.persist();
-    return clone(challenge);
+    return clone(room);
   }
 
-  async increaseCapacity(challengeId: string, capacity: number): Promise<Challenge> {
+  async increaseCapacity(roomId: string, capacity: number): Promise<Room> {
     const state = await this.requireState();
-    const challenge = this.findChallenge(state, challengeId);
-    const activeCount = state.members.filter((member) => member.challengeId === challengeId && member.status === 'ACTIVE').length;
-    if (challenge.ownerId !== state.currentUserId) throw new Error('방장만 정원을 변경할 수 있어요.');
-    if (capacity < challenge.capacity) throw new Error('정원은 줄일 수 없고 늘리기만 할 수 있어요.');
+    const room = this.findRoom(state, roomId);
+    const activeCount = this.activeRoomMemberCount(state, roomId);
+    if (room.ownerId !== state.currentUserId) throw new Error('방장만 정원을 변경할 수 있어요.');
+    if (room.status === 'CLOSED') throw new Error('닫힌 방은 읽기 전용이에요.');
+    if (capacity < room.capacity) throw new Error('정원은 줄일 수 없고 늘리기만 할 수 있어요.');
     if (capacity < activeCount) throw new Error('현재 참여자 수보다 정원을 줄일 수 없어요.');
     if (capacity > 10) throw new Error('정원은 최대 10명이에요.');
-    challenge.capacity = capacity;
+    room.capacity = capacity;
     await this.persist();
-    return clone(challenge);
+    return clone(room);
   }
 
-  async joinChallenge(code: string, joinedAt = new Date().toISOString()): Promise<ChallengeMember> {
+  async joinRoom(code: string, joinedAt = new Date().toISOString()): Promise<RoomMember> {
     const state = await this.requireState();
-    const challenge = state.challenges.find((item) => item.inviteCode === code.trim().toUpperCase());
-    if (!challenge) throw new Error('참여 코드를 확인해 주세요.');
-    const timeline = createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate });
-    const existing = state.members.find((member) => member.challengeId === challenge.id && member.userId === state.currentUserId);
-    const activeCount = state.members.filter((member) => member.challengeId === challenge.id && member.status === 'ACTIVE').length;
-    if (activeCount >= challenge.capacity) throw new Error('방 정원이 가득 찼어요.');
+    const room = state.rooms.find((item) => item.inviteCode === code.trim().toUpperCase());
+    if (!room) throw new Error('참여 코드를 확인해 주세요.');
+    if (room.status === 'CLOSED') throw new Error('이미 닫힌 방이에요.');
+    const existing = state.roomMembers.find(
+      (member) => member.roomId === room.id && member.userId === state.currentUserId,
+    );
+    if (existing) throw new Error('이미 참여했거나 참여했던 방이에요.');
+    if (this.activeRoomMemberCount(state, room.id) >= room.capacity) {
+      throw new Error('방 정원이 가득 찼어요.');
+    }
 
-    const joinedDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(joinedAt)) as ChallengeMember['joinedDate'];
-    const remainingEligibleDays = challenge.selectedDates.filter(
-      (date) => date >= joinedDate && !challenge.holidayDates.includes(date),
-    ).length;
-    const decision = evaluateJoinPermission({
-      now: joinedAt,
-      timeline,
-      activeMemberCount: activeCount,
-      capacity: challenge.capacity,
-      hasParticipatedBefore: Boolean(existing),
-      remainingEffectiveDays: remainingEligibleDays,
-    });
-    if (!decision.allowed) throw new Error(joinErrorMessage(decision.reason));
-    const member: ChallengeMember = {
-      challengeId: challenge.id,
+    const member: RoomMember = {
+      roomId: room.id,
       userId: state.currentUserId,
-      joinedAt,
-      joinedDate,
-      appliedLimit: calculateAppliedLimit({
-        baseAmount: challenge.baseLimit,
-        totalSelectedDays: challenge.selectedDates.length,
-        remainingEffectiveDays: remainingEligibleDays,
-      }),
+      role: 'MEMBER',
       status: 'ACTIVE',
-      isLateJoiner: joinedDate > challenge.startDate,
+      joinedAt,
     };
-    state.members.push(member);
+    state.roomMembers.push(member);
+
+    // D3: 현재 주차가 열려 있으면(now < E) 합류일부터 일할 참여.
+    const joinedDate = toSeoulLocalDate(joinedAt);
+    const currentPeriod = this.openPeriodOf(state, room.id, Date.parse(joinedAt));
+    if (currentPeriod) {
+      this.upsertPeriodMember(state, room, currentPeriod, state.currentUserId, joinedDate, joinedAt);
+    }
     await this.persist();
     return clone(member);
   }
@@ -186,51 +184,98 @@ export class LocalRepository implements AppRepository {
   async previewInvite(code: string): Promise<InvitePreview> {
     const state = await this.requireState();
     const normalized = code.trim().toUpperCase();
-    const challenge = state.challenges.find((item) => item.inviteCode === normalized);
-    if (!challenge) throw new Error('참여 코드를 확인해 주세요.');
-    const now = new Date();
-    const joinedDate = toSeoulLocalDate(now);
-    const memberCount = state.members.filter(
-      (member) => member.challengeId === challenge.id && member.status === 'ACTIVE',
-    ).length;
-    const remainingEffectiveDays = challenge.selectedDates.filter(
-      (date) => date >= joinedDate && !challenge.holidayDates.includes(date),
-    ).length;
-    const existing = state.members.some(
-      (member) => member.challengeId === challenge.id && member.userId === state.currentUserId,
+    const room = state.rooms.find((item) => item.inviteCode === normalized);
+    if (!room) throw new Error('참여 코드를 확인해 주세요.');
+    if (room.status === 'CLOSED') throw new Error('이미 닫힌 방이에요.');
+    const joinedDate = toSeoulLocalDate(Date.now());
+    const memberCount = this.activeRoomMemberCount(state, room.id);
+    const existing = state.roomMembers.some(
+      (member) => member.roomId === room.id && member.userId === state.currentUserId,
     );
-    const phase = getChallengePhase(
-      createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate }),
-      now,
-    );
+    const currentPeriod = this.openPeriodOf(state, room.id, Date.now());
+    const plan = currentPeriod
+      ? createPeriodMemberPlan({
+          calendar: this.calendarOf(currentPeriod),
+          joinedOn: joinedDate,
+          baseAmount: room.baseAmount,
+        })
+      : null;
+
     return {
       code: normalized,
-      challengeId: challenge.id,
-      name: challenge.name,
-      startDate: challenge.startDate,
-      endDate: challenge.endDate,
-      baseLimit: challenge.baseLimit,
-      capacity: challenge.capacity,
+      roomId: room.id,
+      name: room.name,
+      baseAmount: room.baseAmount,
+      capacity: room.capacity,
       memberCount,
-      totalSelectedDays: challenge.selectedDates.length,
-      effectiveDayCount: challenge.selectedDates.length - challenge.holidayDates.length,
-      holidayDates: [...challenge.holidayDates],
+      currentPeriod: currentPeriod
+        ? {
+            id: currentPeriod.id,
+            weekStart: currentPeriod.weekStart,
+            weekEnd: currentPeriod.weekEnd,
+            selectedDayCount: currentPeriod.selectedDayCount,
+            validDayCount: currentPeriod.validDayCount,
+            holidayDates: [...currentPeriod.holidayDates],
+          }
+        : undefined,
       joinedDate,
-      remainingEffectiveDays,
-      appliedLimit: remainingEffectiveDays > 0
-        ? calculateAppliedLimit({
-            baseAmount: challenge.baseLimit,
-            totalSelectedDays: challenge.selectedDates.length,
-            remainingEffectiveDays,
-          })
-        : 0,
-      isLateJoiner: phase === 'ACTIVE',
-      canJoin:
-        !existing &&
-        (phase === 'WAITING' || phase === 'ACTIVE') &&
-        memberCount < challenge.capacity &&
-        remainingEffectiveDays > 0,
+      eligibleDayCount: plan?.eligibleDayCount ?? 0,
+      appliedLimit: plan?.appliedLimit ?? 0,
+      isLateJoiner: plan?.isLateJoin ?? false,
+      participatesThisWeek: plan?.participatesThisWeek ?? false,
+      canJoin: !existing && memberCount < room.capacity,
     };
+  }
+
+  async leaveRoom(roomId: string, successorUserId?: string): Promise<void> {
+    const state = await this.requireState();
+    const room = this.findRoom(state, roomId);
+    const member = state.roomMembers.find(
+      (item) => item.roomId === roomId && item.userId === state.currentUserId,
+    );
+    if (!member || member.status !== 'ACTIVE') throw new Error('참여 중인 방이 아니에요.');
+
+    if (member.role === 'OWNER') {
+      if (!successorUserId || successorUserId === state.currentUserId) {
+        throw new Error('방장이 나가려면 다른 참여자에게 방장을 넘겨야 해요.');
+      }
+      const successor = state.roomMembers.find(
+        (item) => item.roomId === roomId && item.userId === successorUserId && item.status === 'ACTIVE',
+      );
+      if (!successor) throw new Error('방장을 넘길 참여자를 찾을 수 없어요.');
+      member.role = 'MEMBER';
+      successor.role = 'OWNER';
+      room.ownerId = successorUserId;
+    }
+    member.status = 'LEFT';
+
+    // 시작 전 주차에서는 행을 제거하고, 진행 중 주차에서는 LEFT로 남긴다.
+    const now = Date.now();
+    state.periodMembers = state.periodMembers.filter((periodMember) => {
+      if (periodMember.userId !== state.currentUserId) return true;
+      const period = state.periods.find((item) => item.id === periodMember.periodId);
+      if (!period || period.roomId !== roomId) return true;
+      return now >= createPeriodTimeline(period.weekStart).S;
+    });
+    for (const periodMember of state.periodMembers) {
+      if (periodMember.userId !== state.currentUserId || periodMember.status !== 'ACTIVE') continue;
+      const period = state.periods.find((item) => item.id === periodMember.periodId);
+      if (!period || period.roomId !== roomId) continue;
+      const timeline = createPeriodTimeline(period.weekStart);
+      if (now >= timeline.S && now < timeline.E) periodMember.status = 'LEFT';
+    }
+    await this.persist();
+  }
+
+  async closeRoom(roomId: string): Promise<Room> {
+    const state = await this.requireState();
+    const room = this.findRoom(state, roomId);
+    if (room.ownerId !== state.currentUserId) throw new Error('방장만 방을 닫을 수 있어요.');
+    if (room.status === 'CLOSED') return clone(room);
+    room.status = 'CLOSED';
+    room.closedAt = new Date().toISOString();
+    await this.persist();
+    return clone(room);
   }
 
   async addExpense(input: AddExpenseInput): Promise<Expense> {
@@ -257,8 +302,8 @@ export class LocalRepository implements AppRepository {
     const state = await this.requireState();
     const expense = this.findExpense(state, expenseId);
     if (expense.userId !== state.currentUserId) throw new Error('내 지출만 수정할 수 있어요.');
-    if (patch.challengeId !== undefined && patch.challengeId !== expense.challengeId) {
-      throw new Error('등록한 챌린지는 변경할 수 없어요.');
+    if (patch.periodId !== undefined && patch.periodId !== expense.periodId) {
+      throw new Error('등록한 주차는 변경할 수 없어요.');
     }
     if (patch.clientRequestId !== undefined && patch.clientRequestId !== expense.clientRequestId) {
       throw new Error('요청 식별자는 변경할 수 없어요.');
@@ -274,7 +319,7 @@ export class LocalRepository implements AppRepository {
     const state = await this.requireState();
     const expense = this.findExpense(state, expenseId);
     if (expense.userId !== state.currentUserId) throw new Error('내 지출만 삭제할 수 있어요.');
-    this.assertExpenseMutationAllowed(state, expense.challengeId, 'DELETE', expense.userId);
+    this.assertExpenseMutationAllowed(state, expense.periodId, 'DELETE', expense.userId);
     expense.deletedAt = new Date().toISOString();
     expense.updatedAt = expense.deletedAt;
     await this.persist();
@@ -335,19 +380,166 @@ export class LocalRepository implements AppRepository {
 
   private async requireState(): Promise<AppSnapshot> {
     if (!this.snapshot) await this.load();
-    this.refreshPhases(this.snapshot as AppSnapshot);
+    this.refreshState(this.snapshot as AppSnapshot);
     return this.snapshot as AppSnapshot;
   }
 
-  private refreshPhases(state: AppSnapshot): void {
-    for (const challenge of state.challenges) {
-      const phase = getChallengePhase(
-        createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate }),
-        Date.now(),
-      );
-      challenge.phase = phase;
-      if (phase === 'ARCHIVED' && !challenge.archivedAt) challenge.archivedAt = new Date().toISOString();
+  /**
+   * 서버(cron)가 하는 일을 데모에서 재현한다: phase 갱신 → 마감 주차 정산 →
+   * 이번 주차 자동 생성 (D7) → 누적 통계 재계산 (D4).
+   */
+  private refreshState(state: AppSnapshot): void {
+    const nowMs = Date.now();
+    for (const period of state.periods) {
+      const timeline = createPeriodTimeline(period.weekStart);
+      period.phase = getPeriodPhase(timeline, nowMs);
+      if (period.phase === 'ARCHIVED' && !period.finalizedAt) {
+        period.finalizedAt = new Date(timeline.F).toISOString();
+      }
     }
+
+    for (const period of state.periods) {
+      if (period.phase !== 'ARCHIVED') continue;
+      if (state.periodResults.some((result) => result.periodId === period.id)) continue;
+      this.finalizePeriod(state, period);
+    }
+
+    const today = toSeoulLocalDate(nowMs);
+    if (isWeekday(today)) {
+      const weekStart = getWeekStart(today);
+      for (const room of state.rooms) {
+        if (room.status !== 'OPEN') continue;
+        if (state.periods.some((period) => period.roomId === room.id && period.weekStart === weekStart)) {
+          continue;
+        }
+        const nextIndex = Math.max(
+          0,
+          ...state.periods.filter((period) => period.roomId === room.id).map((period) => period.weekIndex),
+        ) + 1;
+        const period = this.createPeriodFor(state, room, weekStart, nextIndex);
+        for (const member of state.roomMembers) {
+          if (member.roomId !== room.id || member.status !== 'ACTIVE') continue;
+          this.upsertPeriodMember(state, room, period, member.userId, weekStart, seoulStartOfDay(weekStart));
+        }
+      }
+    }
+
+    state.memberStats = computeStats(state.periods, state.periodResults);
+  }
+
+  private createPeriodFor(state: AppSnapshot, room: Room, weekStart: LocalDate, weekIndex: number): Period {
+    const calendar = createWeekdayCalendar({ weekStart, holidaySnapshot: DEMO_HOLIDAYS });
+    const timeline = createPeriodTimeline(weekStart);
+    const period: Period = {
+      id: id('period'),
+      roomId: room.id,
+      weekIndex,
+      weekStart,
+      weekEnd: calendar.weekEnd,
+      selectedDayCount: calendar.selectedDayCount,
+      validDayCount: calendar.validDayCount,
+      holidayDates: [...calendar.excludedHolidayDates],
+      holidayVersionId: DEMO_HOLIDAYS.version,
+      phase: getPeriodPhase(timeline, Date.now()),
+      isRestWeek: calendar.isRestWeek,
+      createdAt: new Date().toISOString(),
+    };
+    state.periods.unshift(period);
+    return period;
+  }
+
+  /** 단일 일할 경로 (D3/D6/D7): 유효일 0이면 행을 만들지 않는다. */
+  private upsertPeriodMember(
+    state: AppSnapshot,
+    room: Room,
+    period: Period,
+    userId: string,
+    joinedOn: LocalDate,
+    joinedAt: string,
+  ): PeriodMember | null {
+    const existing = state.periodMembers.find(
+      (member) => member.periodId === period.id && member.userId === userId,
+    );
+    if (existing) return existing;
+    const plan = createPeriodMemberPlan({
+      calendar: this.calendarOf(period),
+      joinedOn,
+      baseAmount: room.baseAmount,
+    });
+    if (!plan.participatesThisWeek) return null;
+    const member: PeriodMember = {
+      periodId: period.id,
+      userId,
+      joinedAt,
+      joinedDate: plan.joinedOn,
+      eligibleDayCount: plan.eligibleDayCount,
+      appliedLimit: plan.appliedLimit,
+      status: 'ACTIVE',
+      isLateJoiner: plan.isLateJoin,
+    };
+    state.periodMembers.push(member);
+    return member;
+  }
+
+  private finalizePeriod(state: AppSnapshot, period: Period): void {
+    const members = state.periodMembers.filter((member) => member.periodId === period.id);
+    if (members.length === 0) return;
+    const profileById = new Map(state.profiles.map((profile) => [profile.id, profile]));
+    const rows = members.map((member) => {
+      const spent = state.expenses
+        .filter(
+          (expense) =>
+            expense.periodId === period.id &&
+            expense.userId === member.userId &&
+            !expense.deletedAt,
+        )
+        .reduce((sum, expense) => sum + expense.amount, 0);
+      return { member, spent, remaining: member.appliedLimit - spent };
+    });
+    const maxActiveRemaining = Math.max(
+      ...rows.filter((row) => row.member.status === 'ACTIVE').map((row) => row.remaining),
+      Number.NEGATIVE_INFINITY,
+    );
+    const finalizedAt = period.finalizedAt ?? new Date().toISOString();
+    for (const row of rows) {
+      const result: PeriodResult = {
+        periodId: period.id,
+        roomId: period.roomId,
+        userId: row.member.userId,
+        nickname: profileById.get(row.member.userId)?.nickname ?? '사용자',
+        appliedLimit: row.member.appliedLimit,
+        spentAmount: row.spent,
+        remainingAmount: row.remaining,
+        achieved: row.spent <= row.member.appliedLimit,
+        isCrown: row.member.status === 'ACTIVE' && row.remaining === maxActiveRemaining,
+        finalizedAt,
+      };
+      state.periodResults.push(result);
+    }
+  }
+
+  private calendarOf(period: Period): WeekdayCalendar {
+    return createWeekdayCalendar({
+      weekStart: period.weekStart,
+      holidaySnapshot: createKoreanHolidaySnapshot({
+        version: period.holidayVersionId || 'demo-empty',
+        capturedAt: period.createdAt,
+        dates: period.holidayDates,
+      }),
+    });
+  }
+
+  /** now가 E 이전인 최신 주차 (WAITING 또는 ACTIVE). */
+  private openPeriodOf(state: AppSnapshot, roomId: string, nowMs: number): Period | undefined {
+    return state.periods
+      .filter((period) => period.roomId === roomId && nowMs < createPeriodTimeline(period.weekStart).E)
+      .sort((left, right) => right.weekStart.localeCompare(left.weekStart))[0];
+  }
+
+  private activeRoomMemberCount(state: AppSnapshot, roomId: string): number {
+    return state.roomMembers.filter(
+      (member) => member.roomId === roomId && member.status === 'ACTIVE',
+    ).length;
   }
 
   private validateExpenseInput(
@@ -364,30 +556,28 @@ export class LocalRepository implements AppRepository {
     }
     if (!isExpenseCategory(input.category)) throw new Error('지출 카테고리를 확인해 주세요.');
     if (input.memo.trim().length > 200) throw new Error('메모는 200자 이내로 입력해 주세요.');
-    if (!input.challengeId) return;
-    const challenge = this.findChallenge(state, input.challengeId);
-    const member = state.members.find(
-      (item) => item.challengeId === challenge.id && item.userId === authorId,
+    if (!input.periodId) return;
+    const period = this.findPeriod(state, input.periodId);
+    const room = this.findRoom(state, period.roomId);
+    if (room.status === 'CLOSED') throw new Error('닫힌 방은 읽기 전용이에요.');
+    const member = state.periodMembers.find(
+      (item) => item.periodId === period.id && item.userId === authorId,
     );
-    if (!member) throw new Error('참여 중인 챌린지가 아니에요.');
-    this.assertExpenseMutationAllowed(
-      state,
-      challenge.id,
-      action,
-      authorId,
-    );
-    if (!input.photoUri?.trim()) throw new Error('챌린지 지출에는 사진 1장이 필요해요.');
-    const timeline = createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate });
+    if (!member) throw new Error('이번 주차에 참여하고 있지 않아요.');
+    this.assertExpenseMutationAllowed(state, period.id, action, authorId);
+    if (!input.photoUri?.trim()) throw new Error('주차 지출에는 사진 1장이 필요해요.');
+    const timeline = createPeriodTimeline(period.weekStart);
     const eligibility = evaluateExpenseEligibility({
-      expectedChallengeId: challenge.id,
+      expectedPeriodId: period.id,
       timeline,
-      effectiveDates: challenge.selectedDates.filter((date) => !challenge.holidayDates.includes(date)),
+      effectiveDates: this.calendarOf(period).effectiveDates,
       expense: {
-        challengeId: challenge.id,
+        periodId: period.id,
         amount: input.amount,
         category: input.category,
         occurredAt: input.occurredAt,
-        joinedAt: member.joinedAt,
+        // D3: 합류일 포함 — 같은 날 합류 전 시각의 지출도 유효 (day 단위 판정).
+        joinedAt: seoulStartOfDay(member.joinedDate),
         memberStatusAtRecord: member.status,
         photoCount: 1,
         photoUploadStatus: 'COMPLETE',
@@ -399,19 +589,19 @@ export class LocalRepository implements AppRepository {
 
   private assertExpenseMutationAllowed(
     state: AppSnapshot,
-    challengeId: string | undefined,
+    periodId: string | undefined,
     action: 'CREATE' | 'UPDATE' | 'DELETE',
     expenseAuthorId?: string,
   ): void {
-    if (!challengeId) return;
-    const challenge = this.findChallenge(state, challengeId);
-    const member = state.members.find(
-      (item) => item.challengeId === challengeId && item.userId === state.currentUserId,
+    if (!periodId) return;
+    const period = this.findPeriod(state, periodId);
+    const member = state.periodMembers.find(
+      (item) => item.periodId === periodId && item.userId === state.currentUserId,
     );
     const decision = evaluateExpenseMutationPermission({
       action,
       now: Date.now(),
-      timeline: createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate }),
+      timeline: createPeriodTimeline(period.weekStart),
       actorMemberStatus: member?.status ?? 'LEFT',
       actorId: state.currentUserId,
       expenseAuthorId,
@@ -427,16 +617,17 @@ export class LocalRepository implements AppRepository {
     comment?: Comment,
   ): void {
     const expense = this.findExpense(state, expenseId);
-    if (!expense.challengeId) throw new Error('챌린지 지출에만 댓글을 남길 수 있어요.');
-    const challenge = this.findChallenge(state, expense.challengeId);
-    const member = state.members.find(
-      (item) => item.challengeId === challenge.id && item.userId === state.currentUserId,
+    if (!expense.periodId) throw new Error('주차 지출에만 댓글을 남길 수 있어요.');
+    const period = this.findPeriod(state, expense.periodId);
+    // 댓글 권한은 주차가 아니라 방 멤버십 기준 (서버와 동일).
+    const roomMember = state.roomMembers.find(
+      (item) => item.roomId === period.roomId && item.userId === state.currentUserId,
     );
     const decision = evaluateCommentMutationPermission({
       action,
       now,
-      timeline: createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate }),
-      actorMemberStatus: member?.status ?? 'LEFT',
+      timeline: createPeriodTimeline(period.weekStart),
+      actorMemberStatus: roomMember?.status ?? 'LEFT',
       actorId: state.currentUserId,
       commentAuthorId: comment?.userId,
       commentCreatedAt: comment?.createdAt,
@@ -444,10 +635,16 @@ export class LocalRepository implements AppRepository {
     if (!decision.allowed) throw new Error(commentPermissionMessage(decision.reason));
   }
 
-  private findChallenge(state: AppSnapshot, challengeId: string): Challenge {
-    const challenge = state.challenges.find((item) => item.id === challengeId);
-    if (!challenge) throw new Error('챌린지를 찾을 수 없어요.');
-    return challenge;
+  private findRoom(state: AppSnapshot, roomId: string): Room {
+    const room = state.rooms.find((item) => item.id === roomId);
+    if (!room) throw new Error('방을 찾을 수 없어요.');
+    return room;
+  }
+
+  private findPeriod(state: AppSnapshot, periodId: string): Period {
+    const period = state.periods.find((item) => item.id === periodId);
+    if (!period) throw new Error('주차를 찾을 수 없어요.');
+    return period;
   }
 
   private findExpense(state: AppSnapshot, expenseId: string): Expense {
@@ -470,19 +667,45 @@ export class LocalRepository implements AppRepository {
   }
 }
 
+/** D4/D5: 쉬는 주 제외, 최근 주차부터 연속 달성 수를 센다 (서버 뷰와 동일). */
+function computeStats(periods: Period[], results: PeriodResult[]): RoomMemberStats[] {
+  const weekIndexByPeriod = new Map(periods.map((period) => [period.id, period.weekIndex]));
+  const restPeriodIds = new Set(periods.filter((period) => period.isRestWeek).map((period) => period.id));
+  const grouped = new Map<string, { weekIndex: number; achieved: boolean; isCrown: boolean }[]>();
+  for (const result of results) {
+    if (restPeriodIds.has(result.periodId)) continue;
+    const weekIndex = weekIndexByPeriod.get(result.periodId);
+    if (weekIndex === undefined) continue;
+    const key = `${result.roomId} ${result.userId}`;
+    const rows = grouped.get(key) ?? [];
+    rows.push({ weekIndex, achieved: result.achieved, isCrown: result.isCrown });
+    grouped.set(key, rows);
+  }
+  return [...grouped.entries()].map(([key, rows]) => {
+    const [roomId, userId] = key.split(' ');
+    rows.sort((left, right) => right.weekIndex - left.weekIndex);
+    let currentStreak = 0;
+    for (const row of rows) {
+      if (!row.achieved) break;
+      currentStreak += 1;
+    }
+    return {
+      roomId,
+      userId,
+      participatedWeekCount: rows.length,
+      achievedWeekCount: rows.filter((row) => row.achieved).length,
+      crownCount: rows.filter((row) => row.isCrown).length,
+      currentStreak,
+    };
+  });
+}
+
 /** Applies the shared rule, then stores what the server would store: btrim(body). */
 function normalizeValidCommentBody(value: string): string {
   if (!validateCommentBody(value).valid) {
     throw new Error('댓글은 앞뒤 공백을 제외하고 1~500자로 입력해 주세요.');
   }
   return normalizeCommentBody(value);
-}
-
-function joinErrorMessage(reason: string): string {
-  if (reason === 'ROOM_FULL') return '방 정원이 가득 찼어요.';
-  if (reason === 'ALREADY_PARTICIPATED') return '이미 참여했거나 참여했던 챌린지예요.';
-  if (reason === 'NO_EFFECTIVE_DAYS') return '남은 유효 챌린지 날짜가 없어요.';
-  return '참여 가능한 기간이 끝났어요.';
 }
 
 function expensePermissionMessage(reason: string): string {
@@ -495,13 +718,13 @@ function commentPermissionMessage(reason: string): string {
   if (reason === 'NOT_COMMENT_AUTHOR') return '내 댓글만 수정하거나 삭제할 수 있어요.';
   if (reason === 'EDIT_WINDOW_EXPIRED') return '댓글은 작성 후 5분 안에만 수정할 수 있어요.';
   if (reason === 'MEMBER_NOT_ACTIVE') return '활성 참여자만 댓글을 남길 수 있어요.';
-  return '완료된 챌린지의 댓글은 읽기 전용이에요.';
+  return '정산이 끝난 주차의 댓글은 읽기 전용이에요.';
 }
 
 function expenseEligibilityMessage(reason: string | undefined): string {
-  if (reason === 'BEFORE_JOIN') return '합류 전 지출은 챌린지에 등록할 수 없어요.';
-  if (reason === 'HOLIDAY_OR_UNSELECTED_DATE') return '선택일이 아니거나 공휴일인 날짜의 지출은 포함할 수 없어요.';
-  if (reason === 'OUTSIDE_CHALLENGE_TIME') return '챌린지 기간 안의 지출만 등록할 수 있어요.';
+  if (reason === 'BEFORE_JOIN') return '합류 전 지출은 주차에 등록할 수 없어요.';
+  if (reason === 'HOLIDAY_OR_UNSELECTED_DATE') return '평일이 아니거나 공휴일인 날짜의 지출은 포함할 수 없어요.';
+  if (reason === 'OUTSIDE_PERIOD_TIME') return '주차 기간 안의 지출만 등록할 수 있어요.';
   if (reason === 'PHOTO_NOT_COMPLETE_BEFORE_C') return '보정 마감 전에 사진 저장이 완료돼야 해요.';
-  return '챌린지 정책에 맞지 않는 지출이에요.';
+  return '주차 정책에 맞지 않는 지출이에요.';
 }

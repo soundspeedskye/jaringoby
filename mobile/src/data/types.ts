@@ -1,8 +1,8 @@
 import type {
-  ChallengePhase,
   ExpenseCategory,
   LocalDate,
   MemberStatus,
+  PeriodPhase,
 } from "@/domain/types";
 
 export type SyncStatus = "SYNCED" | "PENDING" | "FAILED";
@@ -17,38 +17,92 @@ export type Profile = {
   avatarPath?: string;
 };
 
-export type Challenge = {
+export type RoomStatus = "OPEN" | "CLOSED";
+export type RoomRole = "OWNER" | "MEMBER";
+
+/** 방: 고정 설정 + 멤버십 + 초대의 소유자. 주차별 타임라인은 Period에 있다. */
+export type Room = {
   id: string;
   ownerId: string;
   name: string;
   inviteCode: string;
-  startDate: LocalDate;
-  endDate: LocalDate;
-  selectedDates: LocalDate[];
-  holidayDates: LocalDate[];
-  holidaySnapshotVersion: string;
-  baseLimit: number;
+  /** 주당 기준금액 (D2: 방 생성 시 고정). */
+  baseAmount: number;
   capacity: number;
-  phase: ChallengePhase;
+  status: RoomStatus;
   createdAt: string;
-  archivedAt?: string;
+  closedAt?: string;
   clientRequestId?: string;
 };
 
-export type ChallengeMember = {
-  challengeId: string;
+/** 방 멤버십(영속). 탈퇴 전까지 모든 주차에 자동 참여한다. */
+export type RoomMember = {
+  roomId: string;
+  userId: string;
+  role: RoomRole;
+  status: MemberStatus;
+  joinedAt: string;
+};
+
+/** 주차: 월~금 고정 주간 타임라인 (D1). 매주 자동 생성된다 (D7). */
+export type Period = {
+  id: string;
+  roomId: string;
+  weekIndex: number;
+  weekStart: LocalDate;
+  weekEnd: LocalDate;
+  selectedDayCount: number;
+  validDayCount: number;
+  holidayDates: LocalDate[];
+  holidayVersionId: string;
+  phase: PeriodPhase;
+  /** D5: 유효일 0인 쉬는 주. 참여자·결과·streak에 포함되지 않는다. */
+  isRestWeek: boolean;
+  finalizedAt?: string;
+  createdAt: string;
+};
+
+/** 주차 참여자: 주차별 일할 한도 (D3/D6 proration). */
+export type PeriodMember = {
+  periodId: string;
   userId: string;
   joinedAt: string;
   joinedDate: LocalDate;
+  eligibleDayCount: number;
   appliedLimit: number;
   status: MemberStatus;
   isLateJoiner: boolean;
 };
 
+/** 주차별 정산 스냅샷 (F 시점 확정). */
+export type PeriodResult = {
+  periodId: string;
+  roomId: string;
+  userId: string;
+  nickname: string;
+  appliedLimit: number;
+  spentAmount: number;
+  remainingAmount: number;
+  achieved: boolean;
+  isCrown: boolean;
+  finalizedAt: string;
+};
+
+/** 누적 통계 (D4): 쉬는 주는 집계·streak 모두 제외. */
+export type RoomMemberStats = {
+  roomId: string;
+  userId: string;
+  participatedWeekCount: number;
+  achievedWeekCount: number;
+  crownCount: number;
+  currentStreak: number;
+};
+
 export type Expense = {
   id: string;
   clientRequestId: string;
-  challengeId?: string;
+  /** 지출이 귀속되는 주차. 비우면 개인 지출. */
+  periodId?: string;
   userId: string;
   amount: number;
   category: ExpenseCategory;
@@ -87,49 +141,56 @@ export type Comment = {
 export type AppSnapshot = {
   currentUserId: string;
   profiles: Profile[];
-  challenges: Challenge[];
-  members: ChallengeMember[];
+  rooms: Room[];
+  roomMembers: RoomMember[];
+  periods: Period[];
+  periodMembers: PeriodMember[];
+  periodResults: PeriodResult[];
+  memberStats: RoomMemberStats[];
   expenses: Expense[];
   comments: Comment[];
   processedRequestIds: string[];
 };
 
+export type InvitePreviewPeriod = {
+  id: string;
+  weekStart: LocalDate;
+  weekEnd: LocalDate;
+  selectedDayCount: number;
+  validDayCount: number;
+  holidayDates: LocalDate[];
+};
+
 export type InvitePreview = {
   code: string;
-  challengeId: string;
+  roomId: string;
   name: string;
-  startDate: LocalDate;
-  endDate: LocalDate;
-  baseLimit: number;
+  baseAmount: number;
   capacity: number;
   memberCount: number;
-  totalSelectedDays: number;
-  effectiveDayCount: number;
-  holidayDates: LocalDate[];
+  /** 진행 중(또는 대기 중)인 주차. 주말에는 비어 있을 수 있다. */
+  currentPeriod?: InvitePreviewPeriod;
   joinedDate: LocalDate;
-  remainingEffectiveDays: number;
+  eligibleDayCount: number;
   appliedLimit: number;
   isLateJoiner: boolean;
+  /** false면 이번 주는 참여 없이 다음 주 월요일부터 시작한다. */
+  participatesThisWeek: boolean;
   canJoin: boolean;
 };
 
-export type CreateChallengeInput = Pick<
-  Challenge,
-  | "name"
-  | "startDate"
-  | "endDate"
-  | "selectedDates"
-  | "holidayDates"
-  | "baseLimit"
-  | "capacity"
-> & {
+export type CreateRoomInput = {
+  name: string;
+  /** 주당 기준금액. */
+  baseAmount: number;
+  capacity: number;
   /** UUID reused when retrying the same create request. */
   clientRequestId?: string;
 };
 
 export type AddExpenseInput = Pick<
   Expense,
-  "challengeId" | "amount" | "category" | "memo" | "photoUri" | "occurredAt"
+  "periodId" | "amount" | "category" | "memo" | "photoUri" | "occurredAt"
 > & {
   clientRequestId: string;
 };

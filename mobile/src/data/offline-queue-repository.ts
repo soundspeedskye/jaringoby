@@ -11,14 +11,14 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   AppSnapshot,
-  Challenge,
-  ChallengeMember,
   Comment,
-  CreateChallengeInput,
+  CreateRoomInput,
   Expense,
   InvitePreview,
+  Room,
+  RoomMember,
 } from '@/data/types';
-import { createChallengeTimeline } from '@/domain';
+import { createPeriodTimeline } from '@/domain';
 
 export const OFFLINE_QUEUE_STORAGE_KEY = 'jaringoby.offline-mutations.v1';
 export const OFFLINE_SNAPSHOT_STORAGE_KEY = 'jaringoby.offline-snapshots.v1';
@@ -179,8 +179,9 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
  * Offline-first decorator for the Supabase-backed repository.
  *
  * Mutations are durably written before network I/O and replayed in FIFO order.
- * Challenge creation, joining, invite preview and capacity changes intentionally
- * remain direct server operations because their result depends on current room state.
+ * Room creation, joining, invite preview, capacity changes, leaving and closing
+ * intentionally remain direct server operations because their result depends on
+ * current room state.
  */
 export class OfflineQueueRepository implements AppRepository {
   private readonly storage: OfflineQueueStorage;
@@ -276,14 +277,14 @@ export class OfflineQueueRepository implements AppRepository {
     });
   }
 
-  async createChallenge(input: CreateChallengeInput): Promise<Challenge> {
-    const result = await this.base.createChallenge(input);
+  async createRoom(input: CreateRoomInput): Promise<Room> {
+    const result = await this.base.createRoom(input);
     void this.refreshBase().catch(() => undefined);
     return result;
   }
 
-  async increaseCapacity(challengeId: string, capacity: number): Promise<Challenge> {
-    const result = await this.base.increaseCapacity(challengeId, capacity);
+  async increaseCapacity(roomId: string, capacity: number): Promise<Room> {
+    const result = await this.base.increaseCapacity(roomId, capacity);
     void this.refreshBase().catch(() => undefined);
     return result;
   }
@@ -292,8 +293,19 @@ export class OfflineQueueRepository implements AppRepository {
     return this.base.previewInvite(inviteCode);
   }
 
-  async joinChallenge(inviteCode: string, joinedAt?: string): Promise<ChallengeMember> {
-    const result = await this.base.joinChallenge(inviteCode, joinedAt);
+  async joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember> {
+    const result = await this.base.joinRoom(inviteCode, joinedAt);
+    void this.refreshBase().catch(() => undefined);
+    return result;
+  }
+
+  async leaveRoom(roomId: string, successorUserId?: string): Promise<void> {
+    await this.base.leaveRoom(roomId, successorUserId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async closeRoom(roomId: string): Promise<Room> {
+    const result = await this.base.closeRoom(roomId);
     void this.refreshBase().catch(() => undefined);
     return result;
   }
@@ -312,7 +324,7 @@ export class OfflineQueueRepository implements AppRepository {
       const timestamp = new Date(this.now()).toISOString();
       const operation: AddExpenseOperation = {
         ...this.newOperationBase('ADD_EXPENSE', operationId, requestId, timestamp),
-        deadlineAt: this.expenseDeadline(input.challengeId),
+        deadlineAt: this.expenseDeadline(input.periodId),
         optimisticId: `offline-expense-${hash32(requestId).toString(16)}`,
         input: {
           ...input,
@@ -379,7 +391,7 @@ export class OfflineQueueRepository implements AppRepository {
           patch: {},
           baseEntity: clone(current),
           baseVersion: current.version,
-          deadlineAt: this.expenseDeadline(current.challengeId),
+          deadlineAt: this.expenseDeadline(current.periodId),
         };
       }
       await this.replaceOperationPhotoLocked(operation, nextPatch.photoUri);
@@ -427,7 +439,7 @@ export class OfflineQueueRepository implements AppRepository {
       const timestamp = new Date(this.now()).toISOString();
       this.queue.operations.push({
         ...this.newOperationBase('DELETE_EXPENSE', `expense:delete:${requestId}`, requestId, timestamp),
-        deadlineAt: this.expenseDeadline(serverBase.challengeId),
+        deadlineAt: this.expenseDeadline(serverBase.periodId),
         targetId: expenseId,
         baseEntity: clone(serverBase),
         baseVersion: serverBase.version,
@@ -876,14 +888,16 @@ export class OfflineQueueRepository implements AppRepository {
     }
   }
 
-  private expenseDeadline(challengeId: string | undefined): string | undefined {
-    if (!challengeId || !this.baseSnapshot) return undefined;
-    const challenge = this.baseSnapshot.challenges.find((item) => item.id === challengeId);
-    if (!challenge) return undefined;
-    return new Date(createChallengeTimeline({
-      startDate: challenge.startDate,
-      endDate: challenge.endDate,
-    }).C).toISOString();
+  /**
+   * §7 오프라인 주차 전환 규칙: 지출은 큐에 담길 때의 주차(period)에 귀속되고,
+   * 그 주차의 보정 마감(C = 토 12:00 KST)이 서버 확인 전에 지나면
+   * CUTOFF_EXPIRED로 확정 실패 처리한다. 다음 주차로 이월하지 않는다.
+   */
+  private expenseDeadline(periodId: string | undefined): string | undefined {
+    if (!periodId || !this.baseSnapshot) return undefined;
+    const period = this.baseSnapshot.periods.find((item) => item.id === periodId);
+    if (!period) return undefined;
+    return new Date(createPeriodTimeline(period.weekStart).C).toISOString();
   }
 
   private async rebaseConflictLocked(operation: MutationOperation): Promise<boolean> {
@@ -902,7 +916,7 @@ export class OfflineQueueRepository implements AppRepository {
       }
       operation.baseEntity = clone(remote);
       operation.baseVersion = remote.version;
-      operation.deadlineAt = this.expenseDeadline(remote.challengeId);
+      operation.deadlineAt = this.expenseDeadline(remote.periodId);
       return true;
     }
     const remote = this.baseSnapshot.comments.find((comment) => comment.id === operation.targetId);
@@ -957,7 +971,7 @@ export class OfflineQueueRepository implements AppRepository {
         snapshot.expenses.unshift({
           id: operation.optimisticId,
           clientRequestId: operation.requestId,
-          challengeId: operation.input.challengeId,
+          periodId: operation.input.periodId,
           userId: operation.userId,
           amount: operation.input.amount,
           category: operation.input.category,
@@ -1047,7 +1061,7 @@ export class OfflineQueueRepository implements AppRepository {
         continue;
       }
       if (isExpenseOperation(operation) && !operation.deadlineAt) {
-        operation.deadlineAt = this.expenseDeadline(expenseChallengeId(operation));
+        operation.deadlineAt = this.expenseDeadline(expensePeriodId(operation));
         if (operation.deadlineAt) changed = true;
       }
       if (operation.kind === 'ADD_EXPENSE') {
@@ -1634,7 +1648,7 @@ function replacedExpensePhotoPath(
 
 function expectedUpdatePhotoPath(operation: UpdateExpenseOperation): string | undefined {
   if (!operation.patch.photoUri) return undefined;
-  const folder = operation.baseEntity.challengeId ?? 'personal';
+  const folder = operation.baseEntity.periodId ?? 'personal';
   const revision = operation.photoRevision ?? 1;
   return `${folder}/${operation.userId}/${safeFileStem(operation.id)}-photo-${revision}`;
 }
@@ -1752,12 +1766,12 @@ function isExpenseOperation(
     operation.kind === 'DELETE_EXPENSE';
 }
 
-function expenseChallengeId(
+function expensePeriodId(
   operation: AddExpenseOperation | UpdateExpenseOperation | DeleteExpenseOperation,
 ): string | undefined {
   return operation.kind === 'ADD_EXPENSE'
-    ? operation.input.challengeId
-    : operation.baseEntity.challengeId;
+    ? operation.input.periodId
+    : operation.baseEntity.periodId;
 }
 
 function isExpired(deadlineAt: string | undefined, now: number): boolean {
@@ -1803,8 +1817,12 @@ function isAppSnapshot(value: unknown): value is AppSnapshot {
   if (!isRecord(value)) return false;
   return typeof value.currentUserId === 'string' && value.currentUserId.length > 0 &&
     isRecordArray(value.profiles) &&
-    isRecordArray(value.challenges) &&
-    isRecordArray(value.members) &&
+    isRecordArray(value.rooms) &&
+    isRecordArray(value.roomMembers) &&
+    isRecordArray(value.periods) &&
+    isRecordArray(value.periodMembers) &&
+    isRecordArray(value.periodResults) &&
+    isRecordArray(value.memberStats) &&
     isRecordArray(value.expenses) &&
     isRecordArray(value.comments) &&
     Array.isArray(value.processedRequestIds) &&
