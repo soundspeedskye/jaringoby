@@ -10,6 +10,8 @@ type ChallengeHeroProps = {
   baseLimit: number;
   appliedLimit: number;
   spent: number;
+  pendingDelta?: number;
+  pendingCount?: number;
   joinLabel: string;
 };
 
@@ -24,16 +26,19 @@ export function ChallengeHero({
   baseLimit,
   appliedLimit,
   spent,
+  pendingDelta = 0,
+  pendingCount = 0,
   joinLabel,
 }: ChallengeHeroProps) {
   const safeLimit = Math.max(appliedLimit, 1);
+  const hasPending = pendingDelta !== 0 || pendingCount > 0;
   const progress = Math.min(Math.max(spent / safeLimit, 0), 1);
   const remaining = appliedLimit - spent;
 
   return (
     <View
       accessible
-      accessibilityLabel={`${title}, ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}, 적용한도 ${formatWon(appliedLimit)}`}
+      accessibilityLabel={`${title}, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}, 적용한도 ${formatWon(appliedLimit)}${hasPending ? `, ${pendingDelta === 0 ? '금액 외 변경' : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ''}`}
       style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.eyebrow}>WEEKDAY QUEST</Text>
@@ -56,13 +61,12 @@ export function ChallengeHero({
               cy={ringSize / 2}
               fill="transparent"
               r={radius}
-              rotation="-90"
-              origin={`${ringSize / 2}, ${ringSize / 2}`}
               stroke={spent > appliedLimit ? palette.coral : palette.yellow}
               strokeDasharray={`${circumference} ${circumference}`}
               strokeDashoffset={circumference * (1 - progress)}
               strokeLinecap="butt"
               strokeWidth={ringStroke}
+              transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
             />
           </Svg>
           <View pointerEvents="none" style={styles.ringLabel}>
@@ -81,10 +85,19 @@ export function ChallengeHero({
           <View style={styles.basePill}>
             <Text style={styles.basePillText}>기준금액 {formatWon(baseLimit)}</Text>
           </View>
+          {hasPending ? (
+            <Text style={styles.pendingText}>
+              임시 합계 {formatWon(spent + pendingDelta)} · {pendingDelta === 0 ? '금액 외 변경 대기' : `대기 반영 ${formatSignedWon(pendingDelta)}`}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
   );
+}
+
+function formatSignedWon(value: number): string {
+  return `${value > 0 ? '+' : '-'}${formatWon(Math.abs(value))}`;
 }
 
 const styles = StyleSheet.create({
@@ -119,4 +132,5 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.16)',
   },
   basePillText: { color: palette.cream, fontSize: 11 },
+  pendingText: { color: palette.cream, fontSize: 11, marginTop: spacing.sm },
 });

@@ -4,7 +4,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MemberListItem } from '@/components/challenge/member-list';
 import { ExpenseCard } from '@/components/expense/expense-card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { palette, radii, spacing } from '@/constants/design';
+import {
+  expenseOfficialAmount,
+  expensePendingDelta,
+  hasPendingExpenseProjection,
+} from '@/data/expense-sync';
 import type { Expense } from '@/data/types';
 import { formatDateLabel, formatWon } from '@/utils/format';
 
@@ -29,14 +35,19 @@ export const MemberExpenseDropdown = memo(function MemberExpenseDropdown({
     }),
     [expenses],
   );
-  const total = sortedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const total = sortedExpenses
+    .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
+  const pendingDelta = sortedExpenses
+    .reduce((sum, expense) => sum + expensePendingDelta(expense), 0);
+  const hasPending = sortedExpenses.some(hasPendingExpenseProjection);
+  const pendingSummary = pendingDelta === 0 ? '금액 외 변경' : `대기 반영 ${formatSignedWon(pendingDelta)}`;
   const displayName = member.isCurrentUser ? '나' : member.nickname;
 
   return (
     <View style={[styles.container, expanded && styles.containerExpanded]}>
       <Pressable
         accessibilityHint={`누르면 ${displayName}님의 지출 목록을 ${expanded ? '접습니다' : '펼칩니다'}`}
-        accessibilityLabel={`${member.isCrowned ? '현재 1위, ' : ''}${displayName}, 지출 ${sortedExpenses.length}건, 총 ${formatWon(total)}`}
+        accessibilityLabel={`${member.isCrowned ? '현재 1위, ' : ''}${displayName}, 지출 ${sortedExpenses.length}건, 공식 합계 ${formatWon(total)}${hasPending ? `, ${pendingSummary}` : ''}`}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         onPress={() => setExpanded((current) => !current)}
@@ -57,7 +68,9 @@ export const MemberExpenseDropdown = memo(function MemberExpenseDropdown({
             ) : null}
           </View>
           <Text style={styles.summary}>
-            {sortedExpenses.length ? `${sortedExpenses.length}건 · 총 ${formatWon(total)}` : '아직 지출 없음'}
+            {sortedExpenses.length
+              ? `${sortedExpenses.length}건 · 공식 ${formatWon(total)}${hasPending ? ` · ${pendingSummary}` : ''}`
+              : '아직 지출 없음'}
           </Text>
         </View>
 
@@ -93,16 +106,21 @@ export const MemberExpenseDropdown = memo(function MemberExpenseDropdown({
               ) : null}
             </View>
           )) : (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons color={palette.greenSoft} name="camera-outline" size={22} />
-              <Text style={styles.emptyText}>{displayName}님의 지출 기록이 아직 없어요.</Text>
-            </View>
+            <EmptyState
+              icon="camera-outline"
+              title={`${displayName}님의 지출 기록이 아직 없어요.`}
+              variant="compact"
+            />
           )}
         </View>
       ) : null}
     </View>
   );
 }, areMemberExpenseDropdownPropsEqual);
+
+function formatSignedWon(value: number): string {
+  return `${value > 0 ? '+' : '-'}${formatWon(Math.abs(value))}`;
+}
 
 function areMemberExpenseDropdownPropsEqual(
   previous: MemberExpenseDropdownProps,
@@ -188,11 +206,4 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
     backgroundColor: palette.line,
   },
-  emptyState: {
-    minHeight: 82,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  emptyText: { color: palette.muted, fontSize: 12 },
 });

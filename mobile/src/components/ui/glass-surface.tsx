@@ -58,10 +58,16 @@ export function GlassSurface({
   );
 
   useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
     let mounted = true;
-    void AccessibilityInfo.isReduceTransparencyEnabled().then((enabled) => {
-      if (mounted) setReduceTransparency(enabled);
-    });
+    void AccessibilityInfo.isReduceTransparencyEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceTransparency(enabled);
+      })
+      .catch(() => {
+        if (mounted) setReduceTransparency(false);
+      });
     const subscription = AccessibilityInfo.addEventListener('reduceTransparencyChanged', setReduceTransparency);
     return () => {
       mounted = false;
