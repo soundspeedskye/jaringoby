@@ -1,9 +1,10 @@
 export const DELETED_REPLY_PREVIEW = '삭제된 메시지에 대한 답글' as const;
-export const COMMENT_MAX_NON_WHITESPACE_CHARACTERS = 500;
+export const COMMENT_MAX_CHARACTERS = 500;
 
 export interface CommentBodyValidation {
   readonly valid: boolean;
-  readonly nonWhitespaceCharacters: number;
+  /** Length the database will see, i.e. char_length(btrim(body)). */
+  readonly length: number;
   readonly reason: 'VALID' | 'EMPTY' | 'TOO_LONG';
 }
 
@@ -33,17 +34,33 @@ export interface CommentCommand {
   readonly replyToMessageId: string | null;
 }
 
+/**
+ * Normalizes exactly like the database, which stores `btrim(body)`.
+ * Postgres `btrim` with one argument strips spaces only — not newlines or
+ * tabs — so a JavaScript `.trim()` would remove more than the server does.
+ */
+export function normalizeCommentBody(body: string): string {
+  return body.replace(/^ +| +$/gu, '');
+}
+
+/**
+ * Mirrors `char_length(btrim(body)) between 1 and 500`. `char_length` counts
+ * code points, so surrogate pairs (emoji) must not be counted as two.
+ * Whitespace-only bodies are rejected here even though `btrim` would let a
+ * newline through: staying stricter than the server never lets through
+ * something it would refuse.
+ */
 export function validateCommentBody(body: string): CommentBodyValidation {
-  const nonWhitespaceCharacters = Array.from(body).filter((character) => !/\s/u.test(character)).length;
+  const length = Array.from(normalizeCommentBody(body)).length;
   const reason =
-    nonWhitespaceCharacters === 0
+    body.trim().length === 0
       ? 'EMPTY'
-      : nonWhitespaceCharacters > COMMENT_MAX_NON_WHITESPACE_CHARACTERS
+      : length > COMMENT_MAX_CHARACTERS
         ? 'TOO_LONG'
         : 'VALID';
   return Object.freeze({
     valid: reason === 'VALID',
-    nonWhitespaceCharacters,
+    length,
     reason,
   });
 }

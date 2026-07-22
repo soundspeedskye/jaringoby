@@ -1,22 +1,3 @@
-import type { ChallengeCalendar } from './calendar';
-import { compareLocalDates, toSeoulLocalDate } from './date-time';
-import type { InstantInput } from './types';
-
-export interface AppliedLimitResult {
-  readonly baseAmount: number;
-  readonly totalSelectedDays: number;
-  readonly remainingEffectiveDays: number;
-  readonly appliedLimit: number;
-}
-
-export function countRemainingEffectiveDays(
-  calendar: ChallengeCalendar,
-  joinedAt: InstantInput,
-): number {
-  const joinDate = toSeoulLocalDate(joinedAt);
-  return calendar.effectiveDates.filter((date) => compareLocalDates(date, joinDate) >= 0).length;
-}
-
 export function calculateAppliedLimit(input: {
   readonly baseAmount: number;
   readonly totalSelectedDays: number;
@@ -43,24 +24,6 @@ export function calculateAppliedLimit(input: {
     throw new RangeError('Applied limit exceeds the safe KRW integer range');
   }
   return result;
-}
-
-export function calculateMemberLimit(input: {
-  readonly baseAmount: number;
-  readonly calendar: ChallengeCalendar;
-  readonly joinedAt: InstantInput;
-}): AppliedLimitResult {
-  const remainingEffectiveDays = countRemainingEffectiveDays(input.calendar, input.joinedAt);
-  return Object.freeze({
-    baseAmount: input.baseAmount,
-    totalSelectedDays: input.calendar.totalSelectedDays,
-    remainingEffectiveDays,
-    appliedLimit: calculateAppliedLimit({
-      baseAmount: input.baseAmount,
-      totalSelectedDays: input.calendar.totalSelectedDays,
-      remainingEffectiveDays,
-    }),
-  });
 }
 
 export function calculateRemainingAmount(appliedLimit: number, eligibleSpending: number): number {

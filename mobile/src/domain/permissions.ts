@@ -123,27 +123,6 @@ export function evaluateCommentMutationPermission(input: {
   return allowed();
 }
 
-export const IMMUTABLE_CHALLENGE_FIELDS = [
-  'startDate',
-  'endDate',
-  'selectedDates',
-  'dateSelectionMode',
-  'baseAmount',
-  'currency',
-  'timeZone',
-  'holidaySnapshot',
-] as const;
-
-export type ImmutableChallengeField = (typeof IMMUTABLE_CHALLENGE_FIELDS)[number];
-
-export function isChallengeFieldMutable(field: string): boolean {
-  return !(IMMUTABLE_CHALLENGE_FIELDS as readonly string[]).includes(field);
-}
-
-export function isReadOnlyChallengePhase(phase: ReturnType<typeof getChallengePhase>): boolean {
-  return phase === 'ARCHIVED';
-}
-
 function assertCapacityCounts(activeMemberCount: number, capacity: number): void {
   if (!Number.isInteger(activeMemberCount) || activeMemberCount < 0) {
     throw new RangeError('activeMemberCount must be a non-negative integer');

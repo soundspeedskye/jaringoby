@@ -1,5 +1,3 @@
-export const SEOUL_TIME_ZONE = 'Asia/Seoul' as const;
-
 export type LocalDate = `${number}-${number}-${number}`;
 export type InstantInput = Date | number | string;
 
