@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Field } from '@/components/ui/field';
+import { FormMessage } from '@/components/ui/form-message';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Screen } from '@/components/ui/screen';
 import { palette, spacing } from '@/constants/design';
@@ -45,7 +46,7 @@ export default function ResetPasswordScreen() {
       <View style={styles.form}>
         <Field autoComplete="new-password" label="새 비밀번호" onChangeText={setPassword} secureTextEntry value={password} />
         <Field autoComplete="new-password" label="새 비밀번호 확인" onChangeText={setConfirmation} secureTextEntry value={confirmation} />
-        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+        <FormMessage message={error} />
         <PrimaryButton label="비밀번호 변경" loading={submitting} onPress={() => void submit()} />
       </View>
     </Screen>
@@ -57,5 +58,4 @@ const styles = StyleSheet.create({
   title: { color: palette.ink, fontSize: 25, fontWeight: '800', marginTop: spacing.md },
   body: { color: palette.muted, fontSize: 12, textAlign: 'center', marginTop: spacing.sm },
   form: { gap: spacing.lg },
-  error: { color: palette.danger, fontSize: 12 },
 });

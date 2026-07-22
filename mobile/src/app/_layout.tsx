@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 
 import { palette } from '@/constants/design';
 import { AppProvider } from '@/providers/app-provider';
+import { AppDialogProvider } from '@/providers/app-dialog-provider';
 import { NotificationCoordinator } from '@/providers/notification-coordinator';
 import { SessionProvider, useSession } from '@/providers/session-provider';
 
@@ -37,20 +38,24 @@ function AuthenticatedApp() {
   }, [inAuthGroup, loading, recoveryMode, requiresAuth, router, session]);
 
   return (
-    <AppProvider key={session?.user.id ?? (requiresAuth ? 'signed-out' : 'demo')}>
-      <NotificationCoordinator>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.cream } }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="challenge/create" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="challenge/join" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="expense/new" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="expense/[id]" />
-          <Stack.Screen name="history/index" />
-          <Stack.Screen name="history/[id]" />
-        </Stack>
-      </NotificationCoordinator>
+    <AppProvider
+      key={session?.user.id ?? (requiresAuth ? 'signed-out' : 'demo')}
+      sessionUserId={session?.user.id ?? null}>
+      <AppDialogProvider>
+        <NotificationCoordinator>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.cream } }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="challenge/create" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="challenge/join" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="expense/new" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="expense/[id]" />
+            <Stack.Screen name="history/index" />
+            <Stack.Screen name="history/[id]" />
+          </Stack>
+        </NotificationCoordinator>
+      </AppDialogProvider>
     </AppProvider>
   );
 }

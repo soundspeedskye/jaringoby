@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Field } from '@/components/ui/field';
+import { FormMessage } from '@/components/ui/form-message';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Screen } from '@/components/ui/screen';
@@ -101,8 +102,8 @@ export default function SignInScreen() {
           </Pressable>
         ) : null}
 
-        {message ? <Text accessibilityLiveRegion="polite" style={styles.message}>{message}</Text> : null}
-        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+        <FormMessage message={message} tone="success" />
+        <FormMessage message={error} />
         <PrimaryButton label={mode === 'SIGN_IN' ? '로그인' : '계정 만들기'} loading={submitting} onPress={() => void submit()} />
         {mode === 'SIGN_IN' ? (
           <Pressable accessibilityRole="button" onPress={() => void resetPassword()} style={styles.resetButton}>
@@ -138,8 +139,6 @@ const styles = StyleSheet.create({
   checkbox: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: palette.green, borderRadius: 7 },
   checkboxChecked: { backgroundColor: palette.green },
   consentText: { flex: 1, color: palette.ink, fontSize: 11, lineHeight: 17 },
-  message: { color: palette.success, fontSize: 12, lineHeight: 18 },
-  error: { color: palette.danger, fontSize: 12, lineHeight: 18 },
   resetButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   resetText: { color: palette.green, fontSize: 12, fontWeight: '700' },
 });

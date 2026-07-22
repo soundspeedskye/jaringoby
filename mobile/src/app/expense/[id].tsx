@@ -6,7 +6,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -14,8 +13,13 @@ import {
   View,
 } from "react-native";
 
+import { ChoiceChip } from "@/components/ui/choice-chip";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
+import { FormMessage } from "@/components/ui/form-message";
 import { GlassSurface } from "@/components/ui/glass-surface";
+import { NoticeBanner } from "@/components/ui/notice-banner";
+import { PageHeader } from "@/components/ui/page-header";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen } from "@/components/ui/screen";
@@ -40,12 +44,14 @@ import {
   type ReplyDraft,
 } from "@/domain";
 import { useAppActions, useAppData } from "@/providers/app-provider";
+import { useAppDialog } from "@/providers/app-dialog-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { formatDateLabel, formatWon } from "@/utils/format";
 import { createUuid } from "@/utils/uuid";
 
 export default function ExpenseDetailScreen() {
   const router = useRouter();
+  const { showDialog } = useAppDialog();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const expenseId = Array.isArray(params.id) ? params.id[0] : params.id;
   const {
@@ -115,26 +121,24 @@ export default function ExpenseDetailScreen() {
   if (!expense || !expenseId) {
     return (
       <Screen testID="expense-detail-screen">
-        <TopBar onBack={() => router.back()} />
-        <View style={styles.notFound}>
-          <MaterialCommunityIcons
-            color={palette.greenSoft}
-            name="receipt-text-remove-outline"
-            size={44}
-          />
-          <Text style={styles.notFoundTitle}>지출 기록을 찾을 수 없어요.</Text>
-          <PrimaryButton
-            label="뒤로 가기"
-            onPress={() => router.back()}
-            variant="secondary"
-          />
-        </View>
+        <PageHeader onBack={() => router.back()} title="지출 상세" />
+        <EmptyState
+          action={
+            <PrimaryButton
+              label="뒤로 가기"
+              onPress={() => router.back()}
+              variant="secondary"
+            />
+          }
+          icon="receipt-text-remove-outline"
+          title="지출 기록을 찾을 수 없어요."
+        />
       </Screen>
     );
   }
 
   const removeExpense = () => {
-    Alert.alert(
+    showDialog(
       "지출 기록 삭제",
       "보정 마감 전까지 삭제할 수 있으며, 방 합계에서도 제외돼요.",
       [
@@ -162,30 +166,19 @@ export default function ExpenseDetailScreen() {
 
   return (
     <Screen testID="expense-detail-screen">
-      <TopBar onBack={() => router.back()} />
+      <PageHeader onBack={() => router.back()} title="지출 상세" />
 
       {phase === "ARCHIVED" ? (
-        <View style={styles.readOnlyBanner}>
-          <MaterialCommunityIcons
-            color={palette.green}
-            name="archive-lock-outline"
-            size={19}
-          />
-          <Text style={styles.readOnlyText}>
-            완료된 챌린지의 읽기 전용 기록이에요.
-          </Text>
-        </View>
+        <NoticeBanner icon="archive-lock-outline" style={styles.readOnlyBanner}>
+          완료된 챌린지의 읽기 전용 기록이에요.
+        </NoticeBanner>
       ) : phase === "SETTLEMENT" ? (
-        <View style={styles.readOnlyBanner}>
-          <MaterialCommunityIcons
-            color={palette.green}
-            name="calculator-variant-outline"
-            size={19}
-          />
-          <Text style={styles.readOnlyText}>
-            정산 중이라 지출은 잠겼지만 댓글은 남길 수 있어요.
-          </Text>
-        </View>
+        <NoticeBanner
+          icon="calculator-variant-outline"
+          style={styles.readOnlyBanner}
+        >
+          정산 중이라 지출은 잠겼지만 댓글은 남길 수 있어요.
+        </NoticeBanner>
       ) : null}
 
       <ExpenseSummary author={author} challenge={challenge} expense={expense} />
@@ -223,11 +216,7 @@ export default function ExpenseDetailScreen() {
         />
       ) : null}
 
-      {expenseError ? (
-        <Text accessibilityRole="alert" style={styles.threadError}>
-          {expenseError}
-        </Text>
-      ) : null}
+      <FormMessage message={expenseError} style={styles.threadError} />
       <CommentSection
         addComment={addComment}
         canMutate={canMutateComments}
@@ -397,25 +386,18 @@ function ExpenseEditor({
         onChangeText={setDraftAmount}
         value={draftAmount}
       />
-      <View style={styles.editCategories}>
+      <View
+        accessibilityLabel="지출 카테고리 선택"
+        accessibilityRole="radiogroup"
+        style={styles.editCategories}
+      >
         {EXPENSE_CATEGORIES.map((item) => (
-          <Pressable
+          <ChoiceChip
             key={item}
+            label={item}
             onPress={() => setDraftCategory(item)}
-            style={[
-              styles.editCategory,
-              item === draftCategory && styles.editCategorySelected,
-            ]}
-          >
-            <Text
-              style={[
-                styles.editCategoryText,
-                item === draftCategory && styles.editCategoryTextSelected,
-              ]}
-            >
-              {item}
-            </Text>
-          </Pressable>
+            selected={item === draftCategory}
+          />
         ))}
       </View>
       <Field
@@ -452,11 +434,7 @@ function ExpenseEditor({
           value={draftOccurredAt}
         />
       </View>
-      {error ? (
-        <Text accessibilityRole="alert" style={styles.threadError}>
-          {error}
-        </Text>
-      ) : null}
+      <FormMessage message={error} style={styles.threadError} />
       <PrimaryButton
         label="수정 내용 저장"
         loading={saving}
@@ -590,24 +568,15 @@ function CommentSection({
             );
           })
         ) : (
-          <View style={styles.noMessages}>
-            <Text style={styles.noMessagesText}>
-              아직 댓글이 없어요. 첫 응원을 남겨 보세요.
-            </Text>
-          </View>
+          <EmptyState
+            title="아직 댓글이 없어요. 첫 응원을 남겨 보세요."
+            variant="compact"
+          />
         )}
       </View>
 
-      {feedback ? (
-        <Text accessibilityLiveRegion="polite" style={styles.feedback}>
-          {feedback}
-        </Text>
-      ) : null}
-      {error ? (
-        <Text accessibilityRole="alert" style={styles.threadError}>
-          {error}
-        </Text>
-      ) : null}
+      <FormMessage message={feedback} style={styles.feedback} tone="success" />
+      <FormMessage message={error} style={styles.threadError} />
 
       {canMutate ? (
         <CommentComposer
@@ -668,6 +637,7 @@ const CommentItem = memo(function CommentItem({
   replied?: Comment;
   repliedProfile?: Profile;
 }) {
+  const { showDialog } = useAppDialog();
   const mine = comment.userId === currentUserId;
   const [editingBody, setEditingBody] = useState(comment.body);
 
@@ -684,18 +654,18 @@ const CommentItem = memo(function CommentItem({
         : []),
       { text: "취소", style: "cancel" as const },
     ];
-    Alert.alert(
+    showDialog(
       "메시지 메뉴",
       "답글을 선택하면 입력창 위에 원문이 읽기 전용으로 표시돼요.",
       buttons,
     );
-  }, [comment, copyMessage, onReply]);
+  }, [comment, copyMessage, onReply, showDialog]);
   const saveEdit = async () => {
     const validation = validateCommentBody(editingBody);
     if (!validation.valid) {
       onError(
         validation.reason === "TOO_LONG"
-          ? "댓글은 공백 제외 500자까지 입력할 수 있어요."
+          ? "댓글은 앞뒤 공백을 제외하고 500자까지 입력할 수 있어요."
           : "댓글 내용을 입력해 주세요.",
       );
       return;
@@ -711,7 +681,7 @@ const CommentItem = memo(function CommentItem({
     }
   };
   const remove = () => {
-    Alert.alert(
+    showDialog(
       "댓글 삭제",
       "답글 관계는 남고 본문은 삭제된 메시지로 표시돼요.",
       [
@@ -943,25 +913,6 @@ const CommentComposer = memo(function CommentComposer({
   );
 });
 
-function TopBar({ onBack }: { onBack: () => void }) {
-  return (
-    <View style={styles.topBar}>
-      <Pressable
-        accessibilityLabel="뒤로"
-        onPress={onBack}
-        style={styles.backButton}
-      >
-        <MaterialCommunityIcons
-          color={palette.green}
-          name="chevron-left"
-          size={26}
-        />
-      </Pressable>
-      <Text style={styles.title}>지출 상세</Text>
-    </View>
-  );
-}
-
 function InlineDatePicker({
   label,
   mode,
@@ -1011,33 +962,7 @@ function formatFullDate(value: Date): string {
 }
 
 const styles = StyleSheet.create({
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.48)",
-  },
-  title: { color: palette.ink, fontSize: 28, fontWeight: "700", marginTop: 3 },
-  readOnlyBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(47,113,93,0.10)",
-  },
-  readOnlyText: { color: palette.green, flex: 1, fontSize: 12 },
+  readOnlyBanner: { marginBottom: spacing.md },
   expenseCard: {
     overflow: "hidden",
     borderRadius: radii.lg,
@@ -1107,19 +1032,6 @@ const styles = StyleSheet.create({
   },
   editorTitle: { color: palette.ink, fontSize: 17, fontWeight: "700" },
   editCategories: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  editCategory: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: palette.line,
-    borderRadius: radii.pill,
-  },
-  editCategorySelected: {
-    backgroundColor: palette.green,
-    borderColor: palette.green,
-  },
-  editCategoryText: { color: palette.muted, fontSize: 11 },
-  editCategoryTextSelected: { color: palette.cream, fontWeight: "700" },
   editMemo: { minHeight: 76, textAlignVertical: "top" },
   editPhoto: {
     width: "100%",
@@ -1233,8 +1145,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   commentActionDanger: { color: palette.danger, fontSize: 10 },
-  noMessages: { alignItems: "center", paddingVertical: spacing.xxl },
-  noMessagesText: { color: palette.muted, fontSize: 12 },
   feedback: {
     color: palette.success,
     fontSize: 11,
@@ -1302,6 +1212,4 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(52,49,40,0.06)",
   },
   closedComposerText: { color: palette.muted, fontSize: 11 },
-  notFound: { alignItems: "center", gap: spacing.md, paddingTop: 100 },
-  notFoundTitle: { color: palette.ink, fontSize: 17, fontWeight: "700" },
 });

@@ -8,11 +8,16 @@ import {
   View,
 } from "react-native";
 
+import { ModalFormScreen } from "@/components/layout/modal-form-screen";
+import { ActionChip } from "@/components/ui/choice-chip";
 import { Field } from "@/components/ui/field";
+import { FormMessage } from "@/components/ui/form-message";
+import { FormSection } from "@/components/ui/form-section";
 import { GlassSurface } from "@/components/ui/glass-surface";
+import { KeyValueRow } from "@/components/ui/key-value-row";
+import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen } from "@/components/ui/screen";
 import { palette, radii, spacing } from "@/constants/design";
 import {
   addLocalDays,
@@ -157,9 +162,19 @@ export default function CreateChallengeScreen() {
   };
 
   return (
-    <Screen testID="create-challenge-screen">
-      <Header onBack={() => router.back()} />
-
+    <ModalFormScreen
+      footer={
+        <PrimaryButton
+          label="이 조건으로 챌린지 만들기"
+          loading={submitting}
+          onPress={() => void submit()}
+        />
+      }
+      headerBottomSpacing="xl"
+      onBack={() => router.back()}
+      testID="create-challenge-screen"
+      title="챌린지 만들기"
+    >
       <Field
         autoFocus
         label="챌린지 이름"
@@ -169,15 +184,18 @@ export default function CreateChallengeScreen() {
         value={name}
       />
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>기간</Text>
+      <FormSection
+        hint="시작일과 종료일을 포함해 최대 31일까지 선택할 수 있어요."
+        style={styles.section}
+        title="기간"
+      >
         <View style={styles.presets}>
-          <Preset label="오늘" onPress={() => applyPreset("TODAY")} />
-          <Preset
+          <ActionChip label="오늘" onPress={() => applyPreset("TODAY")} />
+          <ActionChip
             label="다음 평일"
             onPress={() => applyPreset("NEXT_WEEKDAY")}
           />
-          <Preset label="7일" onPress={() => applyPreset("SEVEN_DAYS")} />
+          <ActionChip label="7일" onPress={() => applyPreset("SEVEN_DAYS")} />
         </View>
         <View style={styles.dateRow}>
           <DateSelector
@@ -199,22 +217,12 @@ export default function CreateChallengeScreen() {
             value={endDate}
           />
         </View>
-        <Text style={styles.hint}>
-          시작일과 종료일을 포함해 최대 31일까지 선택할 수 있어요.
-        </Text>
-      </View>
+      </FormSection>
 
-      <View style={styles.selectionNotice}>
-        <MaterialCommunityIcons
-          color={palette.green}
-          name="calendar-range-outline"
-          size={19}
-        />
-        <Text style={styles.selectionNoticeText}>
-          시작일부터 종료일까지 주말을 포함한 연속 {selectedDates.length}일이
-          선택일로 고정돼요. 공휴일만 자동 제외됩니다.
-        </Text>
-      </View>
+      <NoticeBanner icon="calendar-range-outline" style={styles.selectionNotice}>
+        시작일부터 종료일까지 주말을 포함한 연속 {selectedDates.length}일이
+        선택일로 고정돼요. 공휴일만 자동 제외됩니다.
+      </NoticeBanner>
 
       <View style={styles.amountRow}>
         <View style={styles.flexField}>
@@ -250,16 +258,16 @@ export default function CreateChallengeScreen() {
           <Text style={styles.previewValue}>{formatWon(previewLimit)}</Text>
         </View>
         <View style={styles.divider} />
-        <SummaryRow label="전체 선택일" value={`${selectedDates.length}일`} />
-        <SummaryRow
+        <KeyValueRow label="전체 선택일" value={`${selectedDates.length}일`} />
+        <KeyValueRow
           label="대한민국 공휴일 제외"
           value={`${holidayDates.length}일`}
         />
-        <SummaryRow
+        <KeyValueRow
           label="유효 챌린지"
           value={`${Math.max(0, effectiveDays)}일`}
         />
-        <SummaryRow
+        <KeyValueRow
           label="계산식"
           value={`${formatWon(baseLimit || 0, false)} × ${Math.max(0, effectiveDays)} ÷ ${selectedDates.length || 0}`}
         />
@@ -305,47 +313,8 @@ export default function CreateChallengeScreen() {
         </Text>
       </Pressable>
 
-      {formError ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {formError}
-        </Text>
-      ) : null}
-      <PrimaryButton
-        label="이 조건으로 챌린지 만들기"
-        loading={submitting}
-        onPress={() => void submit()}
-      />
-    </Screen>
-  );
-}
-
-function Header({ onBack }: { onBack: () => void }) {
-  return (
-    <View style={styles.header}>
-      <Pressable
-        accessibilityLabel="뒤로"
-        onPress={onBack}
-        style={styles.backButton}
-      >
-        <MaterialCommunityIcons
-          color={palette.green}
-          name="chevron-left"
-          size={26}
-        />
-      </Pressable>
-      <Text style={styles.title}>챌린지 만들기</Text>
-    </View>
-  );
-}
-
-function Preset({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.preset, pressed && styles.pressed]}
-    >
-      <Text style={styles.presetText}>{label}</Text>
-    </Pressable>
+      <FormMessage message={formError} style={styles.formMessage} />
+    </ModalFormScreen>
   );
 }
 
@@ -401,15 +370,6 @@ function DateSelector({
       )}
       value={dateFromLocal(value)}
     />
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
-    </View>
   );
 }
 
@@ -479,43 +439,8 @@ function validate(input: {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingTop: spacing.xl,
-    marginBottom: spacing.xl,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.48)",
-  },
-  title: {
-    flex: 1,
-    color: palette.ink,
-    fontSize: 28,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-  section: { marginTop: spacing.xl, gap: spacing.md },
-  sectionTitle: { color: palette.ink, fontSize: 15, fontWeight: "700" },
+  section: { marginTop: spacing.xl },
   presets: { flexDirection: "row", gap: spacing.sm },
-  preset: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: palette.green,
-    backgroundColor: "rgba(255,255,255,0.48)",
-  },
-  presetText: { color: palette.green, fontSize: 12, fontWeight: "600" },
-  pressed: { opacity: 0.7 },
   dateRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   dateArrow: { transform: [{ translateY: spacing.sm }] },
   dateSelector: { flex: 1, gap: spacing.sm },
@@ -532,22 +457,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.55)",
   },
   dateValue: { color: palette.ink, fontSize: 13, fontWeight: "600" },
-  hint: { color: palette.muted, fontSize: 11, lineHeight: 17 },
-  selectionNotice: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(47,113,93,0.09)",
-  },
-  selectionNoticeText: {
-    flex: 1,
-    color: palette.green,
-    fontSize: 11,
-    lineHeight: 18,
-  },
+  selectionNotice: { marginTop: spacing.md },
   amountRow: {
     flexDirection: "row",
     gap: spacing.md,
@@ -585,14 +495,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.line,
     marginVertical: spacing.md,
   },
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 28,
-  },
-  summaryLabel: { color: palette.muted, fontSize: 12 },
-  summaryValue: { color: palette.ink, fontSize: 12, fontWeight: "600" },
   holidayBox: {
     marginTop: spacing.md,
     padding: spacing.md,
@@ -633,5 +535,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 19,
   },
-  error: { color: palette.danger, fontSize: 12, marginBottom: spacing.md },
+  formMessage: { marginBottom: spacing.md },
 });

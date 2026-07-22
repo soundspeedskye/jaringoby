@@ -16,9 +16,16 @@ import {
   type MemberListItem,
 } from "@/components/challenge/member-list";
 import { MemberExpenseDropdown } from "@/components/expense/member-expense-dropdown";
+import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen } from "@/components/ui/screen";
+import { SectionHeader } from "@/components/ui/section-header";
 import { palette, radii, shadow, spacing } from "@/constants/design";
+import {
+  expenseOfficialAmount,
+  expensePendingDelta,
+  hasPendingExpenseProjection,
+} from "@/data/expense-sync";
 import type { Expense } from "@/data/types";
 import {
   addLocalDays,
@@ -47,7 +54,7 @@ export default function ChallengeHomeScreen() {
     getProfile,
     loading,
   } = useAppData();
-  const { clearError } = useAppActions();
+  const { clearError, refresh } = useAppActions();
   const members = useMemo(
     () => (activeChallenge ? getMembers(activeChallenge.id) : []),
     [activeChallenge, getMembers],
@@ -105,6 +112,20 @@ export default function ChallengeHomeScreen() {
     Boolean(timeline),
   );
 
+  // Rendered by every branch below: a failed initial load leaves activeChallenge
+  // and currentUser empty, so an error shown only by the loaded view is invisible
+  // exactly when it matters most.
+  const errorBanner = error ? (
+    <Pressable
+      accessibilityRole="alert"
+      onPress={clearError}
+      style={styles.errorBanner}
+    >
+      <Text style={styles.errorText}>{error}</Text>
+      <MaterialCommunityIcons color={palette.danger} name="close" size={18} />
+    </Pressable>
+  ) : null;
+
   if (loading) {
     return (
       <Screen scroll={false}>
@@ -118,19 +139,28 @@ export default function ChallengeHomeScreen() {
   if (!activeChallenge || !currentUser || !timeline) {
     return (
       <Screen>
+        {errorBanner}
         <View style={styles.emptyHeader}>
           <Text style={styles.kicker}>JARINGOBY</Text>
           <Text style={styles.emptyTitle}>
-            함께하면 더 오래 지킬 수 있어요.
+            {error
+              ? "기록을 불러오지 못했어요."
+              : "함께하면 더 오래 지킬 수 있어요."}
           </Text>
           <Text style={styles.emptyBody}>
-            기간과 기준금액을 정하고 친구를 초대해 첫 챌린지를 시작해 보세요.
+            {error
+              ? "네트워크와 로그인 상태를 확인한 뒤 다시 시도해 주세요. 아직 저장되지 않은 기록은 이 기기에 남아 있어요."
+              : "기간과 기준금액을 정하고 친구를 초대해 첫 챌린지를 시작해 보세요."}
           </Text>
         </View>
         <View style={styles.emptyActions}>
+          {error ? (
+            <PrimaryButton label="다시 시도" onPress={() => void refresh()} />
+          ) : null}
           <PrimaryButton
             label="챌린지 만들기"
             onPress={() => router.push("/challenge/create")}
+            variant={error ? "secondary" : "primary"}
           />
           <PrimaryButton
             label="참여 코드 입력"
@@ -148,7 +178,13 @@ export default function ChallengeHomeScreen() {
   );
   const mySpent = expenses
     .filter((expense) => expense.userId === currentUser.id)
-    .reduce((sum, expense) => sum + expense.amount, 0);
+    .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
+  const myPendingDelta = expenses
+    .filter((expense) => expense.userId === currentUser.id)
+    .reduce((sum, expense) => sum + expensePendingDelta(expense), 0);
+  const myPendingCount = expenses.filter(
+    (expense) => expense.userId === currentUser.id && hasPendingExpenseProjection(expense),
+  ).length;
   const appliedLimit = currentMember?.appliedLimit ?? activeChallenge.baseLimit;
   const today = toSeoulLocalDate(now);
   const daysRemaining = Math.max(
@@ -165,10 +201,8 @@ export default function ChallengeHomeScreen() {
       const profile = getProfile(member.userId);
       const memberExpenses =
         expensesByUserId.get(member.userId) ?? EMPTY_EXPENSES;
-      const spent = memberExpenses.reduce(
-        (sum, expense) => sum + expense.amount,
-        0,
-      );
+      const spent = memberExpenses
+        .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
       const latest = memberExpenses[0];
       return {
         id: member.userId,
@@ -223,20 +257,7 @@ export default function ChallengeHomeScreen() {
         </View>
       </View>
 
-      {error ? (
-        <Pressable
-          accessibilityRole="alert"
-          onPress={clearError}
-          style={styles.errorBanner}
-        >
-          <Text style={styles.errorText}>{error}</Text>
-          <MaterialCommunityIcons
-            color={palette.danger}
-            name="close"
-            size={18}
-          />
-        </Pressable>
-      ) : null}
+      {errorBanner}
 
       <ChallengeHero
         appliedLimit={appliedLimit}
@@ -247,6 +268,8 @@ export default function ChallengeHomeScreen() {
             ? `${currentMember.joinedDate.slice(5).replace("-", "/")} 중도 합류`
             : "시작 전 합류"
         }
+        pendingDelta={myPendingDelta}
+        pendingCount={myPendingCount}
         spent={mySpent}
         title={activeChallenge.name}
       />
@@ -291,23 +314,26 @@ export default function ChallengeHomeScreen() {
 
       <PhaseBanner phase={phase} timeline={timeline} />
 
-      <View style={styles.feedHeader}>
-        <Text style={styles.sectionTitle}>멤버별 최근 지출</Text>
-        {phase === "ACTIVE" || phase === "ADJUSTMENT" ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/expense/new")}
-            style={styles.addButton}
-          >
-            <MaterialCommunityIcons
-              color={palette.cream}
-              name="camera-plus-outline"
-              size={18}
-            />
-            <Text style={styles.addButtonText}>지출</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <SectionHeader
+        right={
+          phase === "ACTIVE" || phase === "ADJUSTMENT" ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/expense/new")}
+              style={styles.addButton}
+            >
+              <MaterialCommunityIcons
+                color={palette.cream}
+                name="camera-plus-outline"
+                size={18}
+              />
+              <Text style={styles.addButtonText}>지출</Text>
+            </Pressable>
+          ) : null
+        }
+        style={styles.feedHeader}
+        title="멤버별 최근 지출"
+      />
 
       <View style={styles.memberExpenseList}>
         {memberRows.map((member) => (
@@ -339,14 +365,9 @@ function PhaseBanner({
         ? `정산 중 · 지출이 잠겼어요. ${formatDateLabel(new Date(timeline.F))}에 결과가 확정돼요.`
         : "완료된 챌린지예요. 기록은 읽기 전용으로 보관됩니다.";
   return (
-    <View style={styles.phaseBanner}>
-      <MaterialCommunityIcons
-        color={palette.green}
-        name="clock-outline"
-        size={18}
-      />
-      <Text style={styles.phaseText}>{copy}</Text>
-    </View>
+    <NoticeBanner icon="clock-outline" style={styles.phaseBanner}>
+      {copy}
+    </NoticeBanner>
   );
 }
 
@@ -431,23 +452,12 @@ const styles = StyleSheet.create({
   },
   capacity: { color: palette.ink, fontSize: 10, fontWeight: "600" },
   phaseBanner: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    alignItems: "center",
-    padding: spacing.md,
     marginTop: spacing.lg,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(47,113,93,0.10)",
   },
-  phaseText: { color: palette.green, flex: 1, fontSize: 12, lineHeight: 18 },
   feedHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     marginTop: spacing.xxl,
     marginBottom: spacing.md,
   },
-  sectionTitle: { color: palette.ink, fontSize: 20, fontWeight: "700" },
   addButton: {
     flexDirection: "row",
     alignItems: "center",

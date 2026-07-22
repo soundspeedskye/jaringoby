@@ -9,9 +9,16 @@ import {
 } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { ChoiceChip } from "@/components/ui/choice-chip";
+import { EmptyState } from "@/components/ui/empty-state";
 import { GlassSurface } from "@/components/ui/glass-surface";
+import { PageHeader } from "@/components/ui/page-header";
 import { Screen } from "@/components/ui/screen";
 import { palette, radii, spacing } from "@/constants/design";
+import {
+  expenseOfficialAmount,
+  hasOfficialExpenseRecord,
+} from "@/data/expense-sync";
 import type { Challenge } from "@/data/types";
 import { useAppData } from "@/providers/app-provider";
 import { formatWon } from "@/utils/format";
@@ -37,8 +44,9 @@ export default function HistoryScreen() {
           const expenses = currentUser
             ? getUserExpenses(currentUser.id, challenge.id)
             : [];
-          const spent = expenses.reduce(
-            (sum, expense) => sum + expense.amount,
+          const officialExpenses = expenses.filter(hasOfficialExpenseRecord);
+          const spent = officialExpenses.reduce(
+            (sum, expense) => sum + expenseOfficialAmount(expense),
             0,
           );
           return {
@@ -47,7 +55,7 @@ export default function HistoryScreen() {
             spent,
             remaining: member.appliedLimit - spent,
             achieved: spent <= member.appliedLimit,
-            expenseCount: expenses.length,
+            expenseCount: officialExpenses.length,
           };
         })
         .filter((record): record is NonNullable<typeof record> =>
@@ -93,27 +101,24 @@ export default function HistoryScreen() {
 
   return (
     <Screen testID="challenge-history-screen">
-      <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="뒤로"
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <MaterialCommunityIcons
-            color={palette.green}
-            name="chevron-left"
-            size={26}
-          />
-        </Pressable>
-        <Text style={styles.title}>지난 챌린지</Text>
-        <View style={styles.archiveIcon}>
-          <MaterialCommunityIcons
-            color={palette.yellow}
-            name="archive-check-outline"
-            size={23}
-          />
-        </View>
-      </View>
+      <PageHeader
+        bottomSpacing="md"
+        onBack={() => router.back()}
+        right={
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+            style={styles.archiveIcon}
+          >
+            <MaterialCommunityIcons
+              color={palette.yellow}
+              name="archive-check-outline"
+              size={23}
+            />
+          </View>
+        }
+        title="지난 챌린지"
+      />
 
       <View style={styles.searchBox}>
         <MaterialCommunityIcons
@@ -143,24 +148,18 @@ export default function HistoryScreen() {
         ) : null}
       </View>
 
-      <View style={styles.filters}>
+      <View
+        accessibilityLabel="챌린지 결과 필터"
+        accessibilityRole="radiogroup"
+        style={styles.filters}
+      >
         {(["전체", "달성", "초과"] as ResultFilter[]).map((item) => (
-          <Pressable
-            accessibilityRole="radio"
-            accessibilityState={{ selected: filter === item }}
+          <ChoiceChip
             key={item}
+            label={item}
             onPress={() => setFilter(item)}
-            style={[styles.filter, filter === item && styles.filterSelected]}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                filter === item && styles.filterTextSelected,
-              ]}
-            >
-              {item}
-            </Text>
-          </Pressable>
+            selected={filter === item}
+          />
         ))}
       </View>
 
@@ -188,21 +187,15 @@ export default function HistoryScreen() {
           </View>
         ))
       ) : (
-        <View style={styles.empty}>
-          <MaterialCommunityIcons
-            color={palette.greenSoft}
-            name="archive-search-outline"
-            size={44}
-          />
-          <Text style={styles.emptyTitle}>
-            {query || filter !== "전체"
+        <EmptyState
+          description="정산이 완료되면 이곳에 월별로 자동 보관돼요."
+          icon="archive-search-outline"
+          title={
+            query || filter !== "전체"
               ? "조건에 맞는 기록이 없어요."
-              : "아직 완료된 챌린지가 없어요."}
-          </Text>
-          <Text style={styles.emptyBody}>
-            정산이 완료되면 이곳에 월별로 자동 보관돼요.
-          </Text>
-        </View>
+              : "아직 완료된 챌린지가 없어요."
+          }
+        />
       )}
     </Screen>
   );
@@ -308,29 +301,6 @@ function formatMonth(value: string): string {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.48)",
-  },
-  title: {
-    flex: 1,
-    color: palette.ink,
-    fontSize: 28,
-    fontWeight: "700",
-    marginTop: 3,
-  },
   archiveIcon: {
     width: 42,
     height: 42,
@@ -361,20 +331,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginVertical: spacing.lg,
   },
-  filter: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: palette.line,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.4)",
-  },
-  filterSelected: {
-    backgroundColor: palette.green,
-    borderColor: palette.green,
-  },
-  filterText: { color: palette.muted, fontSize: 11 },
-  filterTextSelected: { color: palette.cream, fontWeight: "700" },
   monthGroup: { marginBottom: spacing.xxl },
   monthHeader: {
     flexDirection: "row",
@@ -438,12 +394,4 @@ const styles = StyleSheet.create({
   cardMeta: { color: palette.muted, fontSize: 10 },
   readOnlyBadge: { flexDirection: "row", alignItems: "center", gap: 3 },
   readOnlyText: { color: palette.muted, fontSize: 9 },
-  empty: { alignItems: "center", paddingTop: 90 },
-  emptyTitle: {
-    color: palette.ink,
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: spacing.md,
-  },
-  emptyBody: { color: palette.muted, fontSize: 11, marginTop: 5 },
 });

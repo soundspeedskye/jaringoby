@@ -6,10 +6,15 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { ModalFormScreen } from "@/components/layout/modal-form-screen";
+import { ChoiceChip } from "@/components/ui/choice-chip";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
+import { FormMessage } from "@/components/ui/form-message";
+import { FormSection } from "@/components/ui/form-section";
+import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen } from "@/components/ui/screen";
 import { palette, radii, spacing } from "@/constants/design";
 import type { Challenge } from "@/data/types";
 import {
@@ -72,25 +77,24 @@ export default function NewExpenseScreen() {
 
   if (!activeChallenge || !currentMember) {
     return (
-      <Screen testID="new-expense-screen">
-        <Header onBack={() => router.back()} />
-        <View style={styles.empty}>
-          <MaterialCommunityIcons
-            color={palette.greenSoft}
-            name="calendar-remove-outline"
-            size={42}
-          />
-          <Text style={styles.emptyTitle}>진행 중인 챌린지가 없어요.</Text>
-          <Text style={styles.emptyBody}>
-            챌린지 지출은 참여 중인 방에서만 사진과 함께 기록할 수 있어요.
-          </Text>
-          <PrimaryButton
-            label="홈으로 돌아가기"
-            onPress={() => router.replace("/")}
-            variant="secondary"
-          />
-        </View>
-      </Screen>
+      <ModalFormScreen
+        onBack={() => router.back()}
+        testID="new-expense-screen"
+        title="지출 기록"
+      >
+        <EmptyState
+          action={
+            <PrimaryButton
+              label="홈으로 돌아가기"
+              onPress={() => router.replace("/")}
+              variant="secondary"
+            />
+          }
+          description="챌린지 지출은 참여 중인 방에서만 사진과 함께 기록할 수 있어요."
+          icon="calendar-remove-outline"
+          title="진행 중인 챌린지가 없어요."
+        />
+      </ModalFormScreen>
     );
   }
 
@@ -215,9 +219,19 @@ export default function NewExpenseScreen() {
   };
 
   return (
-    <Screen testID="new-expense-screen">
-      <Header onBack={() => router.back()} />
-
+    <ModalFormScreen
+      footer={
+        <PrimaryButton
+          disabled={!canMutate}
+          label="사진과 함께 지출 저장"
+          loading={submitting}
+          onPress={() => void submit()}
+        />
+      }
+      onBack={() => router.back()}
+      testID="new-expense-screen"
+      title="지출 기록"
+    >
       <View style={styles.roomChip}>
         <MaterialCommunityIcons
           color={palette.green}
@@ -233,24 +247,14 @@ export default function NewExpenseScreen() {
       </View>
 
       {!canMutate ? (
-        <View style={styles.locked}>
-          <MaterialCommunityIcons
-            color={palette.danger}
-            name="lock-outline"
-            size={20}
-          />
-          <Text style={styles.lockedText}>
-            {phase === "WAITING"
-              ? "챌린지가 시작되면 지출을 기록할 수 있어요."
-              : "보정 마감이 지나 지출 입력이 잠겼어요."}
-          </Text>
-        </View>
+        <NoticeBanner icon="lock-outline" style={styles.locked} tone="danger">
+          {phase === "WAITING"
+            ? "챌린지가 시작되면 지출을 기록할 수 있어요."
+            : "보정 마감이 지나 지출 입력이 잠겼어요."}
+        </NoticeBanner>
       ) : null}
 
-      <View style={styles.photoSection}>
-        <Text style={styles.sectionTitle}>
-          지출 사진 1장 <Text style={styles.required}>필수</Text>
-        </Text>
+      <FormSection required style={styles.photoSection} title="지출 사진 1장">
         {photoUri ? (
           <View style={styles.photoFrame}>
             <Image
@@ -285,6 +289,7 @@ export default function NewExpenseScreen() {
         )}
         <View style={styles.photoActions}>
           <Pressable
+            accessibilityRole="button"
             onPress={() => void pickPhoto("camera")}
             style={styles.photoButton}
           >
@@ -296,6 +301,7 @@ export default function NewExpenseScreen() {
             <Text style={styles.photoButtonText}>카메라</Text>
           </Pressable>
           <Pressable
+            accessibilityRole="button"
             onPress={() => void pickPhoto("library")}
             style={styles.photoButton}
           >
@@ -309,7 +315,7 @@ export default function NewExpenseScreen() {
             </Text>
           </Pressable>
         </View>
-      </View>
+      </FormSection>
 
       <Field
         keyboardType="number-pad"
@@ -319,40 +325,26 @@ export default function NewExpenseScreen() {
         value={amountText}
       />
 
-      <View style={styles.categorySection}>
-        <Text style={styles.sectionTitle}>카테고리</Text>
-        <View style={styles.categories}>
-          {EXPENSE_CATEGORIES.map((item) => {
-            const selected = item === category;
-            return (
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                key={item}
-                onPress={() => setCategory(item)}
-                style={[styles.category, selected && styles.categorySelected]}
-              >
-                <MaterialCommunityIcons
-                  color={selected ? palette.cream : palette.green}
-                  name={CATEGORY_ICONS[item]}
-                  size={20}
-                />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    selected && styles.categoryTextSelected,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </Pressable>
-            );
-          })}
+      <FormSection style={styles.categorySection} title="카테고리">
+        <View
+          accessibilityLabel="지출 카테고리 선택"
+          accessibilityRole="radiogroup"
+          style={styles.categories}
+        >
+          {EXPENSE_CATEGORIES.map((item) => (
+            <ChoiceChip
+              icon={CATEGORY_ICONS[item]}
+              key={item}
+              label={item}
+              onPress={() => setCategory(item)}
+              selected={item === category}
+              style={styles.category}
+            />
+          ))}
         </View>
-      </View>
+      </FormSection>
 
-      <View style={styles.timeSection}>
-        <Text style={styles.sectionTitle}>발생 일시</Text>
+      <FormSection style={styles.timeSection} title="발생 일시">
         <Text style={styles.timeValue}>{formatSeoulDateTime(occurredAt)}</Text>
         <View style={styles.timeButtons}>
           <OccurrencePicker
@@ -368,7 +360,7 @@ export default function NewExpenseScreen() {
             value={occurredAt}
           />
         </View>
-      </View>
+      </FormSection>
 
       <Field
         label="메모"
@@ -381,37 +373,8 @@ export default function NewExpenseScreen() {
       />
       <Text style={styles.counter}>{memo.length}/200</Text>
 
-      {formError ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {formError}
-        </Text>
-      ) : null}
-      <PrimaryButton
-        disabled={!canMutate}
-        label="사진과 함께 지출 저장"
-        loading={submitting}
-        onPress={() => void submit()}
-      />
-    </Screen>
-  );
-}
-
-function Header({ onBack }: { onBack: () => void }) {
-  return (
-    <View style={styles.header}>
-      <Pressable
-        accessibilityLabel="뒤로"
-        onPress={onBack}
-        style={styles.backButton}
-      >
-        <MaterialCommunityIcons
-          color={palette.green}
-          name="chevron-left"
-          size={26}
-        />
-      </Pressable>
-      <Text style={styles.title}>지출 기록</Text>
-    </View>
+      <FormMessage message={formError} style={styles.formMessage} />
+    </ModalFormScreen>
   );
 }
 
@@ -432,7 +395,11 @@ function OccurrencePicker({
       onChange={onChange}
       renderTrigger={(open) => (
         <View>
-          <Pressable onPress={open} style={styles.timeButton}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={open}
+            style={styles.timeButton}
+          >
             <MaterialCommunityIcons
               color={palette.green}
               name={mode === "date" ? "calendar-outline" : "clock-outline"}
@@ -479,24 +446,6 @@ function formatSeoulDateTime(value: Date): string {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingTop: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.48)",
-  },
-  title: { color: palette.ink, fontSize: 28, fontWeight: "700", marginTop: 3 },
   roomChip: {
     minHeight: 42,
     flexDirection: "row",
@@ -508,19 +457,8 @@ const styles = StyleSheet.create({
   },
   roomName: { flex: 1, color: palette.green, fontSize: 13, fontWeight: "700" },
   phaseLabel: { color: palette.coralText, fontSize: 10, fontWeight: "700" },
-  locked: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(182,83,72,0.10)",
-  },
-  lockedText: { flex: 1, color: palette.danger, fontSize: 12, lineHeight: 18 },
-  photoSection: { gap: spacing.md, marginVertical: spacing.xl },
-  sectionTitle: { color: palette.ink, fontSize: 15, fontWeight: "700" },
-  required: { color: palette.coralText, fontSize: 11 },
+  locked: { marginTop: spacing.md },
+  photoSection: { marginVertical: spacing.xl },
   photoFrame: {
     overflow: "hidden",
     position: "relative",
@@ -572,26 +510,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.46)",
   },
   photoButtonText: { color: palette.green, fontSize: 12, fontWeight: "700" },
-  categorySection: { gap: spacing.md, marginVertical: spacing.xl },
+  categorySection: { marginVertical: spacing.xl },
   categories: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   category: {
     width: "31%",
     minHeight: 68,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderColor: palette.line,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.44)",
   },
-  categorySelected: {
-    backgroundColor: palette.green,
-    borderColor: palette.green,
-  },
-  categoryText: { color: palette.green, fontSize: 11, fontWeight: "600" },
-  categoryTextSelected: { color: palette.cream },
-  timeSection: { gap: spacing.sm, marginBottom: spacing.xl },
+  timeSection: { marginBottom: spacing.xl },
   timeValue: { color: palette.ink, fontSize: 17, fontWeight: "700" },
   timeButtons: { flexDirection: "row", gap: spacing.sm },
   timeButton: {
@@ -615,14 +541,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 4,
   },
-  error: { color: palette.danger, fontSize: 12, marginBottom: spacing.md },
-  empty: { alignItems: "center", paddingTop: 100, gap: spacing.sm },
-  emptyTitle: { color: palette.ink, fontSize: 18, fontWeight: "700" },
-  emptyBody: {
-    color: palette.muted,
-    fontSize: 13,
-    lineHeight: 20,
-    textAlign: "center",
-    marginBottom: spacing.md,
-  },
+  formMessage: { marginBottom: spacing.md },
 });

@@ -3,10 +3,16 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ExpenseCard } from "@/components/expense/expense-card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { GlassSurface } from "@/components/ui/glass-surface";
+import { KeyValueRow } from "@/components/ui/key-value-row";
+import { NoticeBanner } from "@/components/ui/notice-banner";
+import { PageHeader } from "@/components/ui/page-header";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen } from "@/components/ui/screen";
+import { SectionHeader } from "@/components/ui/section-header";
 import { palette, radii, spacing } from "@/constants/design";
+import { expenseOfficialAmount } from "@/data/expense-sync";
 import { createChallengeTimeline, selectCrownHolders } from "@/domain";
 import { useAppData } from "@/providers/app-provider";
 import { formatDateLabel, formatWon } from "@/utils/format";
@@ -29,20 +35,18 @@ export default function HistoryDetailScreen() {
   if (!challenge) {
     return (
       <Screen testID="history-detail-screen">
-        <Header onBack={() => router.back()} />
-        <View style={styles.notFound}>
-          <MaterialCommunityIcons
-            color={palette.greenSoft}
-            name="archive-remove-outline"
-            size={44}
-          />
-          <Text style={styles.notFoundTitle}>지난 기록을 찾을 수 없어요.</Text>
-          <PrimaryButton
-            label="목록으로 돌아가기"
-            onPress={() => router.replace("/history")}
-            variant="secondary"
-          />
-        </View>
+        <PageHeader onBack={() => router.back()} title="지난 기록" />
+        <EmptyState
+          action={
+            <PrimaryButton
+              label="목록으로 돌아가기"
+              onPress={() => router.replace("/history")}
+              variant="secondary"
+            />
+          }
+          icon="archive-remove-outline"
+          title="지난 기록을 찾을 수 없어요."
+        />
       </Screen>
     );
   }
@@ -57,7 +61,7 @@ export default function HistoryDetailScreen() {
   });
   const memberResults = members.map((member) => {
     const spent = getUserExpenses(member.userId, challenge.id)
-      .reduce((sum, expense) => sum + expense.amount, 0);
+      .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
     return {
       member,
       profile: getProfile(member.userId),
@@ -88,16 +92,11 @@ export default function HistoryDetailScreen() {
 
   return (
     <Screen testID="history-detail-screen">
-      <Header onBack={() => router.back()} />
+      <PageHeader onBack={() => router.back()} title="지난 기록" />
 
-      <View style={styles.readOnlyBanner}>
-        <MaterialCommunityIcons
-          color={palette.green}
-          name="archive-lock-outline"
-          size={20}
-        />
-        <Text style={styles.readOnlyTitle}>정산 완료 · 읽기 전용</Text>
-      </View>
+      <NoticeBanner icon="archive-lock-outline" style={styles.readOnlyBanner}>
+        정산 완료 · 읽기 전용
+      </NoticeBanner>
 
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>{challenge.name}</Text>
@@ -147,25 +146,25 @@ export default function HistoryDetailScreen() {
       </View>
 
       <GlassSurface style={styles.rules} testID="archived-rule-snapshot">
-        <Text style={styles.sectionTitle}>고정 조건과 정산 기준</Text>
-        <RuleRow label="기준금액" value={formatWon(challenge.baseLimit)} />
-        <RuleRow
+        <SectionHeader style={styles.sectionHeading} title="고정 조건과 정산 기준" />
+        <KeyValueRow label="기준금액" value={formatWon(challenge.baseLimit)} />
+        <KeyValueRow
           label="전체 선택일"
           value={`${challenge.selectedDates.length}일`}
         />
-        <RuleRow
+        <KeyValueRow
           label="제외 공휴일"
           value={`${challenge.holidayDates.length}일`}
         />
-        <RuleRow
+        <KeyValueRow
           label="공휴일 데이터"
           value={challenge.holidaySnapshotVersion}
         />
-        <RuleRow
+        <KeyValueRow
           label="보정 마감"
           value={formatDateLabel(new Date(timeline.C))}
         />
-        <RuleRow
+        <KeyValueRow
           label="최종 확정"
           value={formatDateLabel(new Date(timeline.F))}
         />
@@ -180,10 +179,11 @@ export default function HistoryDetailScreen() {
       </GlassSurface>
 
       <View style={styles.memberSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>참여자 최종 결과</Text>
-          <Text style={styles.sectionCount}>{activeResults.length}명</Text>
-        </View>
+        <SectionHeader
+          meta={`${activeResults.length}명`}
+          style={styles.sectionHeading}
+          title="참여자 최종 결과"
+        />
         <GlassSurface style={styles.memberList}>
           {memberResults.map((result, index) => (
             <View
@@ -248,10 +248,11 @@ export default function HistoryDetailScreen() {
       </View>
 
       <View style={styles.expenseSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>보관된 지출과 대화</Text>
-          <Text style={styles.sectionCount}>{expenses.length}건</Text>
-        </View>
+        <SectionHeader
+          meta={`${expenses.length}건`}
+          style={styles.sectionHeading}
+          title="보관된 지출과 대화"
+        />
         <View style={styles.expenses}>
           {expenses.map((expense) => {
             const profile = getProfile(expense.userId);
@@ -309,30 +310,11 @@ export default function HistoryDetailScreen() {
             );
           })}
           {!expenses.length ? (
-            <Text style={styles.noExpenses}>보관된 지출이 없어요.</Text>
+            <EmptyState title="보관된 지출이 없어요." variant="compact" />
           ) : null}
         </View>
       </View>
     </Screen>
-  );
-}
-
-function Header({ onBack }: { onBack: () => void }) {
-  return (
-    <View style={styles.header}>
-      <Pressable
-        accessibilityLabel="뒤로"
-        onPress={onBack}
-        style={styles.backButton}
-      >
-        <MaterialCommunityIcons
-          color={palette.green}
-          name="chevron-left"
-          size={26}
-        />
-      </Pressable>
-      <Text style={styles.title}>지난 기록</Text>
-    </View>
   );
 }
 
@@ -341,17 +323,6 @@ function Stat({ label, value }: { label: string; value: string }) {
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text numberOfLines={1} adjustsFontSizeToFit style={styles.statValue}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function RuleRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.ruleRow}>
-      <Text style={styles.ruleLabel}>{label}</Text>
-      <Text numberOfLines={1} style={styles.ruleValue}>
         {value}
       </Text>
     </View>
@@ -369,33 +340,7 @@ function countRemainingDays(
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.48)",
-  },
-  title: { color: palette.ink, fontSize: 28, fontWeight: "700", marginTop: 3 },
-  readOnlyBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(47,113,93,0.10)",
-  },
-  readOnlyTitle: { flex: 1, color: palette.green, fontSize: 12, fontWeight: "700" },
+  readOnlyBanner: { marginBottom: spacing.md },
   hero: {
     padding: spacing.xl,
     borderRadius: radii.lg,
@@ -460,28 +405,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
     backgroundColor: "rgba(255,253,247,0.68)",
   },
-  sectionTitle: {
-    color: palette.ink,
-    fontSize: 19,
-    fontWeight: "800",
-    marginTop: 3,
-    marginBottom: spacing.md,
-  },
-  ruleRow: {
-    minHeight: 30,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  ruleLabel: { color: palette.muted, fontSize: 11 },
-  ruleValue: {
-    color: palette.ink,
-    flex: 1,
-    textAlign: "right",
-    fontSize: 11,
-    fontWeight: "600",
-  },
+  sectionHeading: { marginBottom: spacing.md },
   holidayBox: {
     padding: spacing.md,
     marginTop: spacing.sm,
@@ -496,16 +420,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   memberSection: { marginTop: spacing.xxxl },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
-  sectionCount: {
-    color: palette.muted,
-    fontSize: 11,
-    marginBottom: spacing.md,
-  },
   memberList: {
     paddingHorizontal: spacing.lg,
     backgroundColor: "rgba(255,253,247,0.62)",
@@ -575,12 +489,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   openThreadText: { color: palette.green, fontSize: 10, fontWeight: "700" },
-  noExpenses: {
-    color: palette.muted,
-    fontSize: 12,
-    textAlign: "center",
-    paddingVertical: spacing.xxl,
-  },
-  notFound: { alignItems: "center", gap: spacing.md, paddingTop: 100 },
-  notFoundTitle: { color: palette.ink, fontSize: 17, fontWeight: "700" },
 });

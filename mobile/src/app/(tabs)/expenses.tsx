@@ -4,9 +4,18 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ExpenseCard } from "@/components/expense/expense-card";
+import { ChoiceChip } from "@/components/ui/choice-chip";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen } from "@/components/ui/screen";
 import { palette, radii, spacing } from "@/constants/design";
+import {
+  expenseOfficialAmount,
+  expenseOfficialCategory,
+  expenseOptimisticAmount,
+  hasPendingExpenseProjection,
+} from "@/data/expense-sync";
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/domain";
 import { useAppData } from "@/providers/app-provider";
 import { formatDateLabel, formatWon } from "@/utils/format";
@@ -25,57 +34,68 @@ export default function ExpensesScreen() {
     filter === "전체"
       ? ownExpenses
       : ownExpenses.filter((expense) => expense.category === filter);
-  const total = visibleExpenses.reduce(
-    (sum, expense) => sum + expense.amount,
-    0,
+  const officialTotal = ownExpenses
+    .filter((expense) => filter === "전체" || expenseOfficialCategory(expense) === filter)
+    .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
+  const temporaryTotal = visibleExpenses
+    .reduce((sum, expense) => sum + expenseOptimisticAmount(expense), 0);
+  const pendingDelta = temporaryTotal - officialTotal;
+  const hasPending = ownExpenses.some((expense) =>
+    hasPendingExpenseProjection(expense) && (
+      filter === "전체" || expense.category === filter || expenseOfficialCategory(expense) === filter
+    ),
   );
 
   return (
     <Screen testID="expenses-screen">
-      <View style={styles.header}>
-        <Text style={styles.title}>내 지출</Text>
-        <Pressable
-          accessibilityLabel="지난 챌린지"
-          onPress={() => router.push("/history")}
-          style={styles.historyButton}
-        >
-          <MaterialCommunityIcons
-            color={palette.green}
-            name="archive-outline"
-            size={22}
-          />
-        </Pressable>
-      </View>
+      <PageHeader
+        bottomSpacing="xl"
+        right={
+          <Pressable
+            accessibilityLabel="지난 챌린지"
+            accessibilityRole="button"
+            onPress={() => router.push("/history")}
+            style={styles.historyButton}
+          >
+            <MaterialCommunityIcons
+              color={palette.green}
+              name="archive-outline"
+              size={22}
+            />
+          </Pressable>
+        }
+        title="내 지출"
+      />
 
       <View style={styles.totalCard}>
         <View style={styles.totalHeader}>
-          <Text style={styles.totalLabel}>{filter} 지출 합계</Text>
+          <Text style={styles.totalLabel}>
+            {filter} {hasPending ? "임시 합계" : "지출 합계"}
+          </Text>
           <Text style={styles.totalMeta}>{visibleExpenses.length}건</Text>
         </View>
-        <Text style={styles.totalValue}>{formatWon(total)}</Text>
+        <Text style={styles.totalValue}>{formatWon(hasPending ? temporaryTotal : officialTotal)}</Text>
+        {hasPending ? (
+          <Text style={styles.pendingMeta}>
+            서버 공식 {formatWon(officialTotal)} · {pendingDelta === 0
+              ? "금액 외 변경 대기"
+              : `대기 반영 ${formatSignedWon(pendingDelta)}`}
+          </Text>
+        ) : null}
       </View>
 
-      <View style={styles.filters}>
+      <View
+        accessibilityLabel="지출 카테고리 필터"
+        accessibilityRole="radiogroup"
+        style={styles.filters}
+      >
         {(["전체", ...EXPENSE_CATEGORIES] as Filter[]).map((category) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: filter === category }}
+          <ChoiceChip
             key={category}
+            label={category}
             onPress={() => setFilter(category)}
-            style={[
-              styles.filterChip,
-              filter === category && styles.filterChipActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                filter === category && styles.filterTextActive,
-              ]}
-            >
-              {category}
-            </Text>
-          </Pressable>
+            selected={filter === category}
+          />
         ))}
       </View>
 
@@ -85,7 +105,10 @@ export default function ExpensesScreen() {
             amount={expense.amount}
             avatar={currentUser?.avatar ?? "🙂"}
             category={expense.category}
-            commentCount={getComments(expense.id).length}
+            commentCount={
+              getComments(expense.id).filter((comment) => !comment.deletedAt)
+                .length
+            }
             edited={expense.createdAt !== expense.updatedAt}
             id={expense.id}
             key={expense.id}
@@ -98,7 +121,10 @@ export default function ExpensesScreen() {
         ))}
       </View>
       {!visibleExpenses.length ? (
-        <Text style={styles.empty}>이 카테고리의 지출이 없어요.</Text>
+        <EmptyState
+          title="이 카테고리의 지출이 없어요."
+          variant="compact"
+        />
       ) : null}
       <PrimaryButton
         label="사진과 함께 지출 추가"
@@ -108,14 +134,11 @@ export default function ExpensesScreen() {
   );
 }
 
+function formatSignedWon(value: number): string {
+  return `${value > 0 ? "+" : "-"}${formatWon(Math.abs(value))}`;
+}
+
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.xl,
-  },
-  title: { color: palette.ink, fontSize: 30, fontWeight: "700", marginTop: 4 },
   historyButton: {
     width: 44,
     height: 44,
@@ -144,30 +167,12 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   totalMeta: { color: "rgba(253,246,227,0.76)", fontSize: 11 },
+  pendingMeta: { color: "rgba(253,246,227,0.82)", fontSize: 11, marginTop: 5 },
   filters: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm,
     marginVertical: spacing.xl,
   },
-  filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.44)",
-  },
-  filterChipActive: {
-    backgroundColor: palette.green,
-    borderColor: palette.green,
-  },
-  filterText: { color: palette.muted, fontSize: 12 },
-  filterTextActive: { color: palette.cream, fontWeight: "600" },
   list: { gap: spacing.lg, marginBottom: spacing.xl },
-  empty: {
-    color: palette.muted,
-    textAlign: "center",
-    paddingVertical: spacing.xxl,
-  },
 });
