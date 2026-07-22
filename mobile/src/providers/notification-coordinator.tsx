@@ -8,7 +8,7 @@ import { useAppData } from '@/providers/app-provider';
 import {
   loadNotificationPreferences,
   presentPrivacySafeNotification,
-  syncChallengeNotificationSchedule,
+  syncPeriodNotificationSchedule,
 } from '@/services/notification-service';
 
 export function NotificationCoordinator({ children }: PropsWithChildren) {
@@ -37,7 +37,17 @@ export function NotificationCoordinator({ children }: PropsWithChildren) {
     let cancelled = false;
     void loadNotificationPreferences().then(async (preferences) => {
       if (cancelled) return;
-      if (preferences.challengeEvents) await syncChallengeNotificationSchedule(snapshot.challenges);
+      if (preferences.periodEvents) {
+        const roomNameById = new Map(snapshot.rooms.map((room) => [room.id, room.name]));
+        await syncPeriodNotificationSchedule(
+          snapshot.periods
+            .filter((period) => period.phase !== 'ARCHIVED')
+            .map((period) => ({
+              period,
+              roomName: roomNameById.get(period.roomId) ?? '내 방',
+            })),
+        );
+      }
       const before = previous.current;
       if (before && preferences.socialEvents) await announceSocialChanges(before, snapshot);
       previous.current = snapshot;
@@ -72,13 +82,15 @@ async function announceSocialChanges(before: AppSnapshot, after: AppSnapshot): P
     });
   }
 
-  const oldMemberships = new Set(before.members.map((member) => `${member.challengeId}:${member.userId}`));
-  const joined = after.members.find(
-    (member) => !oldMemberships.has(`${member.challengeId}:${member.userId}`) && member.userId !== after.currentUserId,
+  // 방 멤버십 기준으로만 비교한다. 주차 참여자는 매주 자동 전개되므로
+  // period_members 를 비교하면 매주 월요일마다 거짓 알림이 울린다.
+  const oldMemberships = new Set(before.roomMembers.map((member) => `${member.roomId}:${member.userId}`));
+  const joined = after.roomMembers.find(
+    (member) => !oldMemberships.has(`${member.roomId}:${member.userId}`) && member.userId !== after.currentUserId,
   );
   if (joined) {
     await presentPrivacySafeNotification({
-      title: '새 멤버가 챌린지에 합류했어요',
+      title: '새 멤버가 방에 합류했어요',
       body: '멤버 목록에서 새 적용한도를 확인해 보세요.',
       route: '/',
     });

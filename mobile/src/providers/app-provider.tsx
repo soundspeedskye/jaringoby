@@ -9,15 +9,19 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   AppSnapshot,
-  Challenge,
-  ChallengeMember,
   Comment,
-  CreateChallengeInput,
+  CreateRoomInput,
   Expense,
   InvitePreview,
+  Period,
+  PeriodMember,
+  PeriodResult,
   Profile,
+  Room,
+  RoomMember,
+  RoomMemberStats,
 } from '@/data/types';
-import { createChallengeTimeline, getChallengePhase, selectCrownHolders } from '@/domain';
+import { selectCrownHolders } from '@/domain';
 
 export type AppDataContextValue = {
   dataMode: DataMode;
@@ -27,27 +31,37 @@ export type AppDataContextValue = {
   loading: boolean;
   error: string | null;
   currentUser: Profile | null;
-  activeChallenge: Challenge | null;
-  archivedChallenges: Challenge[];
+  /** 내가 활성 멤버인 열린 방 (단일 방 참여 전제). */
+  activeRoom: Room | null;
+  /** activeRoom의 진행(또는 대기·정산) 중인 주차. */
+  currentPeriod: Period | null;
+  /** 내가 참여했던 방들의 정산 완료 주차, 최신순. */
+  pastPeriods: Period[];
   syncOperations: OfflineMutationSummary[];
-  getChallenge: (challengeId: string) => Challenge | undefined;
-  getMembers: (challengeId: string) => ChallengeMember[];
+  getRoom: (roomId: string) => Room | undefined;
+  getPeriod: (periodId: string) => Period | undefined;
+  getRoomMembers: (roomId: string) => RoomMember[];
+  getMembers: (periodId: string) => PeriodMember[];
   getExpense: (expenseId: string) => Expense | undefined;
-  getExpenses: (challengeId?: string) => Expense[];
-  getUserExpenses: (userId: string, challengeId?: string) => Expense[];
+  getExpenses: (periodId?: string) => Expense[];
+  getUserExpenses: (userId: string, periodId?: string) => Expense[];
   getComments: (expenseId: string) => Comment[];
   getProfile: (userId: string) => Profile | undefined;
-  getCrownIds: (challengeId: string) => string[];
+  getCrownIds: (periodId: string) => string[];
+  getResults: (periodId: string) => PeriodResult[];
+  getStats: (roomId: string) => RoomMemberStats[];
 };
 
 export type AppActionsContextValue = {
   refresh: () => Promise<void>;
   clearError: () => void;
   resetDemo: () => Promise<void>;
-  createChallenge: (input: CreateChallengeInput) => Promise<Challenge>;
-  increaseCapacity: (challengeId: string, capacity: number) => Promise<Challenge>;
+  createRoom: (input: CreateRoomInput) => Promise<Room>;
+  increaseCapacity: (roomId: string, capacity: number) => Promise<Room>;
   previewInvite: (inviteCode: string) => Promise<InvitePreview>;
-  joinChallenge: (inviteCode: string) => Promise<ChallengeMember>;
+  joinRoom: (inviteCode: string) => Promise<RoomMember>;
+  leaveRoom: (roomId: string, successorUserId?: string) => Promise<void>;
+  closeRoom: (roomId: string) => Promise<Room>;
   addExpense: (input: AddExpenseInput) => Promise<Expense>;
   updateExpense: (expenseId: string, patch: Partial<AddExpenseInput>) => Promise<Expense>;
   deleteExpense: (expenseId: string) => Promise<void>;
@@ -60,21 +74,28 @@ export type AppActionsContextValue = {
 };
 
 type AppIndexes = {
-  challengeById: Map<string, Challenge>;
+  roomById: Map<string, Room>;
+  periodById: Map<string, Period>;
   profileById: Map<string, Profile>;
-  membersByChallengeId: Map<string, ChallengeMember[]>;
+  roomMembersByRoomId: Map<string, RoomMember[]>;
+  membersByPeriodId: Map<string, PeriodMember[]>;
   expenseById: Map<string, Expense>;
   expenses: Expense[];
-  expensesByChallengeId: Map<string, Expense[]>;
+  expensesByPeriodId: Map<string, Expense[]>;
   expensesByUserId: Map<string, Expense[]>;
-  expensesByChallengeAndUserId: Map<string, Map<string, Expense[]>>;
+  expensesByPeriodAndUserId: Map<string, Map<string, Expense[]>>;
   commentsByExpenseId: Map<string, Comment[]>;
-  crownIdsByChallengeId: Map<string, string[]>;
+  resultsByPeriodId: Map<string, PeriodResult[]>;
+  statsByRoomId: Map<string, RoomMemberStats[]>;
+  crownIdsByPeriodId: Map<string, string[]>;
 };
 
-const EMPTY_MEMBERS: ChallengeMember[] = [];
+const EMPTY_ROOM_MEMBERS: RoomMember[] = [];
+const EMPTY_MEMBERS: PeriodMember[] = [];
 const EMPTY_EXPENSES: Expense[] = [];
 const EMPTY_COMMENTS: Comment[] = [];
+const EMPTY_RESULTS: PeriodResult[] = [];
+const EMPTY_STATS: RoomMemberStats[] = [];
 const EMPTY_IDS: string[] = [];
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 const AppActionsContext = createContext<AppActionsContextValue | null>(null);
@@ -166,106 +187,122 @@ export function AppProvider({
   }, []);
 
   const indexes = useMemo<AppIndexes>(() => {
-    const challengeById = new Map<string, Challenge>();
+    const roomById = new Map<string, Room>();
+    const periodById = new Map<string, Period>();
     const profileById = new Map<string, Profile>();
-    const membersByChallengeId = new Map<string, ChallengeMember[]>();
+    const roomMembersByRoomId = new Map<string, RoomMember[]>();
+    const membersByPeriodId = new Map<string, PeriodMember[]>();
     const expenseById = new Map<string, Expense>();
     const expenses: Expense[] = [];
-    const expensesByChallengeId = new Map<string, Expense[]>();
+    const expensesByPeriodId = new Map<string, Expense[]>();
     const expensesByUserId = new Map<string, Expense[]>();
-    const expensesByChallengeAndUserId = new Map<
-      string,
-      Map<string, Expense[]>
-    >();
+    const expensesByPeriodAndUserId = new Map<string, Map<string, Expense[]>>();
     const commentsByExpenseId = new Map<string, Comment[]>();
-    const crownIdsByChallengeId = new Map<string, string[]>();
+    const resultsByPeriodId = new Map<string, PeriodResult[]>();
+    const statsByRoomId = new Map<string, RoomMemberStats[]>();
+    const crownIdsByPeriodId = new Map<string, string[]>();
 
-    snapshot?.challenges.forEach((challenge) => {
-      challengeById.set(challenge.id, challenge);
+    snapshot?.rooms.forEach((room) => {
+      roomById.set(room.id, room);
+    });
+    snapshot?.periods.forEach((period) => {
+      periodById.set(period.id, period);
     });
     snapshot?.profiles.forEach((profile) => {
       profileById.set(profile.id, profile);
     });
-    snapshot?.members.forEach((member) => {
-      appendIndexValue(
-        membersByChallengeId,
-        member.challengeId,
-        member,
-      );
+    snapshot?.roomMembers.forEach((member) => {
+      appendIndexValue(roomMembersByRoomId, member.roomId, member);
+    });
+    snapshot?.periodMembers.forEach((member) => {
+      appendIndexValue(membersByPeriodId, member.periodId, member);
     });
     snapshot?.expenses.forEach((expense) => {
       if (!isExpenseVisible(expense)) return;
       expenseById.set(expense.id, expense);
       expenses.push(expense);
       appendIndexValue(expensesByUserId, expense.userId, expense);
-      if (!expense.challengeId) return;
-      appendIndexValue(
-        expensesByChallengeId,
-        expense.challengeId,
-        expense,
-      );
-      let challengeExpenses = expensesByChallengeAndUserId.get(
-        expense.challengeId,
-      );
-      if (!challengeExpenses) {
-        challengeExpenses = new Map<string, Expense[]>();
-        expensesByChallengeAndUserId.set(
-          expense.challengeId,
-          challengeExpenses,
-        );
+      if (!expense.periodId) return;
+      appendIndexValue(expensesByPeriodId, expense.periodId, expense);
+      let periodExpenses = expensesByPeriodAndUserId.get(expense.periodId);
+      if (!periodExpenses) {
+        periodExpenses = new Map<string, Expense[]>();
+        expensesByPeriodAndUserId.set(expense.periodId, periodExpenses);
       }
-      appendIndexValue(challengeExpenses, expense.userId, expense);
+      appendIndexValue(periodExpenses, expense.userId, expense);
     });
     snapshot?.comments.forEach((comment) => {
       appendIndexValue(commentsByExpenseId, comment.expenseId, comment);
     });
-    snapshot?.challenges.forEach((challenge) => {
+    snapshot?.periodResults.forEach((result) => {
+      appendIndexValue(resultsByPeriodId, result.periodId, result);
+    });
+    snapshot?.memberStats.forEach((stats) => {
+      appendIndexValue(statsByRoomId, stats.roomId, stats);
+    });
+    snapshot?.periods.forEach((period) => {
+      // 정산 스냅샷이 있으면 그 왕관이 확정값이고, 진행 중에는 실시간 계산한다.
+      const results = resultsByPeriodId.get(period.id);
+      if (results?.length) {
+        crownIdsByPeriodId.set(
+          period.id,
+          results.filter((result) => result.isCrown).map((result) => result.userId),
+        );
+        return;
+      }
       const crownIds = selectCrownHolders(
-        (membersByChallengeId.get(challenge.id) ?? EMPTY_MEMBERS).map(
-          (member) => ({
-            memberId: member.userId,
-            nickname: profileById.get(member.userId)?.nickname ?? '알 수 없음',
-            status: member.status,
-            appliedLimit: member.appliedLimit,
-            eligibleSpending: (
-              expensesByChallengeAndUserId
-                .get(challenge.id)
-                ?.get(member.userId) ?? EMPTY_EXPENSES
-            ).reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0),
-          }),
-        ),
+        (membersByPeriodId.get(period.id) ?? EMPTY_MEMBERS).map((member) => ({
+          memberId: member.userId,
+          nickname: profileById.get(member.userId)?.nickname ?? '알 수 없음',
+          status: member.status,
+          appliedLimit: member.appliedLimit,
+          eligibleSpending: (
+            expensesByPeriodAndUserId.get(period.id)?.get(member.userId) ?? EMPTY_EXPENSES
+          ).reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0),
+        })),
         'ACTIVE',
       ).holderIds;
-      crownIdsByChallengeId.set(challenge.id, [...crownIds]);
+      crownIdsByPeriodId.set(period.id, [...crownIds]);
     });
 
     return {
-      challengeById,
+      roomById,
+      periodById,
       profileById,
-      membersByChallengeId,
+      roomMembersByRoomId,
+      membersByPeriodId,
       expenseById,
       expenses,
-      expensesByChallengeId,
+      expensesByPeriodId,
       expensesByUserId,
-      expensesByChallengeAndUserId,
+      expensesByPeriodAndUserId,
       commentsByExpenseId,
-      crownIdsByChallengeId,
+      resultsByPeriodId,
+      statsByRoomId,
+      crownIdsByPeriodId,
     };
   }, [snapshot]);
 
-  const getChallenge = useCallback(
-    (challengeId: string) => indexes.challengeById.get(challengeId),
+  const getRoom = useCallback(
+    (roomId: string) => indexes.roomById.get(roomId),
+    [indexes],
+  );
+  const getPeriod = useCallback(
+    (periodId: string) => indexes.periodById.get(periodId),
+    [indexes],
+  );
+  const getRoomMembers = useCallback(
+    (roomId: string) => indexes.roomMembersByRoomId.get(roomId) ?? EMPTY_ROOM_MEMBERS,
     [indexes],
   );
   const getMembers = useCallback(
-    (challengeId: string) =>
-      indexes.membersByChallengeId.get(challengeId) ?? EMPTY_MEMBERS,
+    (periodId: string) => indexes.membersByPeriodId.get(periodId) ?? EMPTY_MEMBERS,
     [indexes],
   );
   const getExpenses = useCallback(
-    (challengeId?: string) =>
-      challengeId
-        ? indexes.expensesByChallengeId.get(challengeId) ?? EMPTY_EXPENSES
+    (periodId?: string) =>
+      periodId
+        ? indexes.expensesByPeriodId.get(periodId) ?? EMPTY_EXPENSES
         : indexes.expenses,
     [indexes],
   );
@@ -274,17 +311,14 @@ export function AppProvider({
     [indexes],
   );
   const getUserExpenses = useCallback(
-    (userId: string, challengeId?: string) =>
-      challengeId
-        ? indexes.expensesByChallengeAndUserId
-            .get(challengeId)
-            ?.get(userId) ?? EMPTY_EXPENSES
+    (userId: string, periodId?: string) =>
+      periodId
+        ? indexes.expensesByPeriodAndUserId.get(periodId)?.get(userId) ?? EMPTY_EXPENSES
         : indexes.expensesByUserId.get(userId) ?? EMPTY_EXPENSES,
     [indexes],
   );
   const getComments = useCallback(
-    (expenseId: string) =>
-      indexes.commentsByExpenseId.get(expenseId) ?? EMPTY_COMMENTS,
+    (expenseId: string) => indexes.commentsByExpenseId.get(expenseId) ?? EMPTY_COMMENTS,
     [indexes],
   );
   const getProfile = useCallback(
@@ -292,18 +326,20 @@ export function AppProvider({
     [indexes],
   );
   const getCrownIds = useCallback(
-    (challengeId: string) => {
-      const challenge = getChallenge(challengeId);
-      if (!challenge) return EMPTY_IDS;
-      const phase = getChallengePhase(
-        createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate }),
-        Date.now(),
-      );
-      return phase === 'WAITING'
-        ? EMPTY_IDS
-        : indexes.crownIdsByChallengeId.get(challengeId) ?? EMPTY_IDS;
+    (periodId: string) => {
+      const period = getPeriod(periodId);
+      if (!period || period.phase === 'WAITING' || period.isRestWeek) return EMPTY_IDS;
+      return indexes.crownIdsByPeriodId.get(periodId) ?? EMPTY_IDS;
     },
-    [getChallenge, indexes],
+    [getPeriod, indexes],
+  );
+  const getResults = useCallback(
+    (periodId: string) => indexes.resultsByPeriodId.get(periodId) ?? EMPTY_RESULTS,
+    [indexes],
+  );
+  const getStats = useCallback(
+    (roomId: string) => indexes.statsByRoomId.get(roomId) ?? EMPTY_STATS,
+    [indexes],
   );
 
   const currentUser = useMemo(
@@ -313,39 +349,63 @@ export function AppProvider({
         : null,
     [indexes, snapshot],
   );
-  const activeChallenge = useMemo(() => {
+  const activeRoom = useMemo(() => {
     if (!snapshot) return null;
-    const myChallengeIds = new Set(
-      snapshot.members
+    const myRoomIds = new Set(
+      snapshot.roomMembers
         .filter((member) => member.userId === snapshot.currentUserId && member.status === 'ACTIVE')
-        .map((member) => member.challengeId),
+        .map((member) => member.roomId),
     );
-    return snapshot.challenges.find((challenge) => myChallengeIds.has(challenge.id) && challenge.phase !== 'ARCHIVED') ?? null;
+    return snapshot.rooms.find((room) => myRoomIds.has(room.id) && room.status === 'OPEN') ?? null;
   }, [snapshot]);
-  const archivedChallenges = useMemo(
-    () => snapshot?.challenges.filter((challenge) => challenge.phase === 'ARCHIVED') ?? [],
-    [snapshot],
-  );
+  const currentPeriod = useMemo(() => {
+    if (!snapshot || !activeRoom) return null;
+    return (
+      snapshot.periods
+        .filter((period) => period.roomId === activeRoom.id && period.phase !== 'ARCHIVED')
+        .sort((left, right) => right.weekStart.localeCompare(left.weekStart))[0] ?? null
+    );
+  }, [activeRoom, snapshot]);
+  const pastPeriods = useMemo(() => {
+    if (!snapshot) return [];
+    const myRoomIds = new Set(
+      snapshot.roomMembers
+        .filter((member) => member.userId === snapshot.currentUserId)
+        .map((member) => member.roomId),
+    );
+    return snapshot.periods
+      .filter((period) => myRoomIds.has(period.roomId) && period.phase === 'ARCHIVED')
+      .sort((left, right) => right.weekStart.localeCompare(left.weekStart));
+  }, [snapshot]);
 
   const clearError = useCallback(() => setError(null), []);
   const resetDemo = useCallback(
     () => execute(async () => void setSnapshot(await repository.resetDemo())),
     [execute],
   );
-  const createChallenge = useCallback(
-    (input: CreateChallengeInput) => execute(() => repository.createChallenge(input)),
+  const createRoom = useCallback(
+    (input: CreateRoomInput) => execute(() => repository.createRoom(input)),
     [execute],
   );
   const increaseCapacity = useCallback(
-    (challengeId: string, capacity: number) => execute(() => repository.increaseCapacity(challengeId, capacity)),
+    (roomId: string, capacity: number) => execute(() => repository.increaseCapacity(roomId, capacity)),
     [execute],
   );
   const previewInvite = useCallback(
     (code: string) => execute(() => repository.previewInvite(code)),
     [execute],
   );
-  const joinChallenge = useCallback(
-    (code: string) => execute(() => repository.joinChallenge(code)),
+  const joinRoom = useCallback(
+    (code: string) => execute(() => repository.joinRoom(code)),
+    [execute],
+  );
+  const leaveRoom = useCallback(
+    (roomId: string, successorUserId?: string) =>
+      execute(() => repository.leaveRoom(roomId, successorUserId)),
+    [execute],
+  );
+  const closeRoom = useCallback(
+    (roomId: string) => execute(() => repository.closeRoom(roomId)),
     [execute],
   );
   const addExpense = useCallback(
@@ -402,10 +462,13 @@ export function AppProvider({
     loading,
     error,
     currentUser,
-    activeChallenge,
-    archivedChallenges,
+    activeRoom,
+    currentPeriod,
+    pastPeriods,
     syncOperations,
-    getChallenge,
+    getRoom,
+    getPeriod,
+    getRoomMembers,
     getMembers,
     getExpense,
     getExpenses,
@@ -413,20 +476,27 @@ export function AppProvider({
     getComments,
     getProfile,
     getCrownIds,
+    getResults,
+    getStats,
   }), [
-    activeChallenge,
-    archivedChallenges,
+    activeRoom,
+    currentPeriod,
     currentUser,
     error,
-    getChallenge,
     getComments,
     getCrownIds,
     getExpense,
     getExpenses,
     getMembers,
+    getPeriod,
     getProfile,
+    getResults,
+    getRoom,
+    getRoomMembers,
+    getStats,
     getUserExpenses,
     loading,
+    pastPeriods,
     snapshot,
     syncOperations,
   ]);
@@ -435,10 +505,12 @@ export function AppProvider({
     refresh,
     clearError,
     resetDemo,
-    createChallenge,
+    createRoom,
     increaseCapacity,
     previewInvite,
-    joinChallenge,
+    joinRoom,
+    leaveRoom,
+    closeRoom,
     addExpense,
     updateExpense,
     deleteExpense,
@@ -452,13 +524,15 @@ export function AppProvider({
     addComment,
     addExpense,
     clearError,
-    createChallenge,
+    closeRoom,
+    createRoom,
     deleteComment,
     deleteExpense,
     discardSyncOperation,
     getCopyableSyncError,
     increaseCapacity,
-    joinChallenge,
+    joinRoom,
+    leaveRoom,
     previewInvite,
     refresh,
     resetDemo,

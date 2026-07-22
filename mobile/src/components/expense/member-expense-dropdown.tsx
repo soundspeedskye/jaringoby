@@ -2,7 +2,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { memo, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { MemberListItem } from '@/components/challenge/member-list';
+import type { MemberListItem } from '@/components/room/member-list';
 import { ExpenseCard } from '@/components/expense/expense-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { palette, radii, spacing } from '@/constants/design';

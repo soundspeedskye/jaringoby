@@ -2,19 +2,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import type { Challenge } from '@/data/types';
-import { createChallengeTimeline } from '@/domain';
+import type { Period } from '@/data/types';
+import { createPeriodTimeline } from '@/domain';
 
 const PREFERENCES_KEY = 'jaringoby.notification-preferences.v1';
-const CHANNEL_ID = 'challenge-events';
+const CHANNEL_ID = 'period-events';
 
 export type NotificationPreferences = {
-  challengeEvents: boolean;
+  periodEvents: boolean;
   socialEvents: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  challengeEvents: true,
+  periodEvents: true,
   socialEvents: true,
 };
 
@@ -45,7 +45,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-      name: '챌린지 상태와 피드백',
+      name: '주간 챌린지 상태와 피드백',
       importance: Notifications.AndroidImportance.DEFAULT,
       vibrationPattern: [0, 180, 120, 180],
       lightColor: '#2F715D',
@@ -57,38 +57,45 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return requested.granted;
 }
 
-export async function syncChallengeNotificationSchedule(challenges: readonly Challenge[]): Promise<void> {
+export type PeriodNotificationTarget = {
+  period: Period;
+  roomName: string;
+};
+
+export async function syncPeriodNotificationSchedule(targets: readonly PeriodNotificationTarget[]): Promise<void> {
   if (Platform.OS === 'web') return;
   const permission = await Notifications.getPermissionsAsync();
   if (!permission.granted) return;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   await Promise.all(
     scheduled
-      .filter((item) => item.content.data?.source === 'jaringoby-challenge-schedule')
+      .filter((item) => item.content.data?.source === 'jaringoby-period-schedule')
       .map((item) => Notifications.cancelScheduledNotificationAsync(item.identifier)),
   );
 
   const now = Date.now();
-  for (const challenge of challenges) {
-    const timeline = createChallengeTimeline({ startDate: challenge.startDate, endDate: challenge.endDate });
+  for (const { period, roomName } of targets) {
+    if (period.isRestWeek) continue;
+    const timeline = createPeriodTimeline(period.weekStart);
+    const weekLabel = `${roomName} ${period.weekIndex}주차`;
     const events = [
-      { at: timeline.S - 10 * 60_000, title: '곧 챌린지가 시작돼요', body: `${challenge.name} 시작 10분 전이에요.` },
-      { at: timeline.S, title: '챌린지 시작', body: `${challenge.name} 지출 기록을 시작해 보세요.` },
-      { at: timeline.E, title: '보정 시간이 시작됐어요', body: '기간 안의 누락 지출을 내일 낮 12시까지 정리할 수 있어요.' },
+      { at: timeline.S - 10 * 60_000, title: '곧 이번 주 챌린지가 시작돼요', body: `${weekLabel} 시작 10분 전이에요.` },
+      { at: timeline.S, title: '이번 주 챌린지 시작', body: `${weekLabel} 지출 기록을 시작해 보세요.` },
+      { at: timeline.E, title: '보정 시간이 시작됐어요', body: '이번 주 누락 지출을 오늘 낮 12시까지 정리할 수 있어요.' },
       { at: timeline.C - 2 * 60 * 60_000, title: '지출 수정 마감 2시간 전', body: '미동기화 사진과 지출을 지금 확인해 주세요.' },
       { at: timeline.C, title: '정산이 시작됐어요', body: '지출은 잠겼고 댓글과 답글은 계속 남길 수 있어요.' },
-      { at: timeline.F, title: '챌린지 결과가 확정됐어요', body: '지난 기록에서 결과와 대화를 다시 볼 수 있어요.' },
+      { at: timeline.F, title: '이번 주 결과가 확정됐어요', body: '지난 주차에서 결과와 누적 기록을 확인할 수 있어요.' },
     ];
     for (const event of events) {
       if (event.at <= now) continue;
       await Notifications.scheduleNotificationAsync({
-        identifier: `challenge:${challenge.id}:${event.at}`,
+        identifier: `period:${period.id}:${event.at}`,
         content: {
           title: event.title,
           body: event.body,
           data: {
-            source: 'jaringoby-challenge-schedule',
-            challengeId: challenge.id,
+            source: 'jaringoby-period-schedule',
+            periodId: period.id,
             route: '/',
           },
         },

@@ -27,19 +27,20 @@ import { palette, radii, spacing } from "@/constants/design";
 import type {
   AddCommentInput,
   AddExpenseInput,
-  Challenge,
   Comment,
   Expense,
+  Period,
   Profile,
+  Room,
 } from "@/data/types";
 import {
-  createChallengeTimeline,
   createCommentCommand,
+  createPeriodTimeline,
   EXPENSE_CATEGORIES,
-  getChallengePhase,
+  getPeriodPhase,
   prepareReplyDraft,
   validateCommentBody,
-  type ChallengePhase,
+  type PeriodPhase,
   type ExpenseCategory,
   type ReplyDraft,
 } from "@/domain";
@@ -63,24 +64,18 @@ export default function ExpenseDetailScreen() {
   } = useAppActions();
   const {
     currentUser,
-    getChallenge,
     getComments,
     getExpense,
+    getPeriod,
     getProfile,
+    getRoom,
   } = useAppData();
   const expense = expenseId ? getExpense(expenseId) : undefined;
-  const challenge = expense?.challengeId
-    ? getChallenge(expense.challengeId)
-    : undefined;
+  const period = expense?.periodId ? getPeriod(expense.periodId) : undefined;
+  const room = period ? getRoom(period.roomId) : undefined;
   const timeline = useMemo(
-    () =>
-      challenge
-        ? createChallengeTimeline({
-            startDate: challenge.startDate,
-            endDate: challenge.endDate,
-          })
-        : null,
-    [challenge],
+    () => (period ? createPeriodTimeline(period.weekStart) : null),
+    [period],
   );
   const renderedAt = useDeadlineNow(
     timeline ? [timeline.S, timeline.E, timeline.C, timeline.F] : [],
@@ -105,7 +100,7 @@ export default function ExpenseDetailScreen() {
   }, [comments, getProfile]);
   const author = expense ? getProfile(expense.userId) : undefined;
   const phase = timeline
-    ? getChallengePhase(timeline, renderedAt)
+    ? getPeriodPhase(timeline, renderedAt)
     : null;
   const canMutateExpense = Boolean(
     expense &&
@@ -181,7 +176,7 @@ export default function ExpenseDetailScreen() {
         </NoticeBanner>
       ) : null}
 
-      <ExpenseSummary author={author} challenge={challenge} expense={expense} />
+      <ExpenseSummary author={author} period={period} room={room} expense={expense} />
 
       {canMutateExpense && !editingExpense ? (
         <View style={styles.expenseActions}>
@@ -234,11 +229,13 @@ export default function ExpenseDetailScreen() {
 
 const ExpenseSummary = memo(function ExpenseSummary({
   author,
-  challenge,
+  period,
+  room,
   expense,
 }: {
   author?: Profile;
-  challenge?: Challenge;
+  period?: Period;
+  room?: Room;
   expense: Expense;
 }) {
   return (
@@ -268,8 +265,10 @@ const ExpenseSummary = memo(function ExpenseSummary({
       />
       <View style={styles.expenseCopy}>
         <Text style={styles.expenseMemo}>{expense.memo || "메모 없음"}</Text>
-        {challenge ? (
-          <Text style={styles.challengeLabel}>{challenge.name}</Text>
+        {period ? (
+          <Text style={styles.periodLabel}>
+            {room ? `${room.name} · ` : ""}{period.weekIndex}주차
+          </Text>
         ) : null}
         {expense.syncStatus !== "SYNCED" ? (
           <Text style={styles.sync}>
@@ -465,7 +464,7 @@ function CommentSection({
   comments: Comment[];
   currentUserId?: string;
   expenseId: string;
-  phase: ChallengePhase | null;
+  phase: PeriodPhase | null;
   profilesById: ReadonlyMap<string, Profile>;
 }) {
   const composerRef = useRef<TextInput>(null);
@@ -1001,7 +1000,7 @@ const styles = StyleSheet.create({
   },
   expenseCopy: { padding: spacing.md, gap: 5 },
   expenseMemo: { color: palette.ink, fontSize: 14, lineHeight: 21 },
-  challengeLabel: { color: palette.green, fontSize: 11, fontWeight: "600" },
+  periodLabel: { color: palette.green, fontSize: 11, fontWeight: "600" },
   sync: { color: palette.coralText, fontSize: 10 },
   expenseActions: {
     flexDirection: "row",

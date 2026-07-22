@@ -20,8 +20,8 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { palette, radii, spacing } from "@/constants/design";
 import type { InvitePreview } from "@/data/types";
 import {
-  createChallengeTimeline,
-  getChallengePhase,
+  createPeriodTimeline,
+  getPeriodPhase,
   isValidInviteCodeFormat,
   normalizeInviteCode,
 } from "@/domain";
@@ -29,9 +29,9 @@ import { useAppActions, useAppData } from "@/providers/app-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { formatWon } from "@/utils/format";
 
-export default function JoinChallengeScreen() {
+export default function JoinRoomScreen() {
   const router = useRouter();
-  const { joinChallenge, previewInvite } = useAppActions();
+  const { joinRoom, previewInvite } = useAppActions();
   const { loading } = useAppData();
   const [code, setCode] = useState("");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
@@ -40,11 +40,8 @@ export default function JoinChallengeScreen() {
   const [joining, setJoining] = useState(false);
   const timeline = useMemo(
     () =>
-      preview
-        ? createChallengeTimeline({
-            startDate: preview.startDate,
-            endDate: preview.endDate,
-          })
+      preview?.currentPeriod
+        ? createPeriodTimeline(preview.currentPeriod.weekStart)
         : null,
     [preview],
   );
@@ -53,7 +50,7 @@ export default function JoinChallengeScreen() {
     Boolean(timeline),
   );
   const normalizedCode = normalizeInviteCode(code);
-  const phase = timeline ? getChallengePhase(timeline, now) : null;
+  const phase = timeline ? getPeriodPhase(timeline, now) : null;
 
   const lookUp = async () => {
     setMessage(null);
@@ -72,7 +69,7 @@ export default function JoinChallengeScreen() {
       setMessage(
         reason instanceof Error
           ? reason.message
-          : "코드와 일치하는 챌린지를 찾지 못했어요.",
+          : "코드와 일치하는 방을 찾지 못했어요.",
       );
     } finally {
       setPreviewing(false);
@@ -84,13 +81,13 @@ export default function JoinChallengeScreen() {
     setMessage(null);
     setJoining(true);
     try {
-      await joinChallenge(preview.code);
+      await joinRoom(preview.code);
       router.replace("/");
     } catch (reason) {
       setMessage(
         reason instanceof Error
           ? reason.message
-          : "챌린지에 참여하지 못했어요.",
+          : "방에 참여하지 못했어요.",
       );
     } finally {
       setJoining(false);
@@ -103,8 +100,8 @@ export default function JoinChallengeScreen() {
         headerBottomSpacing="md"
         loading
         onBack={() => router.back()}
-        testID="join-challenge-screen"
-        title="챌린지 참여"
+        testID="join-room-screen"
+        title="방 참여"
       />
     );
   }
@@ -115,12 +112,12 @@ export default function JoinChallengeScreen() {
     <ModalFormScreen
       headerBottomSpacing="md"
       onBack={() => router.back()}
-      testID="join-challenge-screen"
-      title="챌린지 참여"
+      testID="join-room-screen"
+      title="방 참여"
     >
       <Text style={styles.intro}>
-        초대받은 6자리 코드를 입력하면 참여 전에 기간과 내 적용한도를 확인할 수
-        있어요.
+        초대받은 6자리 코드를 입력하면 참여 전에 이번 주차와 내 적용한도를
+        확인할 수 있어요.
       </Text>
       <View style={styles.codeRow}>
         <View style={styles.codeField}>
@@ -165,7 +162,7 @@ export default function JoinChallengeScreen() {
 
       <FormMessage message={message} style={styles.message} />
 
-      {preview && phase ? (
+      {preview ? (
         <GlassSurface style={styles.preview} testID="invite-preview-card">
           <View style={styles.previewHero}>
             <View style={styles.previewIcon}>
@@ -176,23 +173,30 @@ export default function JoinChallengeScreen() {
               />
             </View>
             <View style={styles.previewCopy}>
-              <Text style={styles.phase}>{phaseLabel(phase)}</Text>
-              <Text style={styles.challengeName}>{preview.name}</Text>
+              <Text style={styles.phase}>
+                {phase ? phaseLabel(phase, preview.participatesThisWeek) : "다음 주 월요일 시작"}
+              </Text>
+              <Text style={styles.roomName}>{preview.name}</Text>
               <Text style={styles.period}>
-                {preview.startDate} ~ {preview.endDate}
+                {preview.currentPeriod
+                  ? `이번 주차 ${preview.currentPeriod.weekStart} ~ ${preview.currentPeriod.weekEnd}`
+                  : "매주 월~금 자동 반복"}
               </Text>
             </View>
           </View>
 
           <View style={styles.ruleBox}>
-            <KeyValueRow label="기준금액" value={formatWon(preview.baseLimit)} />
             <KeyValueRow
-              label="전체 선택일"
-              value={`${preview.totalSelectedDays}일`}
+              label="주당 기준금액"
+              value={formatWon(preview.baseAmount)}
             />
             <KeyValueRow
-              label="공휴일 제외"
-              value={`${preview.holidayDates.length}일`}
+              label="이번 주 유효 평일"
+              value={
+                preview.currentPeriod
+                  ? `${preview.currentPeriod.validDayCount}일 (공휴일 ${preview.currentPeriod.holidayDates.length}일 제외)`
+                  : "다음 주에 확정"
+              }
             />
             <KeyValueRow
               label="현재 인원"
@@ -202,24 +206,29 @@ export default function JoinChallengeScreen() {
 
           <View style={styles.limitBox}>
             <Text style={styles.limitLabel}>
-              {preview.joinedDate} 합류 시 내 적용한도
+              {preview.participatesThisWeek
+                ? `${preview.joinedDate} 합류 시 이번 주 내 적용한도`
+                : "이번 주는 참여 없이, 다음 주부터 전체 한도"}
             </Text>
             <Text style={styles.limitValue}>
-              {formatWon(preview.appliedLimit)}
+              {formatWon(
+                preview.participatesThisWeek
+                  ? preview.appliedLimit
+                  : preview.baseAmount,
+              )}
             </Text>
             <Text style={styles.formula}>
-              {formatWon(preview.baseLimit, false)} ×{" "}
-              {preview.remainingEffectiveDays}일 ÷ {preview.totalSelectedDays}일
+              {preview.participatesThisWeek
+                ? `${formatWon(preview.baseAmount, false)} × ${preview.eligibleDayCount}일 ÷ ${preview.currentPeriod?.selectedDayCount ?? 5}일`
+                : "매주 월요일에 그 주 한도가 새로 계산돼요"}
             </Text>
           </View>
 
-          {preview.holidayDates.length ? (
+          {preview.currentPeriod?.holidayDates.length ? (
             <View style={styles.holidays}>
-              <Text style={styles.holidayTitle}>
-                방 생성 시 고정된 제외 공휴일
-              </Text>
+              <Text style={styles.holidayTitle}>이번 주 제외 공휴일</Text>
               <Text style={styles.holidayDates}>
-                {preview.holidayDates.join(" · ")}
+                {preview.currentPeriod.holidayDates.join(" · ")}
               </Text>
             </View>
           ) : null}
@@ -235,7 +244,8 @@ export default function JoinChallengeScreen() {
 
           {!preview.canJoin ? (
             <NoticeBanner compact style={styles.notice} tone="danger">
-              현재는 이 방에 참여할 수 없어요. 정원과 남은 기간을 확인해 주세요.
+              현재는 이 방에 참여할 수 없어요. 정원이 가득 찼거나 이미 참여한
+              방이에요.
             </NoticeBanner>
           ) : null}
 
@@ -243,7 +253,9 @@ export default function JoinChallengeScreen() {
             disabled={joinDisabled}
             label={
               preview.canJoin
-                ? `${formatWon(preview.appliedLimit)} 한도로 참여`
+                ? preview.participatesThisWeek
+                  ? `${formatWon(preview.appliedLimit)} 한도로 참여`
+                  : "다음 주부터 참여"
                 : "참여할 수 없음"
             }
             loading={joining}
@@ -262,11 +274,12 @@ export default function JoinChallengeScreen() {
   );
 }
 
-function phaseLabel(phase: string): string {
-  if (phase === "WAITING") return "시작 전 · 참여 가능";
-  if (phase === "ACTIVE") return "진행 중 · 중도 합류";
-  if (phase === "ADJUSTMENT") return "보정 중";
-  if (phase === "SETTLEMENT") return "정산 중";
+function phaseLabel(phase: string, participatesThisWeek: boolean): string {
+  if (phase === "WAITING") return "다음 주차 대기 중 · 참여 가능";
+  if (phase === "ACTIVE")
+    return participatesThisWeek ? "이번 주 진행 중 · 오늘부터 참여" : "이번 주 진행 중";
+  if (phase === "ADJUSTMENT") return "보정 중 · 다음 주부터 참여";
+  if (phase === "SETTLEMENT") return "정산 중 · 다음 주부터 참여";
   return "완료";
 }
 
@@ -307,7 +320,7 @@ const styles = StyleSheet.create({
   },
   previewCopy: { flex: 1 },
   phase: { color: palette.coralText, fontSize: 11, fontWeight: "700" },
-  challengeName: {
+  roomName: {
     color: palette.ink,
     fontSize: 21,
     fontWeight: "800",

@@ -47,8 +47,8 @@ function AuthenticatedApp() {
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.cream } }}>
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="challenge/create" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="challenge/join" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="room/create" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="room/join" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/[id]" />
             <Stack.Screen name="history/index" />

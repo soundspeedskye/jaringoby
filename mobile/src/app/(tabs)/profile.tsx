@@ -23,7 +23,7 @@ import {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { archivedChallenges, currentUser, dataMode, syncOperations } = useAppData();
+  const { currentUser, dataMode, pastPeriods, syncOperations } = useAppData();
   const {
     discardSyncOperation,
     getCopyableSyncError,
@@ -177,9 +177,9 @@ export default function ProfileScreen() {
       <SectionHeader style={styles.sectionHeader} title="기록" variant="form" />
       <SettingRow
         icon="archive-outline"
-        label="지난 챌린지"
+        label="지난 주차"
         onPress={() => router.push("/history")}
-        value={`${archivedChallenges.length}개`}
+        value={`${pastPeriods.length}개`}
       />
 
       {syncOperations.length > 0 ? (
@@ -224,8 +224,8 @@ export default function ProfileScreen() {
       <ToggleRow
         icon="bell-outline"
         label="시작·보정·정산"
-        onChange={(value) => void updateNotifications("challengeEvents", value)}
-        value={notifications.challengeEvents}
+        onChange={(value) => void updateNotifications("periodEvents", value)}
+        value={notifications.periodEvents}
       />
 
       <SectionHeader

@@ -16,13 +16,15 @@ import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { palette, radii, spacing } from "@/constants/design";
-import type { Challenge } from "@/data/types";
+import type { Period, PeriodMember } from "@/data/types";
 import {
-  createChallengeTimeline,
+  addLocalDays,
+  createPeriodTimeline,
   EXPENSE_CATEGORIES,
-  getChallengePhase,
+  getPeriodPhase,
   toSeoulLocalDate,
   type ExpenseCategory,
+  type LocalDate,
 } from "@/domain";
 import { useAppActions, useAppData } from "@/providers/app-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
@@ -43,22 +45,16 @@ const CATEGORY_ICONS: Record<
 export default function NewExpenseScreen() {
   const router = useRouter();
   const { addExpense } = useAppActions();
-  const { activeChallenge, currentUser, getMembers } = useAppData();
+  const { activeRoom, currentPeriod, currentUser, getMembers } = useAppData();
   const currentMember =
-    activeChallenge && currentUser
-      ? getMembers(activeChallenge.id).find(
+    currentPeriod && currentUser
+      ? getMembers(currentPeriod.id).find(
           (member) => member.userId === currentUser.id,
         )
       : undefined;
   const timeline = useMemo(
-    () =>
-      activeChallenge
-        ? createChallengeTimeline({
-            startDate: activeChallenge.startDate,
-            endDate: activeChallenge.endDate,
-          })
-        : null,
-    [activeChallenge],
+    () => (currentPeriod ? createPeriodTimeline(currentPeriod.weekStart) : null),
+    [currentPeriod],
   );
   const now = useDeadlineNow(
     timeline ? [timeline.S, timeline.E, timeline.C, timeline.F] : [],
@@ -69,13 +65,13 @@ export default function NewExpenseScreen() {
   const [memo, setMemo] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [occurredAt, setOccurredAt] = useState(() =>
-    chooseInitialOccurrence(activeChallenge, currentMember?.joinedAt),
+    chooseInitialOccurrence(currentPeriod, currentMember),
   );
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [clientRequestId] = useState(createUuid);
 
-  if (!activeChallenge || !currentMember) {
+  if (!activeRoom || !currentPeriod || !currentMember) {
     return (
       <ModalFormScreen
         onBack={() => router.back()}
@@ -90,20 +86,18 @@ export default function NewExpenseScreen() {
               variant="secondary"
             />
           }
-          description="챌린지 지출은 참여 중인 방에서만 사진과 함께 기록할 수 있어요."
+          description="주차 지출은 이번 주차에 참여 중일 때만 사진과 함께 기록할 수 있어요."
           icon="calendar-remove-outline"
-          title="진행 중인 챌린지가 없어요."
+          title="참여 중인 주차가 없어요."
         />
       </ModalFormScreen>
     );
   }
 
   if (!timeline) return null;
-  const phase = getChallengePhase(timeline, now);
+  const phase = getPeriodPhase(timeline, now);
   const canMutate = phase === "ACTIVE" || phase === "ADJUSTMENT";
-  const effectiveDates = activeChallenge.selectedDates.filter(
-    (date) => !activeChallenge.holidayDates.includes(date),
-  );
+  const effectiveDates = enumerateEffectiveDates(currentPeriod);
 
   const pickPhoto = async (source: "camera" | "library") => {
     setFormError(null);
@@ -179,28 +173,28 @@ export default function NewExpenseScreen() {
       setFormError("메모는 200자 이내로 입력해 주세요.");
       return;
     }
-    if (!effectiveDates.includes(toSeoulLocalDate(occurredAt))) {
-      setFormError(
-        "선택일이 아니거나 공휴일인 날짜의 지출은 챌린지에 넣을 수 없어요.",
-      );
+    const occurredOn = toSeoulLocalDate(occurredAt);
+    if (!effectiveDates.includes(occurredOn)) {
+      setFormError("주말이나 공휴일 지출은 주차 한도에 넣을 수 없어요.");
       return;
     }
-    if (occurredAt.getTime() < Date.parse(currentMember.joinedAt)) {
-      setFormError("합류 전 지출은 챌린지에 소급 등록할 수 없어요.");
+    // D3: 합류일 포함 — 같은 날 합류 전 시각의 지출도 유효 (day 단위 판정).
+    if (occurredOn < currentMember.joinedDate) {
+      setFormError("합류 전 지출은 주차에 소급 등록할 수 없어요.");
       return;
     }
     if (
       occurredAt.getTime() < timeline.S ||
       occurredAt.getTime() >= timeline.E
     ) {
-      setFormError("챌린지 기간 안에서 발생한 지출만 등록할 수 있어요.");
+      setFormError("이번 주차 기간 안에서 발생한 지출만 등록할 수 있어요.");
       return;
     }
 
     setSubmitting(true);
     try {
       const expense = await addExpense({
-        challengeId: activeChallenge.id,
+        periodId: currentPeriod.id,
         amount,
         category,
         memo: memo.trim(),
@@ -239,17 +233,17 @@ export default function NewExpenseScreen() {
           size={17}
         />
         <Text numberOfLines={1} style={styles.roomName}>
-          {activeChallenge.name}
+          {activeRoom.name} · {currentPeriod.weekIndex}주차
         </Text>
         <Text style={styles.phaseLabel}>
-          {phase === "ADJUSTMENT" ? "보정 입력" : "챌린지 지출"}
+          {phase === "ADJUSTMENT" ? "보정 입력" : "주차 지출"}
         </Text>
       </View>
 
       {!canMutate ? (
         <NoticeBanner icon="lock-outline" style={styles.locked} tone="danger">
           {phase === "WAITING"
-            ? "챌린지가 시작되면 지출을 기록할 수 있어요."
+            ? "월요일에 주차가 시작되면 지출을 기록할 수 있어요."
             : "보정 마감이 지나 지출 입력이 잠겼어요."}
         </NoticeBanner>
       ) : null}
@@ -349,6 +343,13 @@ export default function NewExpenseScreen() {
         <View style={styles.timeButtons}>
           <OccurrencePicker
             label="날짜 변경"
+            // D1: 주차는 월~금이라 범위 제한만으로 주말이 비활성화된다.
+            maximumDate={dateAtSeoulNoon(currentPeriod.weekEnd)}
+            minimumDate={dateAtSeoulNoon(
+              currentMember.joinedDate > currentPeriod.weekStart
+                ? currentMember.joinedDate
+                : currentPeriod.weekStart,
+            )}
             mode="date"
             onChange={setOccurredAt}
             value={occurredAt}
@@ -380,17 +381,23 @@ export default function NewExpenseScreen() {
 
 function OccurrencePicker({
   label,
+  maximumDate,
+  minimumDate,
   mode,
   value,
   onChange,
 }: {
   label: string;
+  maximumDate?: Date;
+  minimumDate?: Date;
   mode: "date" | "time";
   value: Date;
   onChange: (value: Date) => void;
 }) {
   return (
     <PlatformDateTimePicker
+      maximumDate={maximumDate}
+      minimumDate={minimumDate}
       mode={mode}
       onChange={onChange}
       renderTrigger={(open) => (
@@ -416,24 +423,30 @@ function OccurrencePicker({
 }
 
 function chooseInitialOccurrence(
-  challenge: Challenge | null,
-  joinedAt?: string,
+  period: Period | null,
+  member: PeriodMember | undefined,
   now = Date.now(),
 ): Date {
-  if (!challenge) return new Date(now);
-  const effectiveDates = challenge.selectedDates.filter(
-    (date) =>
-      !challenge.holidayDates.includes(date) &&
-      (!joinedAt || date >= toSeoulLocalDate(joinedAt)),
+  if (!period) return new Date(now);
+  const joinedDate = member?.joinedDate;
+  const effectiveDates = enumerateEffectiveDates(period).filter(
+    (date) => !joinedDate || date >= joinedDate,
   );
   const today = toSeoulLocalDate(now);
-  if (
-    effectiveDates.includes(today) &&
-    (!joinedAt || now >= Date.parse(joinedAt))
-  )
-    return new Date(now);
-  const fallback = effectiveDates.at(-1) ?? challenge.endDate;
+  if (effectiveDates.includes(today)) return new Date(now);
+  const fallback = effectiveDates.at(-1) ?? period.weekEnd;
   return new Date(`${fallback}T12:00:00+09:00`);
+}
+
+/** 주차의 월~금 중 공휴일을 뺀 날짜 목록. */
+function enumerateEffectiveDates(period: Period): LocalDate[] {
+  return Array.from({ length: period.selectedDayCount }, (_, index) =>
+    addLocalDays(period.weekStart, index),
+  ).filter((date) => !period.holidayDates.includes(date));
+}
+
+function dateAtSeoulNoon(date: LocalDate): Date {
+  return new Date(`${date}T12:00:00+09:00`);
 }
 
 function formatSeoulDateTime(value: Date): string {

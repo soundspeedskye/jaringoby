@@ -11,6 +11,7 @@ import { palette, radii, shadow, spacing } from "@/constants/design";
 type PlatformDateTimePickerProps = {
   iosModalTitle?: string;
   iosPresentation?: "inline" | "modal";
+  maximumDate?: Date;
   minimumDate?: Date;
   mode: "date" | "time";
   onChange: (value: Date) => void;
@@ -24,6 +25,7 @@ const TIME_ZONE = "Asia/Seoul";
 export function PlatformDateTimePicker({
   iosModalTitle,
   iosPresentation = "inline",
+  maximumDate,
   minimumDate,
   mode,
   onChange,
@@ -43,6 +45,7 @@ export function PlatformDateTimePicker({
       DateTimePickerAndroid.open({
         display: "default",
         is24Hour: true,
+        maximumDate,
         minimumDate,
         mode,
         onChange: changed,
@@ -61,6 +64,7 @@ export function PlatformDateTimePicker({
       accentColor={iosPresentation === "modal" ? palette.green : undefined}
       display={iosPresentation === "modal" ? "inline" : "default"}
       is24Hour
+      maximumDate={maximumDate}
       minimumDate={minimumDate}
       mode={mode}
       onChange={changed}

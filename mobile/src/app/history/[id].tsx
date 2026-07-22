@@ -12,30 +12,31 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
 import { palette, radii, spacing } from "@/constants/design";
-import { expenseOfficialAmount } from "@/data/expense-sync";
-import { createChallengeTimeline, selectCrownHolders } from "@/domain";
+import { createPeriodTimeline } from "@/domain";
 import { useAppData } from "@/providers/app-provider";
 import { formatDateLabel, formatWon } from "@/utils/format";
 
 export default function HistoryDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
-  const challengeId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const periodId = Array.isArray(params.id) ? params.id[0] : params.id;
   const {
     currentUser,
-    getChallenge,
     getComments,
     getExpenses,
     getMembers,
+    getPeriod,
     getProfile,
-    getUserExpenses,
+    getResults,
+    getRoom,
   } = useAppData();
-  const challenge = challengeId ? getChallenge(challengeId) : undefined;
+  const period = periodId ? getPeriod(periodId) : undefined;
+  const room = period ? getRoom(period.roomId) : undefined;
 
-  if (!challenge) {
+  if (!period) {
     return (
       <Screen testID="history-detail-screen">
-        <PageHeader onBack={() => router.back()} title="지난 기록" />
+        <PageHeader onBack={() => router.back()} title="지난 주차" />
         <EmptyState
           action={
             <PrimaryButton
@@ -45,90 +46,81 @@ export default function HistoryDetailScreen() {
             />
           }
           icon="archive-remove-outline"
-          title="지난 기록을 찾을 수 없어요."
+          title="지난 주차 기록을 찾을 수 없어요."
         />
       </Screen>
     );
   }
 
-  const members = getMembers(challenge.id);
-  const expenses = [...getExpenses(challenge.id)].sort(
+  const expenses = [...getExpenses(period.id)].sort(
     (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
   );
-  const timeline = createChallengeTimeline({
-    startDate: challenge.startDate,
-    endDate: challenge.endDate,
-  });
-  const memberResults = members.map((member) => {
-    const spent = getUserExpenses(member.userId, challenge.id)
-      .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
-    return {
-      member,
-      profile: getProfile(member.userId),
-      spent,
-      remaining: member.appliedLimit - spent,
-      achieved: spent <= member.appliedLimit,
-    };
-  });
-  const crownIds = selectCrownHolders(
-    memberResults.map((result) => ({
-      memberId: result.member.userId,
-      nickname: result.profile?.nickname ?? "알 수 없음",
-      status: result.member.status,
-      appliedLimit: result.member.appliedLimit,
-      eligibleSpending: result.spent,
-    })),
-    "ARCHIVED",
-  ).holderIds;
-  const myResult = memberResults.find(
-    (result) => result.member.userId === currentUser?.id,
+  const timeline = createPeriodTimeline(period.weekStart);
+  const results = getResults(period.id);
+  const membersByUserId = new Map(
+    getMembers(period.id).map((member) => [member.userId, member]),
   );
-  const activeResults = memberResults.filter(
-    (result) => result.member.status === "ACTIVE",
+  const memberResults = results.map((result) => ({
+    result,
+    member: membersByUserId.get(result.userId),
+    profile: getProfile(result.userId),
+  }));
+  const crownIds = results
+    .filter((result) => result.isCrown)
+    .map((result) => result.userId);
+  const myResult = memberResults.find(
+    (row) => row.result.userId === currentUser?.id,
+  );
+  const settledResults = memberResults.filter(
+    (row) => !row.member || row.member.status === "ACTIVE",
   );
   const everyoneAchieved =
-    activeResults.length > 0 &&
-    activeResults.every((result) => result.achieved);
+    settledResults.length > 0 &&
+    settledResults.every((row) => row.result.achieved);
 
   return (
     <Screen testID="history-detail-screen">
-      <PageHeader onBack={() => router.back()} title="지난 기록" />
+      <PageHeader onBack={() => router.back()} title="지난 주차" />
 
       <NoticeBanner icon="archive-lock-outline" style={styles.readOnlyBanner}>
         정산 완료 · 읽기 전용
       </NoticeBanner>
 
       <View style={styles.hero}>
-        <Text style={styles.heroTitle}>{challenge.name}</Text>
+        <Text style={styles.heroTitle}>
+          {room?.name ?? "방"} · {period.weekIndex}주차
+        </Text>
         <Text style={styles.heroPeriod}>
-          {challenge.startDate} ~ {challenge.endDate}
+          {period.weekStart} ~ {period.weekEnd}
         </Text>
         <View style={styles.heroResult}>
           <View
             style={[
               styles.resultIcon,
-              !myResult?.achieved && styles.resultIconOver,
+              !myResult?.result.achieved && styles.resultIconOver,
             ]}
           >
             <MaterialCommunityIcons
-              color={myResult?.achieved ? palette.green : palette.danger}
+              color={myResult?.result.achieved ? palette.green : palette.danger}
               name={
-                myResult?.achieved ? "trophy-outline" : "chart-line-variant"
+                myResult?.result.achieved
+                  ? "trophy-outline"
+                  : "chart-line-variant"
               }
               size={27}
             />
           </View>
           <View style={styles.heroResultCopy}>
-            <Text style={styles.heroResultLabel}>나의 최종 결과</Text>
+            <Text style={styles.heroResultLabel}>나의 주차 결과</Text>
             <Text style={styles.heroResultValue}>
               {myResult
-                ? myResult.achieved
-                  ? `${formatWon(myResult.remaining)} 남김`
-                  : `${formatWon(Math.abs(myResult.remaining))} 초과`
+                ? myResult.result.achieved
+                  ? `${formatWon(myResult.result.remainingAmount)} 남김`
+                  : `${formatWon(Math.abs(myResult.result.remainingAmount))} 초과`
                 : "참여 결과 없음"}
             </Text>
           </View>
-          {myResult && crownIds.includes(myResult.member.userId) ? (
+          {myResult && crownIds.includes(myResult.result.userId) ? (
             <Text style={styles.crown}>👑</Text>
           ) : null}
         </View>
@@ -137,29 +129,29 @@ export default function HistoryDetailScreen() {
       <View style={styles.finalStats}>
         <Stat
           label="내 적용한도"
-          value={formatWon(myResult?.member.appliedLimit ?? 0)}
+          value={formatWon(myResult?.result.appliedLimit ?? 0)}
         />
         <View style={styles.statLine} />
-        <Stat label="내 지출" value={formatWon(myResult?.spent ?? 0)} />
+        <Stat label="내 지출" value={formatWon(myResult?.result.spentAmount ?? 0)} />
         <View style={styles.statLine} />
         <Stat label="전체 완주" value={everyoneAchieved ? "성공" : "미달성"} />
       </View>
 
       <GlassSurface style={styles.rules} testID="archived-rule-snapshot">
         <SectionHeader style={styles.sectionHeading} title="고정 조건과 정산 기준" />
-        <KeyValueRow label="기준금액" value={formatWon(challenge.baseLimit)} />
         <KeyValueRow
-          label="전체 선택일"
-          value={`${challenge.selectedDates.length}일`}
+          label="주당 기준금액"
+          value={formatWon(room?.baseAmount ?? 0)}
+        />
+        <KeyValueRow
+          label="유효 평일"
+          value={`${period.validDayCount}일 / ${period.selectedDayCount}일`}
         />
         <KeyValueRow
           label="제외 공휴일"
-          value={`${challenge.holidayDates.length}일`}
+          value={`${period.holidayDates.length}일`}
         />
-        <KeyValueRow
-          label="공휴일 데이터"
-          value={challenge.holidaySnapshotVersion}
-        />
+        <KeyValueRow label="공휴일 데이터" value={period.holidayVersionId} />
         <KeyValueRow
           label="보정 마감"
           value={formatDateLabel(new Date(timeline.C))}
@@ -168,11 +160,11 @@ export default function HistoryDetailScreen() {
           label="최종 확정"
           value={formatDateLabel(new Date(timeline.F))}
         />
-        {challenge.holidayDates.length ? (
+        {period.holidayDates.length ? (
           <View style={styles.holidayBox}>
             <Text style={styles.holidayTitle}>제외된 날짜</Text>
             <Text style={styles.holidayDates}>
-              {challenge.holidayDates.join(" · ")}
+              {period.holidayDates.join(" · ")}
             </Text>
           </View>
         ) : null}
@@ -180,14 +172,14 @@ export default function HistoryDetailScreen() {
 
       <View style={styles.memberSection}>
         <SectionHeader
-          meta={`${activeResults.length}명`}
+          meta={`${memberResults.length}명`}
           style={styles.sectionHeading}
-          title="참여자 최종 결과"
+          title="참여자 정산 결과"
         />
         <GlassSurface style={styles.memberList}>
-          {memberResults.map((result, index) => (
+          {memberResults.map((row, index) => (
             <View
-              key={result.member.userId}
+              key={row.result.userId}
               style={[
                 styles.memberRow,
                 index === memberResults.length - 1 && styles.memberRowLast,
@@ -195,36 +187,32 @@ export default function HistoryDetailScreen() {
             >
               <View style={styles.memberAvatar}>
                 <Text style={styles.memberAvatarText}>
-                  {result.profile?.avatar ?? "🙂"}
+                  {row.profile?.avatar ?? "🙂"}
                 </Text>
               </View>
               <View style={styles.memberCopy}>
                 <View style={styles.memberNameRow}>
                   <Text numberOfLines={1} style={styles.memberName}>
-                    {crownIds.includes(result.member.userId) ? "👑 " : ""}
-                    {result.member.userId === currentUser?.id
+                    {crownIds.includes(row.result.userId) ? "👑 " : ""}
+                    {row.result.userId === currentUser?.id
                       ? "나"
-                      : (result.profile?.nickname ?? "알 수 없음")}
+                      : (row.profile?.nickname ?? row.result.nickname)}
                   </Text>
-                  {result.member.isLateJoiner ? (
+                  {row.member?.isLateJoiner ? (
                     <View style={styles.lateBadge}>
                       <Text style={styles.lateText}>중도 합류</Text>
                     </View>
                   ) : null}
                 </View>
                 <Text style={styles.memberCalculation}>
-                  {formatWon(challenge.baseLimit, false)} ×{" "}
-                  {countRemainingDays(
-                    challenge.selectedDates,
-                    challenge.holidayDates,
-                    result.member.joinedDate,
-                  )}
-                  일 ÷ {challenge.selectedDates.length}일 ={" "}
-                  {formatWon(result.member.appliedLimit)}
+                  {formatWon(room?.baseAmount ?? 0, false)} ×{" "}
+                  {row.member?.eligibleDayCount ?? period.validDayCount}일 ÷{" "}
+                  {period.selectedDayCount}일 ={" "}
+                  {formatWon(row.result.appliedLimit)}
                 </Text>
                 <Text style={styles.memberJoin}>
-                  {result.member.joinedDate} 합류 ·{" "}
-                  {result.member.status === "ACTIVE"
+                  {row.member ? `${row.member.joinedDate} 합류 · ` : ""}
+                  {!row.member || row.member.status === "ACTIVE"
                     ? "최종 참여"
                     : "참여 종료"}
                 </Text>
@@ -233,17 +221,27 @@ export default function HistoryDetailScreen() {
                 <Text
                   style={[
                     styles.memberRemaining,
-                    !result.achieved && styles.memberRemainingOver,
+                    !row.result.achieved && styles.memberRemainingOver,
                   ]}
                 >
-                  {formatWon(Math.abs(result.remaining), false)}
+                  {formatWon(Math.abs(row.result.remainingAmount), false)}
                 </Text>
                 <Text style={styles.memberAmountLabel}>
-                  {result.remaining >= 0 ? "남음" : "초과"}
+                  {row.result.remainingAmount >= 0 ? "남음" : "초과"}
                 </Text>
               </View>
             </View>
           ))}
+          {!memberResults.length ? (
+            <EmptyState
+              title={
+                period.isRestWeek
+                  ? "공휴일만 있는 쉬는 주였어요."
+                  : "정산 결과가 없어요."
+              }
+              variant="compact"
+            />
+          ) : null}
         </GlassSurface>
       </View>
 
@@ -327,16 +325,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       </Text>
     </View>
   );
-}
-
-function countRemainingDays(
-  selectedDates: string[],
-  holidays: string[],
-  joinedDate: string,
-): number {
-  return selectedDates.filter(
-    (date) => date >= joinedDate && !holidays.includes(date),
-  ).length;
 }
 
 const styles = StyleSheet.create({

@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { palette, radii, shadow, spacing } from '@/constants/design';
 import { formatWon } from '@/utils/format';
 
-type ChallengeHeroProps = {
+type RoomHeroProps = {
   title: string;
   daysRemaining: number;
   baseLimit: number;
@@ -20,7 +20,7 @@ const ringStroke = 20;
 const radius = (ringSize - ringStroke) / 2;
 const circumference = 2 * Math.PI * radius;
 
-export function ChallengeHero({
+export function RoomHero({
   title,
   daysRemaining,
   baseLimit,
@@ -29,7 +29,7 @@ export function ChallengeHero({
   pendingDelta = 0,
   pendingCount = 0,
   joinLabel,
-}: ChallengeHeroProps) {
+}: RoomHeroProps) {
   const safeLimit = Math.max(appliedLimit, 1);
   const hasPending = pendingDelta !== 0 || pendingCount > 0;
   const progress = Math.min(Math.max(spent / safeLimit, 0), 1);

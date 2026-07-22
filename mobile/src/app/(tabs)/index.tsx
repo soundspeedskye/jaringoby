@@ -9,12 +9,12 @@ import {
   View,
 } from "react-native";
 
-import { CalculationCard } from "@/components/challenge/calculation-card";
-import { ChallengeHero } from "@/components/challenge/challenge-hero";
+import { CalculationCard } from "@/components/room/calculation-card";
+import { RoomHero } from "@/components/room/room-hero";
 import {
   MemberList,
   type MemberListItem,
-} from "@/components/challenge/member-list";
+} from "@/components/room/member-list";
 import { MemberExpenseDropdown } from "@/components/expense/member-expense-dropdown";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -29,8 +29,11 @@ import {
 import type { Expense } from "@/data/types";
 import {
   addLocalDays,
-  createChallengeTimeline,
-  getChallengePhase,
+  countRemainingEligibleDays,
+  createPeriodTimeline,
+  createKoreanHolidaySnapshot,
+  createWeekdayCalendar,
+  getPeriodPhase,
   startOfSeoulDate,
   toSeoulLocalDate,
 } from "@/domain";
@@ -41,10 +44,11 @@ import { formatDateLabel, formatWon } from "@/utils/format";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EMPTY_EXPENSES: Expense[] = [];
 
-export default function ChallengeHomeScreen() {
+export default function RoomHomeScreen() {
   const router = useRouter();
   const {
-    activeChallenge,
+    activeRoom,
+    currentPeriod,
     currentUser,
     error,
     getComments,
@@ -56,17 +60,17 @@ export default function ChallengeHomeScreen() {
   } = useAppData();
   const { clearError, refresh } = useAppActions();
   const members = useMemo(
-    () => (activeChallenge ? getMembers(activeChallenge.id) : []),
-    [activeChallenge, getMembers],
+    () => (currentPeriod ? getMembers(currentPeriod.id) : []),
+    [currentPeriod, getMembers],
   );
   const expenses = useMemo(
     () =>
-      activeChallenge
-        ? [...getExpenses(activeChallenge.id)].sort(
+      currentPeriod
+        ? [...getExpenses(currentPeriod.id)].sort(
             (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
           )
         : [],
-    [activeChallenge, getExpenses],
+    [currentPeriod, getExpenses],
   );
   const expensesByUserId = useMemo(() => {
     const grouped = new Map<string, Expense[]>();
@@ -87,14 +91,8 @@ export default function ChallengeHomeScreen() {
     [router],
   );
   const timeline = useMemo(
-    () =>
-      activeChallenge
-        ? createChallengeTimeline({
-            startDate: activeChallenge.startDate,
-            endDate: activeChallenge.endDate,
-          })
-        : null,
-    [activeChallenge],
+    () => (currentPeriod ? createPeriodTimeline(currentPeriod.weekStart) : null),
+    [currentPeriod],
   );
   const nextSeoulMidnight = startOfSeoulDate(
     addLocalDays(toSeoulLocalDate(Date.now()), 1),
@@ -112,7 +110,7 @@ export default function ChallengeHomeScreen() {
     Boolean(timeline),
   );
 
-  // Rendered by every branch below: a failed initial load leaves activeChallenge
+  // Rendered by every branch below: a failed initial load leaves activeRoom
   // and currentUser empty, so an error shown only by the loaded view is invisible
   // exactly when it matters most.
   const errorBanner = error ? (
@@ -136,7 +134,7 @@ export default function ChallengeHomeScreen() {
     );
   }
 
-  if (!activeChallenge || !currentUser || !timeline) {
+  if (!activeRoom || !currentPeriod || !currentUser || !timeline) {
     return (
       <Screen>
         {errorBanner}
@@ -150,7 +148,7 @@ export default function ChallengeHomeScreen() {
           <Text style={styles.emptyBody}>
             {error
               ? "네트워크와 로그인 상태를 확인한 뒤 다시 시도해 주세요. 아직 저장되지 않은 기록은 이 기기에 남아 있어요."
-              : "기간과 기준금액을 정하고 친구를 초대해 첫 챌린지를 시작해 보세요."}
+              : "주당 기준금액을 정하고 친구를 초대하면 매주 평일 챌린지가 자동으로 열려요."}
           </Text>
         </View>
         <View style={styles.emptyActions}>
@@ -158,13 +156,13 @@ export default function ChallengeHomeScreen() {
             <PrimaryButton label="다시 시도" onPress={() => void refresh()} />
           ) : null}
           <PrimaryButton
-            label="챌린지 만들기"
-            onPress={() => router.push("/challenge/create")}
+            label="방 만들기"
+            onPress={() => router.push("/room/create")}
             variant={error ? "secondary" : "primary"}
           />
           <PrimaryButton
             label="참여 코드 입력"
-            onPress={() => router.push("/challenge/join")}
+            onPress={() => router.push("/room/join")}
             variant="secondary"
           />
         </View>
@@ -172,7 +170,7 @@ export default function ChallengeHomeScreen() {
     );
   }
 
-  const phase = getChallengePhase(timeline, now);
+  const phase = getPeriodPhase(timeline, now);
   const currentMember = members.find(
     (member) => member.userId === currentUser.id,
   );
@@ -185,16 +183,16 @@ export default function ChallengeHomeScreen() {
   const myPendingCount = expenses.filter(
     (expense) => expense.userId === currentUser.id && hasPendingExpenseProjection(expense),
   ).length;
-  const appliedLimit = currentMember?.appliedLimit ?? activeChallenge.baseLimit;
+  const appliedLimit = currentMember?.appliedLimit ?? activeRoom.baseAmount;
   const today = toSeoulLocalDate(now);
   const daysRemaining = Math.max(
     0,
     Math.round(
-      (startOfSeoulDate(activeChallenge.endDate) - startOfSeoulDate(today)) /
+      (startOfSeoulDate(currentPeriod.weekEnd) - startOfSeoulDate(today)) /
         DAY_MS,
     ),
   );
-  const crownIds = getCrownIds(activeChallenge.id);
+  const crownIds = getCrownIds(currentPeriod.id);
   const memberRows: MemberListItem[] = members
     .filter((member) => member.status === "ACTIVE")
     .map((member) => {
@@ -219,14 +217,21 @@ export default function ChallengeHomeScreen() {
         isCurrentUser: member.userId === currentUser.id,
       };
     });
-  const remainingEffectiveDays = activeChallenge.selectedDates.filter(
-    (date) =>
-      date >= (currentMember?.joinedDate ?? activeChallenge.startDate) &&
-      !activeChallenge.holidayDates.includes(date),
-  ).length;
+  const periodCalendar = createWeekdayCalendar({
+    weekStart: currentPeriod.weekStart,
+    holidaySnapshot: createKoreanHolidaySnapshot({
+      version: currentPeriod.holidayVersionId || "server",
+      capturedAt: currentPeriod.createdAt,
+      dates: currentPeriod.holidayDates,
+    }),
+  });
+  const remainingEffectiveDays = countRemainingEligibleDays(
+    periodCalendar,
+    currentMember?.joinedDate ?? currentPeriod.weekStart,
+  );
 
   return (
-    <Screen testID="challenge-home-screen">
+    <Screen testID="room-home-screen">
       <View style={styles.topActions}>
         <Text style={styles.greeting}>
           {currentUser.nickname}님, 이번주도 아껴볼까요?
@@ -234,7 +239,7 @@ export default function ChallengeHomeScreen() {
         <View style={styles.actionButtons}>
           <Pressable
             accessibilityLabel="코드로 참여"
-            onPress={() => router.push("/challenge/join")}
+            onPress={() => router.push("/room/join")}
             style={styles.circleButton}
           >
             <MaterialCommunityIcons
@@ -245,7 +250,7 @@ export default function ChallengeHomeScreen() {
           </Pressable>
           <Pressable
             accessibilityLabel="새 챌린지 만들기"
-            onPress={() => router.push("/challenge/create")}
+            onPress={() => router.push("/room/create")}
             style={styles.circleButton}
           >
             <MaterialCommunityIcons
@@ -259,31 +264,33 @@ export default function ChallengeHomeScreen() {
 
       {errorBanner}
 
-      <ChallengeHero
+      <RoomHero
         appliedLimit={appliedLimit}
-        baseLimit={activeChallenge.baseLimit}
+        baseLimit={activeRoom.baseAmount}
         daysRemaining={daysRemaining}
         joinLabel={
-          currentMember?.isLateJoiner
-            ? `${currentMember.joinedDate.slice(5).replace("-", "/")} 중도 합류`
-            : "시작 전 합류"
+          currentMember
+            ? currentMember.isLateJoiner
+              ? `${currentMember.joinedDate.slice(5).replace("-", "/")} 중도 합류`
+              : "이번 주 전체 참여"
+            : "다음 주부터 참여"
         }
         pendingDelta={myPendingDelta}
         pendingCount={myPendingCount}
         spent={mySpent}
-        title={activeChallenge.name}
+        title={`${activeRoom.name} · ${currentPeriod.weekIndex}주차`}
       />
 
       <View style={styles.memberSection} testID="member-list-section">
         <CalculationCard
           appliedLimit={appliedLimit}
-          baseLimit={activeChallenge.baseLimit}
-          holidayCount={activeChallenge.holidayDates.length}
+          baseLimit={activeRoom.baseAmount}
+          holidayCount={currentPeriod.holidayDates.length}
           joinLabel={
-            currentMember?.isLateJoiner ? "중도 합류" : "전체 기간 참여"
+            currentMember?.isLateJoiner ? "중도 합류" : "이번 주 전체 참여"
           }
           remainingEligibleDays={remainingEffectiveDays}
-          totalSelectedDays={activeChallenge.selectedDates.length}
+          totalSelectedDays={currentPeriod.selectedDayCount}
         />
         <MemberList members={memberRows} />
         <View style={styles.memberFooter}>
@@ -293,7 +300,7 @@ export default function ChallengeHomeScreen() {
           </View>
           <View
             accessible
-            accessibilityLabel={`참여 코드 ${activeChallenge.inviteCode}, 현재 ${memberRows.length}명, 최대 ${activeChallenge.capacity}명`}
+            accessibilityLabel={`참여 코드 ${activeRoom.inviteCode}, 현재 ${memberRows.length}명, 최대 ${activeRoom.capacity}명`}
             style={styles.codePill}
           >
             <MaterialCommunityIcons
@@ -302,21 +309,28 @@ export default function ChallengeHomeScreen() {
               size={16}
             />
             <Text selectable style={styles.code}>
-              {activeChallenge.inviteCode}
+              {activeRoom.inviteCode}
             </Text>
             <View style={styles.codeDivider} />
             <Text style={styles.capacity}>
-              {memberRows.length}/{activeChallenge.capacity}명
+              {memberRows.length}/{activeRoom.capacity}명
             </Text>
           </View>
         </View>
       </View>
 
-      <PhaseBanner phase={phase} timeline={timeline} />
+      {currentPeriod.isRestWeek ? (
+        <NoticeBanner icon="palm-tree" style={styles.phaseBanner}>
+          이번 주는 평일이 모두 공휴일이라 쉬는 주예요. 누적 기록에는 포함되지
+          않아요.
+        </NoticeBanner>
+      ) : (
+        <PhaseBanner phase={phase} timeline={timeline} />
+      )}
 
       <SectionHeader
         right={
-          phase === "ACTIVE" || phase === "ADJUSTMENT" ? (
+          !currentPeriod.isRestWeek && currentMember && (phase === "ACTIVE" || phase === "ADJUSTMENT") ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/expense/new")}
@@ -363,7 +377,7 @@ function PhaseBanner({
       ? `보정 중 · ${formatDateLabel(new Date(timeline.C))}까지 기간 내 지출을 수정할 수 있어요.`
       : phase === "SETTLEMENT"
         ? `정산 중 · 지출이 잠겼어요. ${formatDateLabel(new Date(timeline.F))}에 결과가 확정돼요.`
-        : "완료된 챌린지예요. 기록은 읽기 전용으로 보관됩니다.";
+        : "정산이 끝난 주차예요. 기록은 읽기 전용으로 보관됩니다.";
   return (
     <NoticeBanner icon="clock-outline" style={styles.phaseBanner}>
       {copy}
