@@ -2,6 +2,8 @@ import type { PropsWithChildren } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { getRepositoryRuntime, type DataMode } from '@/data/repository-factory';
+import type { OfflineMutationSummary } from '@/data/offline-queue-repository';
+import { expenseOfficialAmount, isExpenseVisible } from '@/data/expense-sync';
 import type { AppRepository } from '@/data/repository';
 import type {
   AddCommentInput,
@@ -27,6 +29,7 @@ export type AppDataContextValue = {
   currentUser: Profile | null;
   activeChallenge: Challenge | null;
   archivedChallenges: Challenge[];
+  syncOperations: OfflineMutationSummary[];
   getChallenge: (challengeId: string) => Challenge | undefined;
   getMembers: (challengeId: string) => ChallengeMember[];
   getExpense: (expenseId: string) => Expense | undefined;
@@ -51,9 +54,10 @@ export type AppActionsContextValue = {
   addComment: (input: AddCommentInput) => Promise<Comment>;
   updateComment: (commentId: string, body: string) => Promise<Comment>;
   deleteComment: (commentId: string) => Promise<void>;
+  retrySyncOperation: (operationId: string) => Promise<void>;
+  discardSyncOperation: (operationId: string) => Promise<void>;
+  getCopyableSyncError: (operationId: string) => Promise<string | null>;
 };
-
-export type AppContextValue = AppDataContextValue & AppActionsContextValue;
 
 type AppIndexes = {
   challengeById: Map<string, Challenge>;
@@ -77,40 +81,68 @@ const AppActionsContext = createContext<AppActionsContextValue | null>(null);
 const runtime = getRepositoryRuntime();
 const repository: AppRepository = runtime.repository;
 
-export function AppProvider({ children }: PropsWithChildren) {
+export function AppProvider({
+  children,
+  sessionUserId,
+}: PropsWithChildren<{ sessionUserId: string | null }>) {
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
+  const [syncOperations, setSyncOperations] = useState<OfflineMutationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const acceptsSnapshot = useCallback(
+    (nextSnapshot: AppSnapshot) =>
+      runtime.dataMode !== 'supabase' || (
+        Boolean(sessionUserId) && nextSnapshot.currentUserId === sessionUserId
+      ),
+    [sessionUserId],
+  );
+
+  const refreshSyncOperations = useCallback(async () => {
+    try {
+      setSyncOperations(runtime.offlineQueue
+        ? await runtime.offlineQueue.getQueueOperations()
+        : []);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '동기화 대기열을 읽지 못했어요.');
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setSnapshot(await repository.load());
+      const nextSnapshot = await repository.load();
+      if (acceptsSnapshot(nextSnapshot)) setSnapshot(nextSnapshot);
+      await refreshSyncOperations();
       setError(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '데이터를 불러오지 못했어요.');
+      await refreshSyncOperations();
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [acceptsSnapshot, refreshSyncOperations]);
 
   useEffect(() => {
     let cancelled = false;
     const unsubscribe = repository.subscribe((nextSnapshot) => {
-      if (!cancelled) {
+      if (!cancelled && acceptsSnapshot(nextSnapshot)) {
         setSnapshot(nextSnapshot);
         setError(null);
         setLoading(false);
+        void refreshSyncOperations();
       }
     });
     repository
       .load()
       .then((nextSnapshot) => {
-        if (!cancelled) setSnapshot(nextSnapshot);
+        if (!cancelled && acceptsSnapshot(nextSnapshot)) setSnapshot(nextSnapshot);
+        if (!cancelled) void refreshSyncOperations();
       })
       .catch((reason: unknown) => {
         if (!cancelled) {
           setError(reason instanceof Error ? reason.message : '데이터를 불러오지 못했어요.');
+          void refreshSyncOperations();
         }
       })
       .finally(() => {
@@ -120,7 +152,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       cancelled = true;
       unsubscribe();
     };
-  }, []);
+  }, [acceptsSnapshot, refreshSyncOperations]);
 
   const execute = useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
     setError(null);
@@ -162,7 +194,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       );
     });
     snapshot?.expenses.forEach((expense) => {
-      if (expense.deletedAt) return;
+      if (!isExpenseVisible(expense)) return;
       expenseById.set(expense.id, expense);
       expenses.push(expense);
       appendIndexValue(expensesByUserId, expense.userId, expense);
@@ -199,7 +231,7 @@ export function AppProvider({ children }: PropsWithChildren) {
               expensesByChallengeAndUserId
                 .get(challenge.id)
                 ?.get(member.userId) ?? EMPTY_EXPENSES
-            ).reduce((sum, expense) => sum + expense.amount, 0),
+            ).reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0),
           }),
         ),
         'ACTIVE',
@@ -341,6 +373,26 @@ export function AppProvider({ children }: PropsWithChildren) {
     (commentId: string) => execute(() => repository.deleteComment(commentId)),
     [execute],
   );
+  const retrySyncOperation = useCallback(
+    (operationId: string) => execute(async () => {
+      if (!runtime.offlineQueue) return;
+      await runtime.offlineQueue.retryOperation(operationId);
+      await refreshSyncOperations();
+    }),
+    [execute, refreshSyncOperations],
+  );
+  const discardSyncOperation = useCallback(
+    (operationId: string) => execute(async () => {
+      if (!runtime.offlineQueue) return;
+      await runtime.offlineQueue.discardOperation(operationId);
+      await refreshSyncOperations();
+    }),
+    [execute, refreshSyncOperations],
+  );
+  const getCopyableSyncError = useCallback(
+    (operationId: string) => runtime.offlineQueue?.getCopyableError(operationId) ?? Promise.resolve(null),
+    [],
+  );
 
   const dataValue = useMemo<AppDataContextValue>(() => ({
     dataMode: runtime.dataMode,
@@ -352,6 +404,7 @@ export function AppProvider({ children }: PropsWithChildren) {
     currentUser,
     activeChallenge,
     archivedChallenges,
+    syncOperations,
     getChallenge,
     getMembers,
     getExpense,
@@ -375,6 +428,7 @@ export function AppProvider({ children }: PropsWithChildren) {
     getUserExpenses,
     loading,
     snapshot,
+    syncOperations,
   ]);
 
   const actionsValue = useMemo<AppActionsContextValue>(() => ({
@@ -391,6 +445,9 @@ export function AppProvider({ children }: PropsWithChildren) {
     addComment,
     updateComment,
     deleteComment,
+    retrySyncOperation,
+    discardSyncOperation,
+    getCopyableSyncError,
   }), [
     addComment,
     addExpense,
@@ -398,11 +455,14 @@ export function AppProvider({ children }: PropsWithChildren) {
     createChallenge,
     deleteComment,
     deleteExpense,
+    discardSyncOperation,
+    getCopyableSyncError,
     increaseCapacity,
     joinChallenge,
     previewInvite,
     refresh,
     resetDemo,
+    retrySyncOperation,
     updateComment,
     updateExpense,
   ]);
@@ -426,12 +486,6 @@ export function useAppActions(): AppActionsContextValue {
   const context = useContext(AppActionsContext);
   if (!context) throw new Error('useAppActions must be used inside AppProvider');
   return context;
-}
-
-export function useApp(): AppContextValue {
-  const data = useAppData();
-  const actions = useAppActions();
-  return useMemo(() => ({ ...data, ...actions }), [actions, data]);
 }
 
 function appendIndexValue<K, V>(map: Map<K, V[]>, key: K, value: V): void {

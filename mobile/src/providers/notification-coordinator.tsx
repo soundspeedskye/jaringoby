@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { type PropsWithChildren, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 
 import type { AppSnapshot } from '@/data/types';
 import { useAppData } from '@/providers/app-provider';
@@ -16,14 +17,18 @@ export function NotificationCoordinator({ children }: PropsWithChildren) {
   const previous = useRef<AppSnapshot | null>(null);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const route = response.notification.request.content.data?.route;
       if (typeof route === 'string' && route.startsWith('/')) router.push(route as never);
     });
-    void Notifications.getLastNotificationResponseAsync().then((response) => {
-      const route = response?.notification.request.content.data?.route;
-      if (typeof route === 'string' && route.startsWith('/')) router.replace(route as never);
-    });
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        const route = response?.notification.request.content.data?.route;
+        if (typeof route === 'string' && route.startsWith('/')) router.replace(route as never);
+      })
+      .catch(() => undefined);
     return () => subscription.remove();
   }, [router]);
 

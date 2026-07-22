@@ -31,7 +31,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!requiresAuth) return;
     let cancelled = false;
+    let bootstrapComplete = false;
     const client = getSupabaseClient();
+    runtime.setActiveUserId(null);
     const applyAuthUrl = async (url: string | null) => {
       if (!url) return;
       const params = authUrlParameters(url);
@@ -42,22 +44,36 @@ export function SessionProvider({ children }: PropsWithChildren) {
       await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
     };
 
-    const authSubscription = client.auth.onAuthStateChange((event, nextSession) => {
+    const applySession = (event: string, nextSession: Session | null) => {
       if (cancelled) return;
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+      runtime.setActiveUserId(nextSession?.user.id ?? null);
       setSession(nextSession);
       setLoading(false);
+    };
+    const authSubscription = client.auth.onAuthStateChange((event, nextSession) => {
+      // The initial URL may replace the persisted session. During bootstrap we
+      // select the final session explicitly below; applying INITIAL_SESSION
+      // here could replay the previous account's native offline queue first.
+      if (cancelled || !bootstrapComplete || event === 'INITIAL_SESSION') return;
+      applySession(event, nextSession);
     }).data.subscription;
     const linkSubscription = Linking.addEventListener('url', ({ url }) => {
-      void applyAuthUrl(url);
+      void applyAuthUrl(url).catch(() => undefined);
     });
     void Promise.all([client.auth.getSession(), Linking.getInitialURL()])
       .then(async ([sessionResult, initialUrl]) => {
         if (sessionResult.error) throw sessionResult.error;
         await applyAuthUrl(initialUrl);
-        if (!cancelled) setSession(sessionResult.data.session);
+        const current = await client.auth.getSession();
+        if (current.error) throw current.error;
+        if (!cancelled) applySession('BOOTSTRAP', current.data.session);
+      })
+      .catch(() => {
+        if (!cancelled) applySession('BOOTSTRAP', null);
       })
       .finally(() => {
+        bootstrapComplete = true;
         if (!cancelled) setLoading(false);
       });
     return () => {
@@ -65,7 +81,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       authSubscription.unsubscribe();
       linkSubscription.remove();
     };
-  }, [requiresAuth]);
+  }, [requiresAuth, runtime]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     validateEmail(email);
@@ -79,7 +95,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     validatePassword(password);
     const cleanNickname = nickname.trim();
     if (cleanNickname.length < 2 || cleanNickname.length > 20) {
-      throw new Error('닉네임은 공백을 제외하고 2~20자로 입력해 주세요.');
+      throw new Error('닉네임은 앞뒤 공백을 제외하고 2~20자로 입력해 주세요.');
     }
     const { data, error } = await getSupabaseClient().auth.signUp({
       email: email.trim(),
@@ -111,6 +127,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     const { error } = await getSupabaseClient().auth.signOut({ scope: 'local' });
     if (error) throw authError(error.message);
+    getRepositoryRuntime().setActiveUserId(null);
     setRecoveryMode(false);
   }, []);
 
