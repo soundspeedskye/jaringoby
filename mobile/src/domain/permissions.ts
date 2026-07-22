@@ -1,5 +1,6 @@
-import { getChallengePhase, toInstantMs } from './date-time';
-import type { ChallengeTimeline, InstantInput, MemberStatus } from './types';
+import { toInstantMs } from './date-time';
+import { getPeriodPhase } from './period';
+import type { InstantInput, MemberStatus, PeriodTimeline } from './types';
 
 export type ExpenseMutationAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'PHOTO_REUPLOAD';
 export type CommentMutationAction = 'CREATE' | 'EDIT' | 'DELETE';
@@ -9,13 +10,6 @@ export type ExpensePermissionReason =
   | 'MEMBER_NOT_ACTIVE'
   | 'EXPENSES_LOCKED_FOR_PHASE'
   | 'NOT_EXPENSE_AUTHOR';
-
-export type JoinPermissionReason =
-  | 'ALLOWED'
-  | 'JOIN_CLOSED_FOR_PHASE'
-  | 'ROOM_FULL'
-  | 'ALREADY_PARTICIPATED'
-  | 'NO_EFFECTIVE_DAYS';
 
 export type CommentPermissionReason =
   | 'ALLOWED'
@@ -32,7 +26,7 @@ export interface PolicyDecision<Reason extends string> {
 export function evaluateExpenseMutationPermission(input: {
   readonly action: ExpenseMutationAction;
   readonly now: InstantInput;
-  readonly timeline: ChallengeTimeline;
+  readonly timeline: PeriodTimeline;
   readonly actorMemberStatus: MemberStatus;
   readonly actorId: string;
   readonly expenseAuthorId?: string;
@@ -41,7 +35,7 @@ export function evaluateExpenseMutationPermission(input: {
     return denied('MEMBER_NOT_ACTIVE');
   }
 
-  const phase = getChallengePhase(input.timeline, input.now);
+  const phase = getPeriodPhase(input.timeline, input.now);
   if (phase !== 'ACTIVE' && phase !== 'ADJUSTMENT') {
     return denied('EXPENSES_LOCKED_FOR_PHASE');
   }
@@ -56,39 +50,10 @@ export function evaluateExpenseMutationPermission(input: {
   return allowed();
 }
 
-export function evaluateJoinPermission(input: {
-  readonly now: InstantInput;
-  readonly timeline: ChallengeTimeline;
-  readonly activeMemberCount: number;
-  readonly capacity: number;
-  readonly hasParticipatedBefore: boolean;
-  readonly remainingEffectiveDays: number;
-}): PolicyDecision<JoinPermissionReason> {
-  assertCapacityCounts(input.activeMemberCount, input.capacity);
-  if (!Number.isInteger(input.remainingEffectiveDays) || input.remainingEffectiveDays < 0) {
-    throw new RangeError('remainingEffectiveDays must be a non-negative integer');
-  }
-
-  const phase = getChallengePhase(input.timeline, input.now);
-  if (phase !== 'WAITING' && phase !== 'ACTIVE') {
-    return denied('JOIN_CLOSED_FOR_PHASE');
-  }
-  if (input.hasParticipatedBefore) {
-    return denied('ALREADY_PARTICIPATED');
-  }
-  if (input.activeMemberCount >= input.capacity) {
-    return denied('ROOM_FULL');
-  }
-  if (input.remainingEffectiveDays === 0) {
-    return denied('NO_EFFECTIVE_DAYS');
-  }
-  return allowed();
-}
-
 export function evaluateCommentMutationPermission(input: {
   readonly action: CommentMutationAction;
   readonly now: InstantInput;
-  readonly timeline: ChallengeTimeline;
+  readonly timeline: PeriodTimeline;
   readonly actorMemberStatus: MemberStatus;
   readonly actorId: string;
   readonly commentAuthorId?: string;
@@ -98,7 +63,7 @@ export function evaluateCommentMutationPermission(input: {
     return denied('MEMBER_NOT_ACTIVE');
   }
 
-  const phase = getChallengePhase(input.timeline, input.now);
+  const phase = getPeriodPhase(input.timeline, input.now);
   if (phase === 'WAITING' || phase === 'ARCHIVED') {
     return denied('COMMENTS_LOCKED_FOR_PHASE');
   }
@@ -121,15 +86,6 @@ export function evaluateCommentMutationPermission(input: {
   }
 
   return allowed();
-}
-
-function assertCapacityCounts(activeMemberCount: number, capacity: number): void {
-  if (!Number.isInteger(activeMemberCount) || activeMemberCount < 0) {
-    throw new RangeError('activeMemberCount must be a non-negative integer');
-  }
-  if (!Number.isInteger(capacity) || capacity < 1) {
-    throw new RangeError('capacity must be a positive integer');
-  }
 }
 
 function allowed(): PolicyDecision<'ALLOWED'> {

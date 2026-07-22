@@ -1,7 +1,7 @@
 export type LocalDate = `${number}-${number}-${number}`;
 export type InstantInput = Date | number | string;
 
-export const CHALLENGE_PHASES = [
+export const PERIOD_PHASES = [
   'WAITING',
   'ACTIVE',
   'ADJUSTMENT',
@@ -9,7 +9,7 @@ export const CHALLENGE_PHASES = [
   'ARCHIVED',
 ] as const;
 
-export type ChallengePhase = (typeof CHALLENGE_PHASES)[number];
+export type PeriodPhase = (typeof PERIOD_PHASES)[number];
 
 export const MEMBER_STATUSES = [
   'ACTIVE',
@@ -31,10 +31,10 @@ export const EXPENSE_CATEGORIES = [
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
-export interface ChallengeTimeline {
-  /** Start date at 00:00 Asia/Seoul. */
+export interface PeriodTimeline {
+  /** Week start (Monday) at 00:00 Asia/Seoul. */
   readonly S: number;
-  /** The day after the inclusive end date at 00:00 Asia/Seoul. */
+  /** The day after the last weekday (Saturday) at 00:00 Asia/Seoul. */
   readonly E: number;
   /** Expense correction deadline, E + 12 hours. */
   readonly C: number;

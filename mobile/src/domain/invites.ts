@@ -20,7 +20,7 @@ export function isValidInviteCodeFormat(code: string): boolean {
 
 /**
  * Not wired to a screen yet: increaseCapacity exists all the way from
- * AppProvider down to the update_challenge_settings RPC, but no view calls it.
+ * AppProvider down to the update_room_settings RPC, but no view calls it.
  * Kept so the eventual capacity screen enforces the rule here rather than
  * re-deriving it, the way the repositories currently do inline.
  */

@@ -1,5 +1,5 @@
 import { calculateRemainingAmount } from './limits';
-import type { ChallengePhase, MemberStatus } from './types';
+import type { MemberStatus, PeriodPhase } from './types';
 
 export interface CrownMember {
   readonly memberId: string;
@@ -17,7 +17,7 @@ export interface CrownResult {
   readonly holderIds: readonly string[];
 }
 
-export function getCrownMode(phase: ChallengePhase): CrownMode {
+export function getCrownMode(phase: PeriodPhase): CrownMode {
   if (phase === 'WAITING') return 'HIDDEN';
   if (phase === 'ACTIVE' || phase === 'ADJUSTMENT') return 'LIVE';
   if (phase === 'SETTLEMENT') return 'TENTATIVE';
@@ -30,7 +30,7 @@ export function getCrownMode(phase: ChallengePhase): CrownMode {
  */
 export function selectCrownHolders(
   members: readonly CrownMember[],
-  phase: ChallengePhase,
+  phase: PeriodPhase,
 ): CrownResult {
   const mode = getCrownMode(phase);
   if (mode === 'HIDDEN') {

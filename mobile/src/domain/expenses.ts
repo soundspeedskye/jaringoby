@@ -2,17 +2,17 @@ import { toInstantMs, toSeoulLocalDate } from './date-time';
 import { assertKrwAmount } from './limits';
 import { EXPENSE_CATEGORIES } from './types';
 import type {
-  ChallengeTimeline,
   ExpenseCategory,
   InstantInput,
   LocalDate,
   MemberStatus,
+  PeriodTimeline,
 } from './types';
 
 export const EXPENSE_INELIGIBILITY_REASONS = [
   'MEMBER_NOT_ACTIVE_AT_RECORD',
-  'NOT_LINKED_TO_CHALLENGE',
-  'OUTSIDE_CHALLENGE_TIME',
+  'NOT_LINKED_TO_PERIOD',
+  'OUTSIDE_PERIOD_TIME',
   'BEFORE_JOIN',
   'HOLIDAY_OR_UNSELECTED_DATE',
   'INVALID_KRW_AMOUNT',
@@ -25,8 +25,8 @@ export const EXPENSE_INELIGIBILITY_REASONS = [
 
 export type ExpenseIneligibilityReason = (typeof EXPENSE_INELIGIBILITY_REASONS)[number];
 
-export interface ChallengeExpenseCandidate {
-  readonly challengeId: string | null;
+export interface PeriodExpenseCandidate {
+  readonly periodId: string | null;
   readonly amount: number;
   readonly category: string;
   readonly occurredAt: InstantInput;
@@ -49,10 +49,10 @@ export function isExpenseCategory(value: string): value is ExpenseCategory {
 }
 
 export function evaluateExpenseEligibility(input: {
-  readonly expectedChallengeId: string;
-  readonly timeline: ChallengeTimeline;
+  readonly expectedPeriodId: string;
+  readonly timeline: PeriodTimeline;
   readonly effectiveDates: readonly LocalDate[];
-  readonly expense: ChallengeExpenseCandidate;
+  readonly expense: PeriodExpenseCandidate;
 }): ExpenseEligibilityResult {
   const { expense, timeline } = input;
   const reasons: ExpenseIneligibilityReason[] = [];
@@ -62,11 +62,11 @@ export function evaluateExpenseEligibility(input: {
   if (expense.memberStatusAtRecord !== 'ACTIVE') {
     reasons.push('MEMBER_NOT_ACTIVE_AT_RECORD');
   }
-  if (expense.challengeId !== input.expectedChallengeId) {
-    reasons.push('NOT_LINKED_TO_CHALLENGE');
+  if (expense.periodId !== input.expectedPeriodId) {
+    reasons.push('NOT_LINKED_TO_PERIOD');
   }
   if (occurredAt === null || occurredAt < timeline.S || occurredAt >= timeline.E) {
-    reasons.push('OUTSIDE_CHALLENGE_TIME');
+    reasons.push('OUTSIDE_PERIOD_TIME');
   }
   if (occurredAt === null || joinedAt === null || occurredAt < joinedAt) {
     reasons.push('BEFORE_JOIN');
