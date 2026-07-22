@@ -25,7 +25,9 @@ import {
   evaluateJoinPermission,
   getChallengePhase,
   isExpenseCategory,
+  normalizeCommentBody,
   toSeoulLocalDate,
+  validateCommentBody,
 } from '@/domain';
 
 const STORAGE_KEY = 'jaringoby.snapshot.v2';
@@ -283,7 +285,7 @@ export class LocalRepository implements AppRepository {
     const duplicate = state.comments.find((comment) => comment.clientRequestId === input.clientRequestId);
     if (duplicate) return clone(duplicate);
     const now = new Date().toISOString();
-    const body = validateCommentBody(input.body);
+    const body = normalizeValidCommentBody(input.body);
     this.assertCommentMutationAllowed(state, input.expenseId, 'CREATE', now);
     if (input.replyToId) {
       const parent = this.findComment(state, input.replyToId);
@@ -309,7 +311,7 @@ export class LocalRepository implements AppRepository {
     const comment = this.findComment(state, commentId);
     const now = new Date().toISOString();
     this.assertCommentMutationAllowed(state, comment.expenseId, 'EDIT', now, comment);
-    comment.body = validateCommentBody(body);
+    comment.body = normalizeValidCommentBody(body);
     comment.updatedAt = now;
     await this.persist();
     return clone(comment);
@@ -468,10 +470,12 @@ export class LocalRepository implements AppRepository {
   }
 }
 
-function validateCommentBody(value: string): string {
-  const body = value.trim();
-  if (!body || body.length > 500) throw new Error('댓글은 공백을 제외하고 1~500자로 입력해 주세요.');
-  return body;
+/** Applies the shared rule, then stores what the server would store: btrim(body). */
+function normalizeValidCommentBody(value: string): string {
+  if (!validateCommentBody(value).valid) {
+    throw new Error('댓글은 앞뒤 공백을 제외하고 1~500자로 입력해 주세요.');
+  }
+  return normalizeCommentBody(value);
 }
 
 function joinErrorMessage(reason: string): string {

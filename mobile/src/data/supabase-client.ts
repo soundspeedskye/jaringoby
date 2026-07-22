@@ -54,10 +54,15 @@ export function getSupabaseClient(): SupabaseClient {
   return singleton;
 }
 
-/** @deprecated Use getSupabaseClient so auth and data share one session. */
-export const createSupabaseClient = getSupabaseClient;
-
-export type JaringobySupabaseClient = ReturnType<typeof getSupabaseClient>;
+/** Creates a non-persistent data client pinned to one already-issued user token. */
+export function createSupabaseClientForAccessToken(accessToken: string): SupabaseClient {
+  if (!hasSupabaseConfiguration() || !supabaseUrl || !supabasePublishableKey) {
+    throw new Error('SUPABASE_NOT_CONFIGURED: Supabase 연결 정보가 설정되지 않았어요.');
+  }
+  return createClient(supabaseUrl, supabasePublishableKey, {
+    accessToken: async () => accessToken,
+  });
+}
 
 function isSafeSupabaseUrl(value: string): boolean {
   if (/^https:\/\/[^\s/]+(?:\/[^\s]*)?$/u.test(value)) return true;

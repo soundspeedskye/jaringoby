@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 
-import type { AppRepository, Unsubscribe } from '@/data/repository';
+import {
+  isSessionBoundRepository,
+  supportsExpensePhotoCleanup,
+  type AppRepository,
+  type Unsubscribe,
+} from '@/data/repository';
 import type {
   AddCommentInput,
   AddExpenseInput,
@@ -13,8 +18,10 @@ import type {
   Expense,
   InvitePreview,
 } from '@/data/types';
+import { createChallengeTimeline } from '@/domain';
 
 export const OFFLINE_QUEUE_STORAGE_KEY = 'jaringoby.offline-mutations.v1';
+export const OFFLINE_SNAPSHOT_STORAGE_KEY = 'jaringoby.offline-snapshots.v1';
 
 type QueueStatus = 'PENDING' | 'FAILED';
 type MutationKind =
@@ -37,6 +44,7 @@ export type OfflineMutationSummary = {
   operationId: string;
   requestId: string;
   kind: MutationKind;
+  entityId: string;
   status: QueueStatus;
   attempts: number;
   enqueuedAt: string;
@@ -68,6 +76,7 @@ export interface DurablePhotoStore {
 export type OfflineQueueRepositoryOptions = {
   storage?: OfflineQueueStorage;
   storageKey?: string;
+  snapshotStorageKey?: string;
   network?: OfflineNetworkMonitor;
   photoStore?: DurablePhotoStore;
   now?: () => number;
@@ -89,6 +98,10 @@ type OperationBase = {
   updatedAt: string;
   nextAttemptAt?: string;
   failure?: OfflineMutationFailure;
+  deadlineAt?: string;
+  serverApplied?: boolean;
+  cleanupPhotoPath?: string;
+  photoRevision?: number;
   originalPhotoUri?: string;
   cachedPhotoUri?: string;
   ownsCachedPhoto?: boolean;
@@ -150,11 +163,17 @@ type QueueEnvelope = {
   operations: MutationOperation[];
 };
 
+type SnapshotEnvelope = {
+  schemaVersion: 1;
+  snapshots: Record<string, AppSnapshot>;
+};
+
 const EMPTY_QUEUE: QueueEnvelope = {
   schemaVersion: 1,
   nextSequence: 1,
   operations: [],
 };
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 /**
  * Offline-first decorator for the Supabase-backed repository.
@@ -166,6 +185,7 @@ const EMPTY_QUEUE: QueueEnvelope = {
 export class OfflineQueueRepository implements AppRepository {
   private readonly storage: OfflineQueueStorage;
   private readonly storageKey: string;
+  private readonly snapshotStorageKey: string;
   private readonly network: OfflineNetworkMonitor;
   private readonly photoStore: DurablePhotoStore;
   private readonly now: () => number;
@@ -178,6 +198,8 @@ export class OfflineQueueRepository implements AppRepository {
   private readonly networkUnsubscribe: Unsubscribe;
 
   private queue: QueueEnvelope = clone(EMPTY_QUEUE);
+  private persistedQueue: QueueEnvelope = clone(EMPTY_QUEUE);
+  private cachedSnapshots: Record<string, AppSnapshot> = {};
   private baseSnapshot: AppSnapshot | null = null;
   private baseUnsubscribe: Unsubscribe | null = null;
   private lock: Promise<void> = Promise.resolve();
@@ -185,6 +207,11 @@ export class OfflineQueueRepository implements AppRepository {
   private forcedFlushPromise: Promise<void> | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private lastOnline: boolean | null = null;
+  private activeUserId: string | null = null;
+  private sessionEpoch = 0;
+  private readonly photoRemovalsAfterCommit = new Set<string>();
+  private readonly photoRemovalsAfterRollback = new Set<string>();
+  private disposed = false;
 
   constructor(
     private readonly base: AppRepository,
@@ -192,6 +219,7 @@ export class OfflineQueueRepository implements AppRepository {
   ) {
     this.storage = options.storage ?? AsyncStorage;
     this.storageKey = options.storageKey ?? OFFLINE_QUEUE_STORAGE_KEY;
+    this.snapshotStorageKey = options.snapshotStorageKey ?? OFFLINE_SNAPSHOT_STORAGE_KEY;
     this.network = options.network ?? createNetInfoMonitor();
     this.photoStore = options.photoStore ?? new ExpoDocumentPhotoStore();
     this.now = options.now ?? Date.now;
@@ -200,6 +228,7 @@ export class OfflineQueueRepository implements AppRepository {
     this.maxBackoffMs = Math.max(this.baseBackoffMs, options.maxBackoffMs ?? 60_000);
     this.maxAutomaticAttempts = Math.max(1, options.maxAutomaticAttempts ?? 5);
     this.ready = this.hydrate();
+    void this.ready.catch(() => undefined);
     this.networkUnsubscribe = this.network.subscribe((online) => {
       const recovered = online && this.lastOnline !== true;
       this.lastOnline = online;
@@ -207,10 +236,22 @@ export class OfflineQueueRepository implements AppRepository {
     });
   }
 
+  /** Invalidates cached state immediately when the authenticated account changes. */
+  setActiveUserId(userId: string | null): void {
+    if (this.disposed) return;
+    if (this.activeUserId === userId) return;
+    this.activeUserId = userId;
+    this.sessionEpoch += 1;
+    this.baseSnapshot = null;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+  }
+
   async load(): Promise<AppSnapshot> {
     const snapshot = await this.withLock(async () => {
       await this.ready;
-      this.baseSnapshot = normalizeSnapshot(await this.base.load());
+      const nextSnapshot = await this.loadBaseOrCachedLocked();
+      this.baseSnapshot = nextSnapshot;
       const changed = await this.reconcileLocked();
       if (changed) await this.persistLocked();
       this.scheduleRetryLocked();
@@ -271,6 +312,7 @@ export class OfflineQueueRepository implements AppRepository {
       const timestamp = new Date(this.now()).toISOString();
       const operation: AddExpenseOperation = {
         ...this.newOperationBase('ADD_EXPENSE', operationId, requestId, timestamp),
+        deadlineAt: this.expenseDeadline(input.challengeId),
         optimisticId: `offline-expense-${hash32(requestId).toString(16)}`,
         input: {
           ...input,
@@ -286,7 +328,7 @@ export class OfflineQueueRepository implements AppRepository {
         await this.persistLocked();
       } catch (error) {
         this.queue.operations = this.queue.operations.filter((item) => item.id !== operation.id);
-        await this.releasePhotoLocked(operation);
+        await this.removePhotoImmediately(operation);
         throw error;
       }
       this.emitLocked();
@@ -299,8 +341,11 @@ export class OfflineQueueRepository implements AppRepository {
   async updateExpense(expenseId: string, patch: Partial<AddExpenseInput>): Promise<Expense> {
     const result = await this.withLock(async () => {
       await this.ensureBaseLocked();
+      this.assertNoAppliedExpenseCleanupLocked(expenseId);
       const current = requireExpenseById(this.composeLocked(), expenseId);
-      if (patch.clientRequestId !== undefined && patch.clientRequestId !== current.clientRequestId) {
+      const nextPatch = { ...patch };
+      if (nextPatch.photoUri === current.photoUri) delete nextPatch.photoUri;
+      if (nextPatch.clientRequestId !== undefined && nextPatch.clientRequestId !== current.clientRequestId) {
         throw new OfflineQueueRepositoryError('IMMUTABLE_FIELD', '요청 식별자는 변경할 수 없어요.');
       }
 
@@ -309,8 +354,8 @@ export class OfflineQueueRepository implements AppRepository {
           operation.kind === 'ADD_EXPENSE' && operation.optimisticId === expenseId,
       );
       if (pendingAdd) {
-        await this.replaceOperationPhotoLocked(pendingAdd, patch.photoUri);
-        pendingAdd.input = { ...pendingAdd.input, ...patch, clientRequestId: pendingAdd.requestId };
+        await this.replaceOperationPhotoLocked(pendingAdd, nextPatch.photoUri);
+        pendingAdd.input = { ...pendingAdd.input, ...nextPatch, clientRequestId: pendingAdd.requestId };
         if (pendingAdd.cachedPhotoUri) pendingAdd.input.photoUri = pendingAdd.cachedPhotoUri;
         this.resetForRetryLocked(pendingAdd);
         await this.persistLocked();
@@ -324,6 +369,7 @@ export class OfflineQueueRepository implements AppRepository {
       let operation = this.queue.operations.find(
         (item): item is UpdateExpenseOperation => item.kind === 'UPDATE_EXPENSE' && item.targetId === expenseId,
       );
+      const isNewOperation = !operation;
       if (!operation) {
         const requestId = this.randomId();
         const timestamp = new Date(this.now()).toISOString();
@@ -333,13 +379,14 @@ export class OfflineQueueRepository implements AppRepository {
           patch: {},
           baseEntity: clone(current),
           baseVersion: current.version,
+          deadlineAt: this.expenseDeadline(current.challengeId),
         };
-        this.queue.operations.push(operation);
       }
-      await this.replaceOperationPhotoLocked(operation, patch.photoUri);
-      operation.patch = { ...operation.patch, ...patch };
+      await this.replaceOperationPhotoLocked(operation, nextPatch.photoUri);
+      operation.patch = { ...operation.patch, ...nextPatch };
       if (operation.cachedPhotoUri) operation.patch.photoUri = operation.cachedPhotoUri;
       this.resetForRetryLocked(operation);
+      if (isNewOperation) this.queue.operations.push(operation);
       await this.persistLocked();
       this.emitLocked();
       return requireExpenseById(this.composeLocked(), expenseId);
@@ -351,6 +398,7 @@ export class OfflineQueueRepository implements AppRepository {
   async deleteExpense(expenseId: string): Promise<void> {
     await this.withLock(async () => {
       await this.ensureBaseLocked();
+      this.assertNoAppliedExpenseCleanupLocked(expenseId);
       const current = requireExpenseById(this.composeLocked(), expenseId);
       const pendingAdd = this.queue.operations.find(
         (operation): operation is AddExpenseOperation =>
@@ -372,15 +420,17 @@ export class OfflineQueueRepository implements AppRepository {
       this.queue.operations = this.queue.operations.filter(
         (operation) => !(operation.kind === 'UPDATE_EXPENSE' && operation.targetId === expenseId),
       );
+      const serverBase = supersededUpdates[0]?.baseEntity ?? current;
       for (const operation of supersededUpdates) await this.releasePhotoLocked(operation);
 
       const requestId = this.randomId();
       const timestamp = new Date(this.now()).toISOString();
       this.queue.operations.push({
         ...this.newOperationBase('DELETE_EXPENSE', `expense:delete:${requestId}`, requestId, timestamp),
+        deadlineAt: this.expenseDeadline(serverBase.challengeId),
         targetId: expenseId,
-        baseEntity: clone(current),
-        baseVersion: current.version,
+        baseEntity: clone(serverBase),
+        baseVersion: serverBase.version,
       });
       await this.persistLocked();
       this.emitLocked();
@@ -496,8 +546,9 @@ export class OfflineQueueRepository implements AppRepository {
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {
     this.listeners.add(listener);
     this.ensureBaseSubscription();
-    if (this.baseSnapshot) listener(this.composeLocked());
-    else void this.load().catch(() => undefined);
+    if (this.baseSnapshot && this.isCurrentSessionSnapshot(this.baseSnapshot)) {
+      listener(this.composeLocked());
+    }
     return () => {
       this.listeners.delete(listener);
       if (this.listeners.size === 0 && this.baseUnsubscribe) {
@@ -513,12 +564,39 @@ export class OfflineQueueRepository implements AppRepository {
   }
 
   async retryOperation(operationId: string): Promise<void> {
-    await this.withLock(async () => {
+    const shouldFlush = await this.withLock(async () => {
       await this.ready;
       const operation = this.queue.operations.find((item) => item.id === operationId);
-      if (!operation) throw new OfflineQueueRepositoryError('QUEUE_ITEM_NOT_FOUND', '재시도할 작업을 찾지 못했어요.');
-      if (operation.status !== 'FAILED') return;
-      if (operation.originalPhotoUri) {
+      const userId = this.currentUserId();
+      if (!operation || !userId || operation.userId !== userId) {
+        throw new OfflineQueueRepositoryError('QUEUE_ITEM_NOT_FOUND', '재시도할 작업을 찾지 못했어요.');
+      }
+      if (operation.status !== 'FAILED') return false;
+      if (operation.failure?.code === 'CUTOFF_EXPIRED' || isExpired(operation.deadlineAt, this.now())) {
+        this.markCutoffExpiredLocked(operation);
+        await this.persistLocked();
+        this.emitLocked();
+        throw new OfflineQueueRepositoryError(
+          'CUTOFF_EXPIRED',
+          '지출 보정 마감이 지나 이 작업은 결과에 다시 반영할 수 없어요.',
+        );
+      }
+
+      const epoch = this.sessionEpoch;
+      const nextSnapshot = normalizeSnapshot(await this.base.load());
+      this.assertCurrentSessionSnapshot(nextSnapshot, epoch);
+      this.baseSnapshot = nextSnapshot;
+      await this.persistCachedSnapshotLocked(nextSnapshot);
+      this.assertCurrentSessionSnapshot(nextSnapshot, epoch);
+      if (operation.failure?.code === 'VERSION_CONFLICT') {
+        const rebased = await this.rebaseConflictLocked(operation);
+        if (!rebased) {
+          await this.persistLocked();
+          this.emitLocked();
+          return false;
+        }
+      }
+      if (operation.originalPhotoUri && !operation.cachedPhotoUri) {
         const persisted = await this.photoStore.persist(operation.originalPhotoUri, operation.id);
         operation.cachedPhotoUri = persisted.owned ? persisted.uri : undefined;
         operation.ownsCachedPhoto = persisted.owned;
@@ -527,25 +605,53 @@ export class OfflineQueueRepository implements AppRepository {
       this.resetForRetryLocked(operation);
       await this.persistLocked();
       this.emitLocked();
+      return true;
     });
-    await this.startFlush(true);
+    if (shouldFlush) await this.startFlush(true);
+  }
+
+  async discardOperation(operationId: string): Promise<void> {
+    await this.withLock(async () => {
+      await this.ready;
+      const userId = this.currentUserId();
+      const operation = this.queue.operations.find((item) => item.id === operationId);
+      if (!operation || !userId || operation.userId !== userId) {
+        throw new OfflineQueueRepositoryError('QUEUE_ITEM_NOT_FOUND', '삭제할 작업을 찾지 못했어요.');
+      }
+      if (operation.status !== 'FAILED') {
+        throw new OfflineQueueRepositoryError('QUEUE_ITEM_PENDING', '동기화 중인 작업은 삭제할 수 없어요.');
+      }
+      this.queue.operations = this.queue.operations.filter((item) => item.id !== operation.id);
+      await this.releasePhotoLocked(operation);
+      await this.persistLocked();
+      this.emitLocked();
+    });
   }
 
   async getQueueOperations(): Promise<OfflineMutationSummary[]> {
     await this.ready;
-    const userId = this.baseSnapshot?.currentUserId;
+    const userId = this.currentUserId();
+    if (!userId) return [];
     return this.queue.operations
-      .filter((operation) => !userId || operation.userId === userId)
+      .filter((operation) => operation.userId === userId)
       .sort(compareOperations)
       .map(toSummary);
   }
 
   async getCopyableError(operationId: string): Promise<string | null> {
     await this.ready;
-    return this.queue.operations.find((operation) => operation.id === operationId)?.failure?.copyableMessage ?? null;
+    const userId = this.currentUserId();
+    if (!userId) return null;
+    return this.queue.operations.find(
+      (operation) => operation.id === operationId && operation.userId === userId,
+    )?.failure?.copyableMessage ?? null;
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.activeUserId = null;
+    this.sessionEpoch += 1;
+    this.baseSnapshot = null;
     this.listeners.clear();
     this.baseUnsubscribe?.();
     this.baseUnsubscribe = null;
@@ -555,35 +661,87 @@ export class OfflineQueueRepository implements AppRepository {
   }
 
   private async hydrate(): Promise<void> {
-    const raw = await this.storage.getItem(this.storageKey);
-    if (!raw) return;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (error) {
-      throw new OfflineQueueRepositoryError(
-        'QUEUE_STORAGE_CORRUPT',
-        '저장된 오프라인 작업을 읽지 못했어요. 원본 데이터는 삭제하지 않았습니다.',
-        { cause: error },
+    const snapshotRead = this.storage.getItem(this.snapshotStorageKey).catch(() => null);
+    const [rawQueue, rawSnapshots] = await Promise.all([
+      this.storage.getItem(this.storageKey),
+      snapshotRead,
+    ]);
+    if (rawQueue) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(rawQueue);
+      } catch (error) {
+        throw new OfflineQueueRepositoryError(
+          'QUEUE_STORAGE_CORRUPT',
+          '저장된 오프라인 작업을 읽지 못했어요. 원본 데이터는 삭제하지 않았습니다.',
+          { cause: error },
+        );
+      }
+      if (!isQueueEnvelope(parsed)) {
+        throw new OfflineQueueRepositoryError(
+          'QUEUE_STORAGE_UNSUPPORTED',
+          '저장된 오프라인 작업 형식을 지원하지 않아요. 원본 데이터는 삭제하지 않았습니다.',
+        );
+      }
+      this.queue = parsed;
+      this.queue.operations.sort(compareOperations);
+      this.queue.nextSequence = Math.max(
+        this.queue.nextSequence,
+        ...this.queue.operations.map((operation) => operation.sequence + 1),
       );
+      this.persistedQueue = clone(this.queue);
     }
-    if (!isQueueEnvelope(parsed)) {
-      throw new OfflineQueueRepositoryError(
-        'QUEUE_STORAGE_UNSUPPORTED',
-        '저장된 오프라인 작업 형식을 지원하지 않아요. 원본 데이터는 삭제하지 않았습니다.',
-      );
+    if (rawSnapshots) {
+      try {
+        const parsed = JSON.parse(rawSnapshots) as unknown;
+        if (isSnapshotEnvelope(parsed)) this.cachedSnapshots = parsed.snapshots;
+      } catch {
+        // A corrupt display cache must never destroy or block the mutation queue.
+      }
     }
-    this.queue = parsed;
-    this.queue.operations.sort(compareOperations);
-    this.queue.nextSequence = Math.max(
-      this.queue.nextSequence,
-      ...this.queue.operations.map((operation) => operation.sequence + 1),
-    );
   }
 
   private async ensureBaseLocked(): Promise<void> {
     await this.ready;
-    if (!this.baseSnapshot) this.baseSnapshot = normalizeSnapshot(await this.base.load());
+    if (this.baseSnapshot && this.isCurrentSessionSnapshot(this.baseSnapshot)) return;
+    this.baseSnapshot = await this.loadBaseOrCachedLocked();
+  }
+
+  private async loadBaseOrCachedLocked(): Promise<AppSnapshot> {
+    const epoch = this.sessionEpoch;
+    try {
+      const snapshot = normalizeSnapshot(await this.base.load());
+      this.assertCurrentSessionSnapshot(snapshot, epoch);
+      await this.persistCachedSnapshotLocked(snapshot);
+      this.assertCurrentSessionSnapshot(snapshot, epoch);
+      return snapshot;
+    } catch (error) {
+      if (!canUseCachedSnapshot(error)) throw error;
+      const userId = this.currentUserId();
+      const cached = userId ? this.cachedSnapshots[userId] : undefined;
+      if (!cached) throw error;
+      const snapshot = normalizeSnapshot(cached);
+      this.assertCurrentSessionSnapshot(snapshot, epoch);
+      return snapshot;
+    }
+  }
+
+  private async persistCachedSnapshotLocked(snapshot: AppSnapshot): Promise<void> {
+    const sanitized = sanitizeCachedSnapshot(snapshot);
+    this.cachedSnapshots = {
+      ...this.cachedSnapshots,
+      [sanitized.currentUserId]: sanitized,
+    };
+    const envelope: SnapshotEnvelope = {
+      schemaVersion: 1,
+      snapshots: this.cachedSnapshots,
+    };
+    try {
+      await this.storage.setItem(this.snapshotStorageKey, JSON.stringify(envelope));
+    } catch {
+      // This cache only restores the read model. A cache write must never roll
+      // back or block the independently durable mutation queue.
+    }
   }
 
   private ensureBaseSubscription(): void {
@@ -591,7 +749,10 @@ export class OfflineQueueRepository implements AppRepository {
     this.baseUnsubscribe = this.base.subscribe((snapshot) => {
       void this.withLock(async () => {
         await this.ready;
-        this.baseSnapshot = normalizeSnapshot(snapshot);
+        const nextSnapshot = normalizeSnapshot(snapshot);
+        if (!this.isCurrentSessionSnapshot(nextSnapshot)) return;
+        this.baseSnapshot = nextSnapshot;
+        await this.persistCachedSnapshotLocked(nextSnapshot);
         const changed = await this.reconcileLocked();
         if (changed) await this.persistLocked();
         this.scheduleRetryLocked();
@@ -606,7 +767,8 @@ export class OfflineQueueRepository implements AppRepository {
   private async refreshBase(): Promise<void> {
     await this.withLock(async () => {
       await this.ready;
-      this.baseSnapshot = normalizeSnapshot(await this.base.load());
+      const nextSnapshot = await this.loadBaseOrCachedLocked();
+      this.baseSnapshot = nextSnapshot;
       const changed = await this.reconcileLocked();
       if (changed) await this.persistLocked();
       this.emitLocked();
@@ -620,6 +782,7 @@ export class OfflineQueueRepository implements AppRepository {
     timestamp: string,
   ): OperationBase & { kind: K } {
     if (!this.baseSnapshot) throw new OfflineQueueRepositoryError('SNAPSHOT_REQUIRED', '앱 데이터를 먼저 불러와 주세요.');
+    this.assertCurrentSessionSnapshot(this.baseSnapshot);
     return {
       id,
       requestId,
@@ -639,6 +802,7 @@ export class OfflineQueueRepository implements AppRepository {
   ): Promise<(PersistedPhoto & { originalUri: string }) | undefined> {
     if (!uri) return undefined;
     const persisted = await this.photoStore.persist(uri, operationId);
+    if (persisted.owned) this.photoRemovalsAfterRollback.add(persisted.uri);
     return { ...persisted, originalUri: uri };
   }
 
@@ -655,20 +819,31 @@ export class OfflineQueueRepository implements AppRepository {
       operation.ownsCachedPhoto = false;
     } else if (nextUri !== operation.originalPhotoUri && nextUri !== previousCached) {
       const persisted = await this.photoStore.persist(nextUri, operation.id);
+      if (persisted.owned) this.photoRemovalsAfterRollback.add(persisted.uri);
       operation.originalPhotoUri = nextUri;
       operation.cachedPhotoUri = persisted.owned ? persisted.uri : undefined;
       operation.ownsCachedPhoto = persisted.owned;
+      operation.photoRevision = (operation.photoRevision ?? 0) + 1;
       applyPhotoUri(operation, persisted.uri);
     }
     if (previousOwned && previousCached && previousCached !== operation.cachedPhotoUri) {
-      await safelyRemove(this.photoStore, previousCached);
+      this.photoRemovalsAfterCommit.add(previousCached);
     }
   }
 
   private async releasePhotoLocked(operation: MutationOperation): Promise<void> {
     if (operation.ownsCachedPhoto && operation.cachedPhotoUri) {
-      await safelyRemove(this.photoStore, operation.cachedPhotoUri);
+      this.photoRemovalsAfterCommit.add(operation.cachedPhotoUri);
       if (operation.originalPhotoUri !== undefined) applyPhotoUri(operation, operation.originalPhotoUri);
+    }
+    operation.cachedPhotoUri = undefined;
+    operation.ownsCachedPhoto = false;
+  }
+
+  private async removePhotoImmediately(operation: MutationOperation): Promise<void> {
+    if (operation.ownsCachedPhoto && operation.cachedPhotoUri) {
+      this.photoRemovalsAfterRollback.delete(operation.cachedPhotoUri);
+      await safelyRemove(this.photoStore, operation.cachedPhotoUri);
     }
     operation.cachedPhotoUri = undefined;
     operation.ownsCachedPhoto = false;
@@ -682,22 +857,100 @@ export class OfflineQueueRepository implements AppRepository {
     operation.updatedAt = new Date(this.now()).toISOString();
   }
 
+  private currentUserId(): string | null {
+    return this.activeUserId;
+  }
+
+  private isCurrentSessionSnapshot(snapshot: AppSnapshot, epoch = this.sessionEpoch): boolean {
+    return epoch === this.sessionEpoch &&
+      this.activeUserId !== null &&
+      snapshot.currentUserId === this.activeUserId;
+  }
+
+  private assertCurrentSessionSnapshot(snapshot: AppSnapshot, epoch = this.sessionEpoch): void {
+    if (!this.isCurrentSessionSnapshot(snapshot, epoch)) {
+      throw new OfflineQueueRepositoryError(
+        'SESSION_CHANGED',
+        '로그인 사용자가 바뀌었어요. 현재 계정의 데이터를 다시 불러와 주세요.',
+      );
+    }
+  }
+
+  private expenseDeadline(challengeId: string | undefined): string | undefined {
+    if (!challengeId || !this.baseSnapshot) return undefined;
+    const challenge = this.baseSnapshot.challenges.find((item) => item.id === challengeId);
+    if (!challenge) return undefined;
+    return new Date(createChallengeTimeline({
+      startDate: challenge.startDate,
+      endDate: challenge.endDate,
+    }).C).toISOString();
+  }
+
+  private async rebaseConflictLocked(operation: MutationOperation): Promise<boolean> {
+    if (!this.baseSnapshot || operation.kind === 'ADD_EXPENSE' || operation.kind === 'ADD_COMMENT') {
+      return true;
+    }
+    if (operation.kind === 'UPDATE_EXPENSE' || operation.kind === 'DELETE_EXPENSE') {
+      const remote = this.baseSnapshot.expenses.find((expense) => expense.id === operation.targetId);
+      if (!remote || remote.deletedAt) {
+        if (operation.kind === 'DELETE_EXPENSE') {
+          this.queue.operations = this.queue.operations.filter((item) => item.id !== operation.id);
+          await this.releasePhotoLocked(operation);
+          return false;
+        }
+        throw new OfflineQueueRepositoryError('NOT_FOUND', '최신 지출 기록을 찾을 수 없어 변경을 다시 적용할 수 없어요.');
+      }
+      operation.baseEntity = clone(remote);
+      operation.baseVersion = remote.version;
+      operation.deadlineAt = this.expenseDeadline(remote.challengeId);
+      return true;
+    }
+    const remote = this.baseSnapshot.comments.find((comment) => comment.id === operation.targetId);
+    if (!remote || remote.deletedAt) {
+      if (operation.kind === 'DELETE_COMMENT') {
+        this.queue.operations = this.queue.operations.filter((item) => item.id !== operation.id);
+        await this.releasePhotoLocked(operation);
+        return false;
+      }
+      throw new OfflineQueueRepositoryError('NOT_FOUND', '최신 댓글을 찾을 수 없어 변경을 다시 적용할 수 없어요.');
+    }
+    operation.baseEntity = clone(remote);
+    operation.baseVersion = remote.version;
+    return true;
+  }
+
   private hasOperation(kind: MutationKind, targetId: string): boolean {
     return this.queue.operations.some(
       (operation) => operation.kind === kind && 'targetId' in operation && operation.targetId === targetId,
     );
   }
 
+  private assertNoAppliedExpenseCleanupLocked(expenseId: string): void {
+    const cleanupPending = this.queue.operations.some((operation) =>
+      operation.serverApplied === true &&
+      (operation.kind === 'UPDATE_EXPENSE' || operation.kind === 'DELETE_EXPENSE') &&
+      operation.targetId === expenseId,
+    );
+    if (cleanupPending) {
+      throw new OfflineQueueRepositoryError(
+        'PHOTO_CLEANUP_PENDING',
+        '이전 사진 정리를 마친 뒤 이 지출을 다시 변경해 주세요.',
+      );
+    }
+  }
+
   private composeLocked(): AppSnapshot {
     if (!this.baseSnapshot) {
       throw new OfflineQueueRepositoryError('SNAPSHOT_REQUIRED', '앱 데이터를 먼저 불러와 주세요.');
     }
+    this.assertCurrentSessionSnapshot(this.baseSnapshot);
     const snapshot = normalizeSnapshot(this.baseSnapshot);
     const operations = this.queue.operations
       .filter((operation) => operation.userId === snapshot.currentUserId)
       .sort(compareOperations);
 
     for (const operation of operations) {
+      if (operation.serverApplied) continue;
       const syncStatus = operation.status;
       if (operation.kind === 'ADD_EXPENSE') {
         if (snapshot.expenses.some((expense) => expense.clientRequestId === operation.requestId)) continue;
@@ -714,9 +967,12 @@ export class OfflineQueueRepository implements AppRepository {
           createdAt: operation.enqueuedAt,
           updatedAt: operation.updatedAt,
           syncStatus,
+          syncOperation: 'ADD',
         });
       } else if (operation.kind === 'UPDATE_EXPENSE') {
-        upsertExpense(snapshot.expenses, {
+        const serverEntity = snapshot.expenses.find((expense) => expense.id === operation.targetId)
+          ?? operation.baseEntity;
+        replaceExpenseProjection(snapshot.expenses, {
           ...operation.baseEntity,
           ...snapshot.expenses.find((expense) => expense.id === operation.targetId),
           ...operation.patch,
@@ -724,14 +980,20 @@ export class OfflineQueueRepository implements AppRepository {
           clientRequestId: operation.baseEntity.clientRequestId,
           updatedAt: operation.updatedAt,
           syncStatus,
+          syncOperation: 'UPDATE',
+          serverAmount: serverEntity.amount,
+          serverCategory: serverEntity.category,
         });
       } else if (operation.kind === 'DELETE_EXPENSE') {
         const current = snapshot.expenses.find((expense) => expense.id === operation.targetId) ?? operation.baseEntity;
-        upsertExpense(snapshot.expenses, {
+        replaceExpenseProjection(snapshot.expenses, {
           ...current,
           deletedAt: operation.status === 'PENDING' ? operation.updatedAt : current.deletedAt,
           updatedAt: operation.updatedAt,
           syncStatus,
+          syncOperation: 'DELETE',
+          serverAmount: current.amount,
+          serverCategory: current.category,
         });
       } else if (operation.kind === 'ADD_COMMENT') {
         if (snapshot.comments.some((comment) => comment.clientRequestId === operation.requestId)) continue;
@@ -780,6 +1042,14 @@ export class OfflineQueueRepository implements AppRepository {
 
     for (const operation of this.queue.operations) {
       if (operation.userId !== snapshot.currentUserId) continue;
+      if (operation.serverApplied) {
+        if (!operation.cleanupPhotoPath) removed.add(operation.id);
+        continue;
+      }
+      if (isExpenseOperation(operation) && !operation.deadlineAt) {
+        operation.deadlineAt = this.expenseDeadline(expenseChallengeId(operation));
+        if (operation.deadlineAt) changed = true;
+      }
       if (operation.kind === 'ADD_EXPENSE') {
         const remote = snapshot.expenses.find(
           (expense) => expense.userId === operation.userId && expense.clientRequestId === operation.requestId,
@@ -792,7 +1062,22 @@ export class OfflineQueueRepository implements AppRepository {
         if (remote || processed.has(operation.requestId)) removed.add(operation.id);
       } else if (operation.kind === 'UPDATE_EXPENSE') {
         const remote = snapshot.expenses.find((expense) => expense.id === operation.targetId);
-        if (remote && expensePatchMatches(remote, operation.patch, operation.baseEntity)) removed.add(operation.id);
+        if (remote && expensePatchMatches(
+          remote,
+          operation.patch,
+          operation.baseEntity,
+          expectedUpdatePhotoPath(operation),
+        )) {
+          const cleanupPath = replacedExpensePhotoPath(operation, remote);
+          if (cleanupPath) {
+            operation.serverApplied = true;
+            operation.cleanupPhotoPath = cleanupPath;
+            this.resetForRetryLocked(operation);
+            changed = true;
+          } else {
+            removed.add(operation.id);
+          }
+        }
         else if (hasAdvancedVersion(remote, operation.baseVersion)) {
           await this.markConflictLocked(operation);
           changed = true;
@@ -806,7 +1091,16 @@ export class OfflineQueueRepository implements AppRepository {
         }
       } else if (operation.kind === 'DELETE_EXPENSE') {
         const remote = snapshot.expenses.find((expense) => expense.id === operation.targetId);
-        if (remote?.deletedAt || (!remote && operation.attempts > 0)) removed.add(operation.id);
+        if (remote?.deletedAt || (!remote && operation.attempts > 0)) {
+          if (operation.baseEntity.photoPath) {
+            operation.serverApplied = true;
+            operation.cleanupPhotoPath = operation.baseEntity.photoPath;
+            this.resetForRetryLocked(operation);
+            changed = true;
+          } else {
+            removed.add(operation.id);
+          }
+        }
         else if (hasAdvancedVersion(remote, operation.baseVersion)) {
           await this.markConflictLocked(operation);
           changed = true;
@@ -842,10 +1136,10 @@ export class OfflineQueueRepository implements AppRepository {
       this.now(),
       true,
     );
-    await this.releasePhotoLocked(operation);
   }
 
   private async startFlush(ignoreBackoff: boolean): Promise<void> {
+    if (this.disposed) return;
     await this.ready;
     if (ignoreBackoff) {
       if (this.forcedFlushPromise) return this.forcedFlushPromise;
@@ -878,18 +1172,36 @@ export class OfflineQueueRepository implements AppRepository {
   }
 
   private async flushLocked(ignoreBackoff: boolean): Promise<void> {
-    if (!(await this.network.fetch().catch(() => false))) return;
-    await this.ensureBaseLocked();
+    if (this.disposed) return;
+    const expired = await this.finalizeExpiredExpenseOperationsLocked();
+    if (expired) {
+      await this.persistLocked();
+      this.emitLocked();
+    }
+    if (!this.currentUserId()) return;
+    if (!(await this.network.fetch().catch(() => false))) {
+      this.scheduleRetryLocked();
+      return;
+    }
     // Re-read before replay so a response-lost mutation or a newer Realtime
     // version is reconciled instead of being applied a second time.
+    const epoch = this.sessionEpoch;
     try {
-      this.baseSnapshot = normalizeSnapshot(await this.base.load());
+      const nextSnapshot = normalizeSnapshot(await this.base.load());
+      this.assertCurrentSessionSnapshot(nextSnapshot, epoch);
+      this.baseSnapshot = nextSnapshot;
+      await this.persistCachedSnapshotLocked(nextSnapshot);
+      this.assertCurrentSessionSnapshot(nextSnapshot, epoch);
     } catch {
-      // The actual mutation below classifies and persists any auth/network
-      // failure. Keeping the last good snapshot preserves the optimistic UI.
+      // Never replay against a stale snapshot or a session whose identity
+      // cannot be freshly verified. The durable queue remains untouched.
+      this.scheduleRetryLocked();
+      return;
     }
     const reconciled = await this.reconcileLocked();
-    if (reconciled) await this.persistLocked();
+    const expiredAfterRefresh = await this.finalizeExpiredExpenseOperationsLocked();
+    if (reconciled || expiredAfterRefresh) await this.persistLocked();
+    if (expiredAfterRefresh) this.emitLocked();
     const userId = this.baseSnapshot?.currentUserId;
     if (!userId) return;
 
@@ -907,12 +1219,14 @@ export class OfflineQueueRepository implements AppRepository {
       this.emitLocked();
 
       try {
-        await this.executeLocked(operation);
+        await this.executeLocked(operation, epoch);
+        if (epoch !== this.sessionEpoch || this.currentUserId() !== operation.userId) return;
         this.queue.operations = this.queue.operations.filter((item) => item.id !== operation.id);
         await this.releasePhotoLocked(operation);
         await this.persistLocked();
         this.emitLocked();
       } catch (error) {
+        if (epoch !== this.sessionEpoch || this.currentUserId() !== operation.userId) return;
         const classification = classifyError(error);
         const exhausted = operation.attempts >= this.maxAutomaticAttempts;
         if (classification.permanent || exhausted) {
@@ -923,7 +1237,6 @@ export class OfflineQueueRepository implements AppRepository {
           operation.status = 'FAILED';
           operation.nextAttemptAt = undefined;
           operation.failure = failureFor(operation, code, message, this.now(), classification.permanent);
-          await this.releasePhotoLocked(operation);
           await this.persistLocked();
           this.emitLocked();
           continue;
@@ -948,68 +1261,157 @@ export class OfflineQueueRepository implements AppRepository {
     this.scheduleRetryLocked();
   }
 
-  private async executeLocked(operation: MutationOperation): Promise<void> {
-    if (!this.baseSnapshot) throw new OfflineQueueRepositoryError('SNAPSHOT_REQUIRED', '앱 데이터를 먼저 불러와 주세요.');
-    if (operation.kind === 'ADD_EXPENSE') {
-      const expense = await this.base.addExpense(operation.input);
-      upsertExpense(this.baseSnapshot.expenses, { ...expense, syncStatus: 'SYNCED' });
-      addProcessedRequest(this.baseSnapshot, operation.requestId);
-    } else if (operation.kind === 'UPDATE_EXPENSE') {
-      const expense = await this.base.updateExpense(operation.targetId, operation.patch);
-      upsertExpense(this.baseSnapshot.expenses, { ...expense, syncStatus: 'SYNCED' });
-    } else if (operation.kind === 'DELETE_EXPENSE') {
-      await this.base.deleteExpense(operation.targetId);
-      const current = this.baseSnapshot.expenses.find((expense) => expense.id === operation.targetId);
-      if (current) {
-        current.deletedAt = new Date(this.now()).toISOString();
-        current.updatedAt = current.deletedAt;
-        current.syncStatus = 'SYNCED';
-        current.version = (current.version ?? operation.baseVersion ?? 0) + 1;
+  private async finalizeExpiredExpenseOperationsLocked(): Promise<boolean> {
+    const userId = this.currentUserId();
+    if (!userId) return false;
+    let changed = false;
+    for (const operation of this.queue.operations) {
+      if (
+        operation.userId !== userId ||
+        !isExpenseOperation(operation) ||
+        operation.serverApplied === true ||
+        operation.failure?.code === 'CUTOFF_EXPIRED' ||
+        !isExpired(operation.deadlineAt, this.now())
+      ) {
+        continue;
       }
-    } else if (operation.kind === 'ADD_COMMENT') {
-      const comment = await this.base.addComment(operation.input);
-      upsertComment(this.baseSnapshot.comments, { ...comment, syncStatus: 'SYNCED' });
-      addProcessedRequest(this.baseSnapshot, operation.requestId);
-    } else if (operation.kind === 'UPDATE_COMMENT') {
-      const comment = await this.base.updateComment(operation.targetId, operation.body);
-      upsertComment(this.baseSnapshot.comments, { ...comment, syncStatus: 'SYNCED' });
-    } else if (operation.kind === 'DELETE_COMMENT') {
-      await this.base.deleteComment(operation.targetId);
-      const current = this.baseSnapshot.comments.find((comment) => comment.id === operation.targetId);
-      if (current) {
-        current.deletedAt = new Date(this.now()).toISOString();
-        current.body = '삭제된 메시지입니다.';
-        current.updatedAt = current.deletedAt;
-        current.syncStatus = 'SYNCED';
-        current.version = (current.version ?? operation.baseVersion ?? 0) + 1;
+      this.markCutoffExpiredLocked(operation);
+      changed = true;
+    }
+    return changed;
+  }
+
+  private markCutoffExpiredLocked(operation: MutationOperation): void {
+    operation.status = 'FAILED';
+    operation.nextAttemptAt = undefined;
+    operation.updatedAt = new Date(this.now()).toISOString();
+    operation.failure = failureFor(
+      operation,
+      'CUTOFF_EXPIRED',
+      '지출 보정 마감 전에 서버가 확인하지 못해 최종 결과에서 제외됐어요.',
+      this.now(),
+      true,
+    );
+  }
+
+  private async executeLocked(operation: MutationOperation, epoch: number): Promise<void> {
+    const snapshot = this.baseSnapshot;
+    if (!snapshot) throw new OfflineQueueRepositoryError('SNAPSHOT_REQUIRED', '앱 데이터를 먼저 불러와 주세요.');
+    if (epoch !== this.sessionEpoch || this.currentUserId() !== operation.userId) {
+      throw new OfflineQueueRepositoryError('SESSION_CHANGED', '로그인 사용자가 바뀌었어요.');
+    }
+
+    const execute = async (repository: AppRepository): Promise<void> => {
+      if (operation.serverApplied) {
+        await cleanupAppliedExpensePhoto(repository, operation);
+        return;
       }
+      if (operation.kind === 'ADD_EXPENSE') {
+        const expense = await repository.addExpense(operation.input);
+        upsertExpense(snapshot.expenses, { ...expense, syncStatus: 'SYNCED' });
+        addProcessedRequest(snapshot, operation.requestId);
+      } else if (operation.kind === 'UPDATE_EXPENSE') {
+        const expense = await repository.updateExpense(operation.targetId, operation.patch, {
+          expectedPhotoPath: expectedUpdatePhotoPath(operation),
+        });
+        upsertExpense(snapshot.expenses, { ...expense, syncStatus: 'SYNCED' });
+        const cleanupPath = replacedExpensePhotoPath(operation, expense);
+        if (cleanupPath) {
+          operation.serverApplied = true;
+          operation.cleanupPhotoPath = cleanupPath;
+          await cleanupAppliedExpensePhoto(repository, operation);
+        }
+      } else if (operation.kind === 'DELETE_EXPENSE') {
+        await repository.deleteExpense(operation.targetId);
+        operation.serverApplied = true;
+        operation.cleanupPhotoPath = operation.baseEntity.photoPath;
+        await cleanupAppliedExpensePhoto(repository, operation);
+        const current = snapshot.expenses.find((expense) => expense.id === operation.targetId);
+        if (current) {
+          current.deletedAt = new Date(this.now()).toISOString();
+          current.updatedAt = current.deletedAt;
+          current.syncStatus = 'SYNCED';
+          current.version = (current.version ?? operation.baseVersion ?? 0) + 1;
+        }
+      } else if (operation.kind === 'ADD_COMMENT') {
+        const comment = await repository.addComment(operation.input);
+        upsertComment(snapshot.comments, { ...comment, syncStatus: 'SYNCED' });
+        addProcessedRequest(snapshot, operation.requestId);
+      } else if (operation.kind === 'UPDATE_COMMENT') {
+        const comment = await repository.updateComment(operation.targetId, operation.body);
+        upsertComment(snapshot.comments, { ...comment, syncStatus: 'SYNCED' });
+      } else if (operation.kind === 'DELETE_COMMENT') {
+        await repository.deleteComment(operation.targetId);
+        const current = snapshot.comments.find((comment) => comment.id === operation.targetId);
+        if (current) {
+          current.deletedAt = new Date(this.now()).toISOString();
+          current.body = '삭제된 메시지입니다.';
+          current.updatedAt = current.deletedAt;
+          current.syncStatus = 'SYNCED';
+          current.version = (current.version ?? operation.baseVersion ?? 0) + 1;
+        }
+      }
+    };
+
+    if (isSessionBoundRepository(this.base)) {
+      await this.base.runAsUser(operation.userId, execute);
+    } else {
+      if (epoch !== this.sessionEpoch || this.currentUserId() !== operation.userId) {
+        throw new OfflineQueueRepositoryError('SESSION_CHANGED', '로그인 사용자가 바뀌었어요.');
+      }
+      await execute(this.base);
     }
   }
 
   private scheduleRetryLocked(): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
+    if (this.disposed) return;
     const userId = this.baseSnapshot?.currentUserId;
     if (!userId) return;
     const next = this.queue.operations
-      .filter((operation) => operation.userId === userId && operation.status === 'PENDING' && operation.nextAttemptAt)
-      .map((operation) => Date.parse(operation.nextAttemptAt as string))
+      .filter((operation) => operation.userId === userId && (
+        operation.status === 'PENDING' || (
+          isExpenseOperation(operation) && operation.failure?.code !== 'CUTOFF_EXPIRED'
+        )
+      ))
+      .flatMap((operation) => [
+        operation.status === 'PENDING' ? operation.nextAttemptAt : undefined,
+        operation.serverApplied ? undefined : operation.deadlineAt,
+      ])
+      .filter((value): value is string => Boolean(value))
+      .map((value) => Date.parse(value))
       .filter(Number.isFinite)
       .sort((left, right) => left - right)[0];
     if (next === undefined) return;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       void this.startFlush(false).catch(() => undefined);
-    }, Math.max(0, next - this.now()));
+    }, Math.min(MAX_TIMER_DELAY_MS, Math.max(0, next - this.now())));
   }
 
   private async persistLocked(): Promise<void> {
     this.queue.operations.sort(compareOperations);
-    await this.storage.setItem(this.storageKey, JSON.stringify(this.queue));
+    const nextPersistedQueue = clone(this.queue);
+    try {
+      await this.storage.setItem(this.storageKey, JSON.stringify(nextPersistedQueue));
+    } catch (error) {
+      this.queue = clone(this.persistedQueue);
+      const rollbackRemovals = [...this.photoRemovalsAfterRollback];
+      this.photoRemovalsAfterCommit.clear();
+      this.photoRemovalsAfterRollback.clear();
+      for (const uri of rollbackRemovals) await safelyRemove(this.photoStore, uri);
+      throw error;
+    }
+    this.persistedQueue = nextPersistedQueue;
+    const committedRemovals = [...this.photoRemovalsAfterCommit];
+    this.photoRemovalsAfterCommit.clear();
+    this.photoRemovalsAfterRollback.clear();
+    for (const uri of committedRemovals) await safelyRemove(this.photoStore, uri);
   }
 
   private emitLocked(): void {
-    if (!this.baseSnapshot) return;
+    if (this.disposed || !this.baseSnapshot) return;
     const snapshot = this.composeLocked();
     this.listeners.forEach((listener) => listener(clone(snapshot)));
   }
@@ -1084,6 +1486,35 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
   return next;
 }
 
+function sanitizeCachedSnapshot(snapshot: AppSnapshot): AppSnapshot {
+  const next = normalizeSnapshot(snapshot);
+  next.profiles = next.profiles.map((profile) => {
+    const sanitized = { ...profile };
+    delete sanitized.avatarUri;
+    return sanitized;
+  });
+  next.expenses = next.expenses.map((expense) => {
+    const sanitized = { ...expense };
+    delete sanitized.photoUri;
+    return sanitized;
+  });
+  return next;
+}
+
+function canUseCachedSnapshot(error: unknown): boolean {
+  const record = isRecord(error) ? error : null;
+  const message = error instanceof Error ? error.message : String(error);
+  const code = typeof record?.code === 'string'
+    ? record.code
+    : /^([A-Z0-9_]+):/u.exec(message)?.[1];
+  const status = Number(record?.status ?? record?.statusCode);
+  if (status === 401 || status === 403) return false;
+  if (['NETWORK_ERROR', 'TIMEOUT', 'ECONNRESET', 'ETIMEDOUT'].includes(code ?? '')) return true;
+  return /network|failed to fetch|offline|timeout|timed out|connection|연결/u.test(
+    message.toLowerCase(),
+  );
+}
+
 function dedupeVersioned<T extends { id: string; clientRequestId: string; userId: string; createdAt: string; updatedAt: string; version?: number; syncStatus: string }>(
   values: T[],
 ): T[] {
@@ -1146,6 +1577,16 @@ function upsertExpense(expenses: Expense[], next: Expense): void {
   else expenses[index] = preferVersioned(expenses[index], next);
 }
 
+function replaceExpenseProjection(expenses: Expense[], next: Expense): void {
+  const index = expenses.findIndex(
+    (expense) => expense.id === next.id || (
+      expense.userId === next.userId && expense.clientRequestId === next.clientRequestId
+    ),
+  );
+  if (index < 0) expenses.unshift(next);
+  else expenses[index] = next;
+}
+
 function upsertComment(comments: Comment[], next: Comment): void {
   const index = comments.findIndex(
     (comment) => comment.id === next.id || (
@@ -1164,15 +1605,52 @@ function expensePatchMatches(
   expense: Expense,
   patch: Partial<AddExpenseInput>,
   baseEntity: Expense,
+  expectedPhotoPath: string | undefined,
 ): boolean {
   return Object.entries(patch).every(([key, value]) => {
     if (key === 'photoUri') {
       if (value === undefined) return true;
       if (!value) return !expense.photoPath;
-      return Boolean(expense.photoPath) && expense.photoPath !== baseEntity.photoPath;
+      return Boolean(expectedPhotoPath) && expense.photoPath === expectedPhotoPath;
     }
     return Object.is(expense[key as keyof Expense], value);
   });
+}
+
+function replacedExpensePhotoPath(
+  operation: UpdateExpenseOperation,
+  remote: Expense,
+): string | undefined {
+  const expectedPhotoPath = expectedUpdatePhotoPath(operation);
+  const photoWasReplaced = operation.patch.photoUri
+    ? remote.photoPath === expectedPhotoPath
+    : operation.patch.photoUri === '' && !remote.photoPath;
+  return photoWasReplaced &&
+    operation.baseEntity.photoPath &&
+    remote.photoPath !== operation.baseEntity.photoPath
+    ? operation.baseEntity.photoPath
+    : undefined;
+}
+
+function expectedUpdatePhotoPath(operation: UpdateExpenseOperation): string | undefined {
+  if (!operation.patch.photoUri) return undefined;
+  const folder = operation.baseEntity.challengeId ?? 'personal';
+  const revision = operation.photoRevision ?? 1;
+  return `${folder}/${operation.userId}/${safeFileStem(operation.id)}-photo-${revision}`;
+}
+
+async function cleanupAppliedExpensePhoto(
+  repository: AppRepository,
+  operation: MutationOperation,
+): Promise<void> {
+  if (!operation.cleanupPhotoPath) return;
+  if (!supportsExpensePhotoCleanup(repository)) {
+    throw new OfflineQueueRepositoryError(
+      'PHOTO_CLEANUP_UNSUPPORTED',
+      '서버에 남은 이전 사진을 안전하게 정리할 수 없어요.',
+    );
+  }
+  await repository.cleanupExpensePhoto(operation.cleanupPhotoPath);
 }
 
 function hasAdvancedVersion(
@@ -1208,6 +1686,7 @@ function classifyError(error: unknown): { code: string; message: string; permane
     'PHOTO_TYPE_NOT_ALLOWED',
     'PHOTO_READ_FAILED',
     'PHOTO_CACHE_FAILED',
+    'PHOTO_CLEANUP_UNSUPPORTED',
     '40001',
     '42501',
     'P0001',
@@ -1249,12 +1728,42 @@ function toSummary(operation: MutationOperation): OfflineMutationSummary {
     operationId: operation.id,
     requestId: operation.requestId,
     kind: operation.kind,
+    entityId: operationEntityId(operation),
     status: operation.status,
     attempts: operation.attempts,
     enqueuedAt: operation.enqueuedAt,
     nextAttemptAt: operation.nextAttemptAt,
     failure: operation.failure ? clone(operation.failure) : undefined,
   };
+}
+
+function operationEntityId(operation: MutationOperation): string {
+  if (operation.kind === 'ADD_EXPENSE' || operation.kind === 'ADD_COMMENT') {
+    return operation.optimisticId;
+  }
+  return operation.targetId;
+}
+
+function isExpenseOperation(
+  operation: MutationOperation,
+): operation is AddExpenseOperation | UpdateExpenseOperation | DeleteExpenseOperation {
+  return operation.kind === 'ADD_EXPENSE' ||
+    operation.kind === 'UPDATE_EXPENSE' ||
+    operation.kind === 'DELETE_EXPENSE';
+}
+
+function expenseChallengeId(
+  operation: AddExpenseOperation | UpdateExpenseOperation | DeleteExpenseOperation,
+): string | undefined {
+  return operation.kind === 'ADD_EXPENSE'
+    ? operation.input.challengeId
+    : operation.baseEntity.challengeId;
+}
+
+function isExpired(deadlineAt: string | undefined, now: number): boolean {
+  if (!deadlineAt) return false;
+  const deadline = Date.parse(deadlineAt);
+  return Number.isFinite(deadline) && now >= deadline;
 }
 
 function compareOperations(left: MutationOperation, right: MutationOperation): number {
@@ -1283,6 +1792,29 @@ function isQueueEnvelope(value: unknown): value is QueueEnvelope {
     record.operations.every(isMutationOperation);
 }
 
+function isSnapshotEnvelope(value: unknown): value is SnapshotEnvelope {
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.snapshots)) return false;
+  return Object.entries(value.snapshots).every(([userId, snapshot]) =>
+    isAppSnapshot(snapshot) && snapshot.currentUserId === userId,
+  );
+}
+
+function isAppSnapshot(value: unknown): value is AppSnapshot {
+  if (!isRecord(value)) return false;
+  return typeof value.currentUserId === 'string' && value.currentUserId.length > 0 &&
+    isRecordArray(value.profiles) &&
+    isRecordArray(value.challenges) &&
+    isRecordArray(value.members) &&
+    isRecordArray(value.expenses) &&
+    isRecordArray(value.comments) &&
+    Array.isArray(value.processedRequestIds) &&
+    value.processedRequestIds.every((requestId) => typeof requestId === 'string');
+}
+
+function isRecordArray(value: unknown): value is Record<string, unknown>[] {
+  return Array.isArray(value) && value.every(isRecord);
+}
+
 function isMutationOperation(value: unknown): value is MutationOperation {
   if (value === null || typeof value !== 'object') return false;
   const operation = value as Record<string, unknown>;
@@ -1295,7 +1827,13 @@ function isMutationOperation(value: unknown): value is MutationOperation {
     Number.isInteger(operation.sequence) && Number(operation.sequence) >= 1 &&
     Number.isInteger(operation.attempts) && Number(operation.attempts) >= 0 &&
     typeof operation.enqueuedAt === 'string' &&
-    typeof operation.updatedAt === 'string';
+    typeof operation.updatedAt === 'string' &&
+    (operation.deadlineAt === undefined || typeof operation.deadlineAt === 'string') &&
+    (operation.serverApplied === undefined || typeof operation.serverApplied === 'boolean') &&
+    (operation.cleanupPhotoPath === undefined || typeof operation.cleanupPhotoPath === 'string') &&
+    (operation.photoRevision === undefined || (
+      Number.isInteger(operation.photoRevision) && Number(operation.photoRevision) >= 1
+    ));
   if (!validBase) return false;
   if (kind === 'ADD_EXPENSE' || kind === 'ADD_COMMENT') {
     return typeof operation.optimisticId === 'string' && isRecord(operation.input);

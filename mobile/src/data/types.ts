@@ -61,6 +61,12 @@ export type Expense = {
   updatedAt: string;
   deletedAt?: string;
   syncStatus: SyncStatus;
+  /** Local mutation represented by this optimistic/failed projection. */
+  syncOperation?: "ADD" | "UPDATE" | "DELETE";
+  /** Last server-confirmed amount while UPDATE/DELETE is not yet applied. */
+  serverAmount?: number;
+  /** Last server-confirmed category while UPDATE is projected locally. */
+  serverCategory?: ExpenseCategory;
   version?: number;
 };
 

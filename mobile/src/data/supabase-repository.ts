@@ -1,7 +1,8 @@
 import { File as ExpoFile } from 'expo-file-system';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
-import type { AppRepository, Unsubscribe } from '@/data/repository';
+import type { AppRepository, Unsubscribe, UpdateExpenseOptions } from '@/data/repository';
+import { createSupabaseClientForAccessToken } from '@/data/supabase-client';
 import type {
   AddCommentInput,
   AddExpenseInput,
@@ -137,6 +138,11 @@ export class RepositoryError extends Error {
   }
 }
 
+type SupabaseRepositoryOptions = {
+  fixedUserId?: string;
+  observeAuth?: boolean;
+};
+
 export class SupabaseRepository implements AppRepository {
   private readonly listeners = new Set<(snapshot: AppSnapshot) => void>();
   private lastSnapshot: AppSnapshot | null = null;
@@ -145,11 +151,26 @@ export class SupabaseRepository implements AppRepository {
   private realtimeUserId: string | null = null;
   private realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
   private signedUrlRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private authUserId: string | null | undefined;
+  private authGeneration = 0;
 
-  constructor(private readonly client: SupabaseClient) {
+  private readonly fixedUserId?: string;
+
+  constructor(
+    private readonly client: SupabaseClient,
+    options: SupabaseRepositoryOptions = {},
+  ) {
+    this.fixedUserId = options.fixedUserId;
+    if (this.fixedUserId) this.authUserId = this.fixedUserId;
+    if (options.observeAuth === false) return;
     this.client.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
+      const nextUserId = session?.user.id ?? null;
+      const userChanged = this.authUserId !== undefined && this.authUserId !== nextUserId;
+      this.authUserId = nextUserId;
+      if (!session || userChanged) {
+        this.authGeneration += 1;
         this.lastSnapshot = null;
+        this.loading = null;
         void this.teardownRealtime();
       } else if (event === 'SIGNED_IN' && this.listeners.size > 0) {
         this.scheduleRealtimeReload();
@@ -157,16 +178,51 @@ export class SupabaseRepository implements AppRepository {
     });
   }
 
+  async runAsUser<T>(
+    userId: string,
+    work: (repository: AppRepository) => Promise<T>,
+  ): Promise<T> {
+    if (this.fixedUserId) {
+      if (this.fixedUserId !== userId) {
+        throw new RepositoryError('SESSION_CHANGED', '로그인 사용자가 바뀌었어요.');
+      }
+      return work(this);
+    }
+    const { data, error } = await this.client.auth.getSession();
+    if (error) throw translateError(error, '로그인 상태를 확인하지 못했어요.');
+    if (!data.session || data.session.user.id !== userId) {
+      throw new RepositoryError('SESSION_CHANGED', '로그인 사용자가 바뀌었어요.');
+    }
+    const scoped = new SupabaseRepository(
+      createSupabaseClientForAccessToken(data.session.access_token),
+      { fixedUserId: userId, observeAuth: false },
+    );
+    return work(scoped);
+  }
+
+  async cleanupExpensePhoto(path: string): Promise<void> {
+    const { error } = await this.client.storage.from('expense-photos').remove([path]);
+    if (error) throw translateError(error, '교체 또는 삭제된 사진을 정리하지 못했어요.');
+  }
+
   async load(): Promise<AppSnapshot> {
     if (!this.loading) {
-      this.loading = this.fetchSnapshot()
+      const generation = this.authGeneration;
+      const request = this.fetchSnapshot()
         .then((snapshot) => {
+          this.assertCurrentAuthSnapshot(snapshot, generation);
           this.lastSnapshot = snapshot;
           return snapshot;
-        })
-        .finally(() => {
-          this.loading = null;
         });
+      this.loading = request;
+      void request.then(
+        () => {
+          if (this.loading === request) this.loading = null;
+        },
+        () => {
+          if (this.loading === request) this.loading = null;
+        },
+      );
     }
     return clone(await this.loading);
   }
@@ -265,7 +321,11 @@ export class SupabaseRepository implements AppRepository {
     return clone(requireExpense(snapshot, id));
   }
 
-  async updateExpense(expenseId: string, patch: Partial<AddExpenseInput>): Promise<Expense> {
+  async updateExpense(
+    expenseId: string,
+    patch: Partial<AddExpenseInput>,
+    options?: UpdateExpenseOptions,
+  ): Promise<Expense> {
     const userId = await this.requireUserId();
     const current = await this.findCurrentExpense(expenseId);
     if (patch.challengeId !== undefined && patch.challengeId !== current.challengeId) {
@@ -285,6 +345,7 @@ export class SupabaseRepository implements AppRepository {
           current.challengeId,
           userId,
           `${expenseId}-v${expectedVersion + 1}-${hash32(patch.photoUri).toString(16)}`,
+          options?.expectedPhotoPath,
         );
         uploadedNewPhoto = true;
       } else {
@@ -483,6 +544,7 @@ export class SupabaseRepository implements AppRepository {
   }
 
   private async requireUserId(): Promise<string> {
+    if (this.fixedUserId) return this.fixedUserId;
     const { data, error } = await this.client.auth.getSession();
     if (error) throw translateError(error, '로그인 상태를 확인하지 못했어요.');
     if (!data.session?.user.id) {
@@ -557,10 +619,25 @@ export class SupabaseRepository implements AppRepository {
     // A mutation can race an older in-flight load. Let that load settle, then
     // fetch once more so the emitted state always includes the committed row.
     if (this.loading) await this.loading.catch(() => undefined);
+    const generation = this.authGeneration;
     const snapshot = await this.fetchSnapshot();
+    this.assertCurrentAuthSnapshot(snapshot, generation);
     this.lastSnapshot = snapshot;
     this.listeners.forEach((listener) => listener(clone(snapshot)));
     return clone(snapshot);
+  }
+
+  private assertCurrentAuthSnapshot(snapshot: AppSnapshot, generation: number): void {
+    if (
+      generation !== this.authGeneration ||
+      this.authUserId === null ||
+      (this.authUserId !== undefined && snapshot.currentUserId !== this.authUserId)
+    ) {
+      throw new RepositoryError(
+        'SESSION_CHANGED',
+        '로그인 사용자가 바뀌었어요. 현재 계정의 데이터를 다시 불러와 주세요.',
+      );
+    }
   }
 
   private async findCurrentExpense(expenseId: string): Promise<Expense> {
@@ -578,12 +655,14 @@ export class SupabaseRepository implements AppRepository {
     challengeId: string | undefined,
     userId: string,
     objectStem: string,
+    expectedPath?: string,
   ): Promise<string> {
     const file = await readPhoto(uri);
     if (file.buffer.byteLength > MAX_EXPENSE_PHOTO_BYTES) {
       throw new RepositoryError('PHOTO_TOO_LARGE', '지출 사진은 10MB 이하여야 해요.');
     }
-    const path = `${challengeId ?? 'personal'}/${userId}/${safeObjectStem(objectStem)}.${file.extension}`;
+    const path = expectedPath ??
+      `${challengeId ?? 'personal'}/${userId}/${safeObjectStem(objectStem)}.${file.extension}`;
     const { error } = await this.client.storage.from('expense-photos').upload(path, file.buffer, {
       cacheControl: '3600',
       contentType: file.contentType,
@@ -596,8 +675,11 @@ export class SupabaseRepository implements AppRepository {
   }
 
   private async removeOrphanPhoto(path: string): Promise<void> {
-    const { error } = await this.client.storage.from('expense-photos').remove([path]);
-    if (error) console.warn('교체 또는 삭제된 사진 정리 오류', error);
+    try {
+      await this.cleanupExpensePhoto(path);
+    } catch (error) {
+      console.warn('교체 또는 삭제된 사진 정리 오류', error);
+    }
   }
 
   private async createSignedUrlMap(bucket: string, paths: string[]): Promise<Map<string, string>> {
@@ -830,7 +912,7 @@ function policyErrorMessage(message: string): string | null {
   if (message.includes('uploaded photo is required') || message.includes('photo upload')) return '마감 전에 지출 사진 1장 업로드를 완료해 주세요.';
   if (message.includes('comment edit window')) return '댓글은 작성 후 5분 안에만 수정할 수 있어요.';
   if (message.includes('comment is read-only')) return '완료된 챌린지의 댓글은 읽기 전용이에요.';
-  if (message.includes('comment body')) return '댓글은 공백을 제외하고 1~500자로 입력해 주세요.';
+  if (message.includes('comment body')) return '댓글은 앞뒤 공백을 제외하고 1~500자로 입력해 주세요.';
   return null;
 }
 
