@@ -53,8 +53,9 @@ import { createUuid } from "@/utils/uuid";
 export default function ExpenseDetailScreen() {
   const router = useRouter();
   const { showDialog } = useAppDialog();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; rid?: string | string[] }>();
   const expenseId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const requestId = Array.isArray(params.rid) ? params.rid[0] : params.rid;
   const {
     addComment,
     deleteComment,
@@ -69,8 +70,15 @@ export default function ExpenseDetailScreen() {
     getPeriod,
     getProfile,
     getRoom,
+    snapshot,
   } = useAppData();
-  const expense = expenseId ? getExpense(expenseId) : undefined;
+  // 저장 직후 오프라인 큐가 낙관적 ID를 서버 ID로 교체하면 라우트의 id로는
+  // 더 이상 찾을 수 없다. 교체 전후로 불변인 멱등 키(rid)로 폴백 조회한다.
+  const expense =
+    (expenseId ? getExpense(expenseId) : undefined) ??
+    (requestId
+      ? snapshot?.expenses.find((item) => item.clientRequestId === requestId)
+      : undefined);
   const period = expense?.periodId ? getPeriod(expense.periodId) : undefined;
   const room = period ? getRoom(period.roomId) : undefined;
   const timeline = useMemo(

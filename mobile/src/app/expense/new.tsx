@@ -202,7 +202,12 @@ export default function NewExpenseScreen() {
         occurredAt: occurredAt.toISOString(),
         clientRequestId,
       });
-      router.replace(`/expense/${expense.id}`);
+      // rid: 오프라인 큐가 낙관적 ID를 서버 ID로 교체해도 상세 화면이
+      // 멱등 키(clientRequestId)로 같은 지출을 계속 찾을 수 있게 한다.
+      router.replace({
+        pathname: "/expense/[id]",
+        params: { id: expense.id, rid: expense.clientRequestId },
+      });
     } catch (reason) {
       setFormError(
         reason instanceof Error ? reason.message : "지출을 저장하지 못했어요.",
