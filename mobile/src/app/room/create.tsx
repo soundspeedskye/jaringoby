@@ -15,11 +15,15 @@ import {
   createKoreanHolidaySnapshot,
   createPeriodMemberPlan,
   createWeekdayCalendar,
+  DEFAULT_MAX_ACTIVE_MEMBERS,
   isWeekend,
+  isValidRoomCapacity,
+  isValidRoomName,
   resolveFirstWeekStart,
+  ROOM_NAME_MAX_CHARACTERS,
   toSeoulLocalDate,
 } from "@/domain";
-import { useAppActions } from "@/providers/app-provider";
+import { useAppActions } from "@/providers/app-actions-provider";
 import { formatWon } from "@/utils/format";
 import { createUuid } from "@/utils/uuid";
 
@@ -105,7 +109,7 @@ export default function CreateRoomScreen() {
       <Field
         autoFocus
         label="방 이름"
-        maxLength={32}
+        maxLength={ROOM_NAME_MAX_CHARACTERS}
         onChangeText={setName}
         placeholder="예: 평일 5만원 지키기"
         value={name}
@@ -129,7 +133,7 @@ export default function CreateRoomScreen() {
         </View>
         <View style={styles.capacityField}>
           <Field
-            hint="최대 10명"
+            hint={`최대 ${DEFAULT_MAX_ACTIVE_MEMBERS}명`}
             keyboardType="number-pad"
             label="최초 정원"
             maxLength={2}
@@ -221,15 +225,16 @@ function validate(input: {
   capacity: number;
   confirmedImmutable: boolean;
 }): string | null {
-  if (!input.name.trim()) return "방 이름을 입력해 주세요.";
+  if (!isValidRoomName(input.name)) {
+    return input.name.trim()
+      ? `방 이름은 ${ROOM_NAME_MAX_CHARACTERS}자 이내로 입력해 주세요.`
+      : "방 이름을 입력해 주세요.";
+  }
   if (!Number.isSafeInteger(input.baseAmount) || input.baseAmount < 1)
     return "주당 기준금액을 1원 이상의 정수로 입력해 주세요.";
-  if (
-    !Number.isInteger(input.capacity) ||
-    input.capacity < 1 ||
-    input.capacity > 10
-  )
-    return "정원은 방장을 포함해 1~10명으로 입력해 주세요.";
+  if (!isValidRoomCapacity(input.capacity)) {
+    return `정원은 방장을 포함해 1~${DEFAULT_MAX_ACTIVE_MEMBERS}명으로 입력해 주세요.`;
+  }
   if (!input.confirmedImmutable)
     return "기준금액이 고정되고 매주 반복된다는 내용을 확인해 주세요.";
   return null;

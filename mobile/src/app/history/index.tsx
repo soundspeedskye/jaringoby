@@ -7,30 +7,61 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Pressable,
+  SectionList,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type SectionListRenderItemInfo,
+} from "react-native";
 
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlassSurface } from "@/components/ui/glass-surface";
 import { PageHeader } from "@/components/ui/page-header";
-import { Screen } from "@/components/ui/screen";
+import { ScreenFrame } from "@/components/ui/screen";
 import { palette, radii, spacing } from "@/constants/design";
 import type { Period, PeriodResult, Room } from "@/data/types";
-import { useAppData } from "@/providers/app-provider";
+import {
+  useActiveRoom,
+  useCurrentUser,
+  useHistory,
+  useResultsForPeriods,
+  useRooms,
+  useRoomStats,
+} from "@/providers/app-data-hooks";
 import { formatWon } from "@/utils/format";
 
 type ResultFilter = "전체" | "달성" | "초과";
+type HistoryRecord = {
+  period: Period;
+  room: Room | undefined;
+  result: PeriodResult;
+};
+type HistorySection = {
+  key: string;
+  month: string;
+  data: HistoryRecord[];
+};
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const {
-    activeRoom,
-    currentUser,
-    getResults,
-    getRoom,
-    getStats,
-    pastPeriods,
-  } = useAppData();
+  const activeRoom = useActiveRoom();
+  const currentUser = useCurrentUser();
+  const { pastPeriods } = useHistory();
+  const periodIds = useMemo(
+    () => pastPeriods.map((period) => period.id),
+    [pastPeriods],
+  );
+  const roomIds = useMemo(
+    () => pastPeriods.map((period) => period.roomId),
+    [pastPeriods],
+  );
+  const resultsByPeriodId = useResultsForPeriods(periodIds);
+  const roomsById = useRooms(roomIds);
+  const roomStats = useRoomStats(activeRoom?.id);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ResultFilter>("전체");
   const deferredQuery = useDeferredValue(query);
@@ -39,29 +70,31 @@ export default function HistoryScreen() {
   const myStats = useMemo(() => {
     if (!activeRoom || !currentUser) return null;
     return (
-      getStats(activeRoom.id).find((stats) => stats.userId === currentUser.id) ??
+      roomStats.find(
+        (stats) => stats.userId === currentUser.id,
+      ) ??
       null
     );
-  }, [activeRoom, currentUser, getStats]);
+  }, [activeRoom, currentUser, roomStats]);
 
   const baseRecords = useMemo(
     () =>
       pastPeriods
         .map((period) => {
-          const result = getResults(period.id).find(
+          const result = (resultsByPeriodId.get(period.id) ?? []).find(
             (item) => item.userId === currentUser?.id,
           );
           if (!result) return null;
           return {
             period,
-            room: getRoom(period.roomId),
+            room: roomsById.get(period.roomId),
             result,
           };
         })
         .filter((record): record is NonNullable<typeof record> =>
           Boolean(record),
         ),
-    [currentUser, getResults, getRoom, pastPeriods],
+    [currentUser, pastPeriods, resultsByPeriodId, roomsById],
   );
 
   const filteredRecords = useMemo(() => {
@@ -79,7 +112,7 @@ export default function HistoryScreen() {
       );
   }, [baseRecords, deferredQuery, filter]);
 
-  const grouped = useMemo(() => {
+  const sections = useMemo<HistorySection[]>(() => {
     const groups = new Map<string, typeof filteredRecords>();
     filteredRecords.forEach((record) => {
       const month = record.period.weekEnd.slice(0, 7);
@@ -87,131 +120,165 @@ export default function HistoryScreen() {
       if (monthRecords) monthRecords.push(record);
       else groups.set(month, [record]);
     });
-    return [...groups.entries()];
+    return [...groups.entries()].map(([month, records]) => ({
+      key: month,
+      month,
+      data: records,
+    }));
   }, [filteredRecords]);
   const openPeriod = useCallback(
     (periodId: string) => router.push(`/history/${periodId}`),
     [router],
   );
+  const renderRecord = useCallback(
+    ({
+      item: record,
+    }: SectionListRenderItemInfo<HistoryRecord, HistorySection>) => (
+      <HistoryCard
+        onSelect={openPeriod}
+        period={record.period}
+        result={record.result}
+        room={record.room}
+      />
+    ),
+    [openPeriod],
+  );
 
   return (
-    <Screen testID="period-history-screen">
-      <PageHeader
-        bottomSpacing="md"
-        onBack={() => router.back()}
-        right={
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-            style={styles.archiveIcon}
-          >
-            <MaterialCommunityIcons
-              color={palette.yellow}
-              name="archive-check-outline"
-              size={23}
-            />
-          </View>
-        }
-        title="지난 주차"
-      />
-
-      {myStats ? (
-        <GlassSurface style={styles.statsCard} testID="cumulative-stats-card">
-          <Text style={styles.statsTitle}>
-            {activeRoom?.name ?? "내 방"} 누적 기록
-          </Text>
-          <View style={styles.statsRow}>
-            <StatBlock label="참여 주차" value={`${myStats.participatedWeekCount}주`} />
-            <View style={styles.statsLine} />
-            <StatBlock label="달성 주차" value={`${myStats.achievedWeekCount}주`} />
-            <View style={styles.statsLine} />
-            <StatBlock
-              highlight
-              label="연속 달성"
-              value={`${myStats.currentStreak}주`}
-            />
-            <View style={styles.statsLine} />
-            <StatBlock label="왕관" value={`👑 ${myStats.crownCount}`} />
-          </View>
-        </GlassSurface>
-      ) : null}
-
-      <View style={styles.searchBox}>
-        <MaterialCommunityIcons
-          color={palette.greenSoft}
-          name="magnify"
-          size={20}
-        />
-        <TextInput
-          accessibilityLabel="방 이름 검색"
-          onChangeText={setQuery}
-          placeholder="방 이름 검색"
-          placeholderTextColor={palette.muted}
-          style={styles.searchInput}
-          value={query}
-        />
-        {query ? (
-          <Pressable
-            accessibilityLabel="검색어 지우기"
-            onPress={() => setQuery("")}
-          >
-            <MaterialCommunityIcons
-              color={palette.muted}
-              name="close-circle"
-              size={18}
-            />
-          </Pressable>
-        ) : null}
-      </View>
-
-      <View
-        accessibilityLabel="주차 결과 필터"
-        accessibilityRole="radiogroup"
-        style={styles.filters}
-      >
-        {(["전체", "달성", "초과"] as ResultFilter[]).map((item) => (
-          <ChoiceChip
-            key={item}
-            label={item}
-            onPress={() => setFilter(item)}
-            selected={filter === item}
+    <ScreenFrame testID="period-history-screen">
+      <SectionList
+        contentContainerStyle={styles.content}
+        ItemSeparatorComponent={HistoryCardSeparator}
+        keyboardShouldPersistTaps="handled"
+        keyExtractor={(record) => record.period.id}
+        ListEmptyComponent={
+          <EmptyState
+            description="매주 정산이 끝나면 이곳에 월별로 자동 보관돼요."
+            icon="archive-search-outline"
+            title={
+              query || filter !== "전체"
+                ? "조건에 맞는 기록이 없어요."
+                : "아직 정산이 끝난 주차가 없어요."
+            }
           />
-        ))}
-      </View>
+        }
+        ListHeaderComponent={
+          <>
+            <PageHeader
+              bottomSpacing="md"
+              onBack={() => router.back()}
+              right={
+                <View
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                  style={styles.archiveIcon}
+                >
+                  <MaterialCommunityIcons
+                    color={palette.yellow}
+                    name="archive-check-outline"
+                    size={23}
+                  />
+                </View>
+              }
+              title="지난 주차"
+            />
 
-      {grouped.length ? (
-        grouped.map(([month, monthRecords]) => (
-          <View key={month} style={styles.monthGroup}>
-            <View style={styles.monthHeader}>
-              <Text style={styles.monthTitle}>{formatMonth(month)}</Text>
-              <Text style={styles.monthCount}>{monthRecords.length}개</Text>
+            {myStats ? (
+              <GlassSurface
+                style={styles.statsCard}
+                testID="cumulative-stats-card"
+              >
+                <Text style={styles.statsTitle}>
+                  {activeRoom?.name ?? "내 방"} 누적 기록
+                </Text>
+                <View style={styles.statsRow}>
+                  <StatBlock
+                    label="참여 주차"
+                    value={`${myStats.participatedWeekCount}주`}
+                  />
+                  <View style={styles.statsLine} />
+                  <StatBlock
+                    label="달성 주차"
+                    value={`${myStats.achievedWeekCount}주`}
+                  />
+                  <View style={styles.statsLine} />
+                  <StatBlock
+                    highlight
+                    label="연속 달성"
+                    value={`${myStats.currentStreak}주`}
+                  />
+                  <View style={styles.statsLine} />
+                  <StatBlock label="왕관" value={`👑 ${myStats.crownCount}`} />
+                </View>
+              </GlassSurface>
+            ) : null}
+
+            <View style={styles.searchBox}>
+              <MaterialCommunityIcons
+                color={palette.greenSoft}
+                name="magnify"
+                size={20}
+              />
+              <TextInput
+                accessibilityLabel="방 이름 검색"
+                onChangeText={setQuery}
+                placeholder="방 이름 검색"
+                placeholderTextColor={palette.muted}
+                style={styles.searchInput}
+                value={query}
+              />
+              {query ? (
+                <Pressable
+                  accessibilityLabel="검색어 지우기"
+                  onPress={() => setQuery("")}
+                >
+                  <MaterialCommunityIcons
+                    color={palette.muted}
+                    name="close-circle"
+                    size={18}
+                  />
+                </Pressable>
+              ) : null}
             </View>
-            <View style={styles.cards}>
-              {monthRecords.map((record) => (
-                <HistoryCard
-                  key={record.period.id}
-                  onSelect={openPeriod}
-                  period={record.period}
-                  result={record.result}
-                  room={record.room}
+
+            <View
+              accessibilityLabel="주차 결과 필터"
+              accessibilityRole="radiogroup"
+              style={styles.filters}
+            >
+              {(["전체", "달성", "초과"] as ResultFilter[]).map((item) => (
+                <ChoiceChip
+                  key={item}
+                  label={item}
+                  onPress={() => setFilter(item)}
+                  selected={filter === item}
                 />
               ))}
             </View>
+          </>
+        }
+        renderItem={renderRecord}
+        renderSectionFooter={HistorySectionFooter}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.monthHeader}>
+            <Text style={styles.monthTitle}>{formatMonth(section.month)}</Text>
+            <Text style={styles.monthCount}>{section.data.length}개</Text>
           </View>
-        ))
-      ) : (
-        <EmptyState
-          description="매주 정산이 끝나면 이곳에 월별로 자동 보관돼요."
-          icon="archive-search-outline"
-          title={
-            query || filter !== "전체"
-              ? "조건에 맞는 기록이 없어요."
-              : "아직 정산이 끝난 주차가 없어요."
-          }
-        />
-      )}
-    </Screen>
+        )}
+        sections={sections}
+        showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
+      />
+    </ScreenFrame>
   );
+}
+
+function HistoryCardSeparator() {
+  return <View style={styles.cardSeparator} />;
+}
+
+function HistorySectionFooter() {
+  return <View style={styles.monthFooter} />;
 }
 
 const HistoryCard = memo(function HistoryCard({
@@ -330,6 +397,11 @@ function formatMonth(value: string): string {
 }
 
 const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 120,
+  },
   archiveIcon: {
     width: 42,
     height: 42,
@@ -388,7 +460,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginVertical: spacing.lg,
   },
-  monthGroup: { marginBottom: spacing.xxl },
   monthHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -397,7 +468,8 @@ const styles = StyleSheet.create({
   },
   monthTitle: { color: palette.ink, fontSize: 18, fontWeight: "800" },
   monthCount: { color: palette.muted, fontSize: 11 },
-  cards: { gap: spacing.md },
+  cardSeparator: { height: spacing.md },
+  monthFooter: { height: spacing.xxl },
   card: { padding: spacing.lg, backgroundColor: "rgba(255,253,247,0.68)" },
   cardTop: { flexDirection: "row", alignItems: "center" },
   cardTitleGroup: { flex: 1 },

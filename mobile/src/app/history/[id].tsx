@@ -1,6 +1,13 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useMemo } from "react";
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { ExpenseCard } from "@/components/expense/expense-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -9,29 +16,96 @@ import { KeyValueRow } from "@/components/ui/key-value-row";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen } from "@/components/ui/screen";
+import { Screen, ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
 import { palette, radii, spacing } from "@/constants/design";
+import type { Expense } from "@/data/types";
 import { createPeriodTimeline } from "@/domain";
-import { useAppData } from "@/providers/app-provider";
+import {
+  useCurrentUser,
+  useExpenseComments,
+  usePeriod,
+  usePeriodExpenses,
+  usePeriodMembers,
+  usePeriodResults,
+  useProfiles,
+  useRoom,
+} from "@/providers/app-data-hooks";
 import { formatDateLabel, formatWon } from "@/utils/format";
 
 export default function HistoryDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const periodId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const currentUser = useCurrentUser();
+  const period = usePeriod(periodId);
+  const room = useRoom(period?.roomId);
+  const periodExpenses = usePeriodExpenses(periodId);
+  const periodMembers = usePeriodMembers(periodId);
+  const results = usePeriodResults(periodId);
+  const profileUserIds = useMemo(
+    () => [
+      ...periodMembers.map((member) => member.userId),
+      ...results.map((result) => result.userId),
+    ],
+    [periodMembers, results],
+  );
+  const profilesById = useProfiles(profileUserIds);
+  const expenses = useMemo(
+    () => [...periodExpenses].sort(
+      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
+    ),
+    [periodExpenses],
+  );
+  const timeline = useMemo(
+    () => period ? createPeriodTimeline(period.weekStart) : null,
+    [period],
+  );
   const {
-    currentUser,
-    getComments,
-    getExpenses,
-    getMembers,
-    getPeriod,
-    getProfile,
-    getResults,
-    getRoom,
-  } = useAppData();
-  const period = periodId ? getPeriod(periodId) : undefined;
-  const room = period ? getRoom(period.roomId) : undefined;
+    crownIdSet,
+    everyoneAchieved,
+    memberResults,
+    myResult,
+  } = useMemo(() => {
+    const membersByUserId = new Map(
+      periodMembers.map((member) => [member.userId, member]),
+    );
+    const nextMemberResults = results.map((result) => ({
+      result,
+      member: membersByUserId.get(result.userId),
+      profile: profilesById.get(result.userId),
+    }));
+    const nextCrownIdSet = new Set(
+      results.filter((result) => result.isCrown).map((result) => result.userId),
+    );
+    const settledResults = nextMemberResults.filter(
+      (row) => !row.member || row.member.status === "ACTIVE",
+    );
+    return {
+      crownIdSet: nextCrownIdSet,
+      everyoneAchieved:
+        settledResults.length > 0
+        && settledResults.every((row) => row.result.achieved),
+      memberResults: nextMemberResults,
+      myResult: nextMemberResults.find(
+        (row) => row.result.userId === currentUser?.id,
+      ),
+    };
+  }, [currentUser?.id, periodMembers, profilesById, results]);
+  const openExpense = useCallback(
+    (expenseId: string) => router.push(`/expense/${expenseId}`),
+    [router],
+  );
+  const renderArchivedExpense = useCallback(
+    ({ item: expense }: { item: Expense }) => (
+      <ArchivedExpenseRecord
+        expense={expense}
+        isCrowned={crownIdSet.has(expense.userId)}
+        onOpen={openExpense}
+      />
+    ),
+    [crownIdSet, openExpense],
+  );
 
   if (!period) {
     return (
@@ -52,41 +126,30 @@ export default function HistoryDetailScreen() {
     );
   }
 
-  const expenses = [...getExpenses(period.id)].sort(
-    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
-  );
-  const timeline = createPeriodTimeline(period.weekStart);
-  const results = getResults(period.id);
-  const membersByUserId = new Map(
-    getMembers(period.id).map((member) => [member.userId, member]),
-  );
-  const memberResults = results.map((result) => ({
-    result,
-    member: membersByUserId.get(result.userId),
-    profile: getProfile(result.userId),
-  }));
-  const crownIds = results
-    .filter((result) => result.isCrown)
-    .map((result) => result.userId);
-  const myResult = memberResults.find(
-    (row) => row.result.userId === currentUser?.id,
-  );
-  const settledResults = memberResults.filter(
-    (row) => !row.member || row.member.status === "ACTIVE",
-  );
-  const everyoneAchieved =
-    settledResults.length > 0 &&
-    settledResults.every((row) => row.result.achieved);
+  if (!timeline) return null;
 
   return (
-    <Screen testID="history-detail-screen">
-      <PageHeader onBack={() => router.back()} title="지난 주차" />
+    <ScreenFrame testID="history-detail-screen">
+      <FlatList
+        contentContainerStyle={styles.content}
+        data={expenses}
+        ItemSeparatorComponent={ArchivedExpenseSeparator}
+        keyExtractor={(expense) => expense.id}
+        ListEmptyComponent={
+          <EmptyState title="보관된 지출이 없어요." variant="compact" />
+        }
+        ListHeaderComponent={
+          <>
+            <PageHeader onBack={() => router.back()} title="지난 주차" />
 
-      <NoticeBanner icon="archive-lock-outline" style={styles.readOnlyBanner}>
-        정산 완료 · 읽기 전용
-      </NoticeBanner>
+            <NoticeBanner
+              icon="archive-lock-outline"
+              style={styles.readOnlyBanner}
+            >
+              정산 완료 · 읽기 전용
+            </NoticeBanner>
 
-      <View style={styles.hero}>
+            <View style={styles.hero}>
         <Text style={styles.heroTitle}>
           {room?.name ?? "방"} · {period.weekIndex}주차
         </Text>
@@ -120,7 +183,7 @@ export default function HistoryDetailScreen() {
                 : "참여 결과 없음"}
             </Text>
           </View>
-          {myResult && crownIds.includes(myResult.result.userId) ? (
+          {myResult && crownIdSet.has(myResult.result.userId) ? (
             <Text style={styles.crown}>👑</Text>
           ) : null}
         </View>
@@ -193,7 +256,7 @@ export default function HistoryDetailScreen() {
               <View style={styles.memberCopy}>
                 <View style={styles.memberNameRow}>
                   <Text numberOfLines={1} style={styles.memberName}>
-                    {crownIds.includes(row.result.userId) ? "👑 " : ""}
+                    {crownIdSet.has(row.result.userId) ? "👑 " : ""}
                     {row.result.userId === currentUser?.id
                       ? "나"
                       : (row.profile?.nickname ?? row.result.nickname)}
@@ -245,75 +308,97 @@ export default function HistoryDetailScreen() {
         </GlassSurface>
       </View>
 
-      <View style={styles.expenseSection}>
-        <SectionHeader
-          meta={`${expenses.length}건`}
-          style={styles.sectionHeading}
-          title="보관된 지출과 대화"
-        />
-        <View style={styles.expenses}>
-          {expenses.map((expense) => {
-            const profile = getProfile(expense.userId);
-            const comments = getComments(expense.id);
-            return (
-              <View key={expense.id} style={styles.expenseRecord}>
-                <ExpenseCard
-                  amount={expense.amount}
-                  avatar={profile?.avatar ?? "🙂"}
-                  category={expense.category}
-                  commentCount={
-                    comments.filter((comment) => !comment.deletedAt).length
-                  }
-                  edited={expense.createdAt !== expense.updatedAt}
-                  id={expense.id}
-                  memo={expense.memo}
-                  nickname={`${crownIds.includes(expense.userId) ? "👑 " : ""}${profile?.nickname ?? "알 수 없음"}`}
-                  occurredAtLabel={formatDateLabel(expense.occurredAt)}
-                  onPress={(id) => router.push(`/expense/${id}`)}
-                  photoUri={expense.photoUri ?? ""}
-                />
-                {comments.length ? (
-                  <View style={styles.commentPreview}>
-                    {comments.slice(0, 3).map((comment) => (
-                      <View key={comment.id} style={styles.previewComment}>
-                        <Text style={styles.previewAuthor}>
-                          {getProfile(comment.userId)?.nickname ?? "알 수 없음"}
-                        </Text>
-                        <Text numberOfLines={1} style={styles.previewBody}>
-                          {comment.deletedAt ? "삭제된 메시지" : comment.body}
-                        </Text>
-                      </View>
-                    ))}
-                    {comments.length > 3 ? (
-                      <Text style={styles.moreComments}>
-                        댓글 {comments.length - 3}개 더 보기
-                      </Text>
-                    ) : null}
-                    <Pressable
-                      onPress={() => router.push(`/expense/${expense.id}`)}
-                      style={styles.openThread}
-                    >
-                      <Text style={styles.openThreadText}>
-                        읽기 전용 대화 전체 보기
-                      </Text>
-                      <MaterialCommunityIcons
-                        color={palette.green}
-                        name="chevron-right"
-                        size={17}
-                      />
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
-          {!expenses.length ? (
-            <EmptyState title="보관된 지출이 없어요." variant="compact" />
-          ) : null}
-        </View>
-      </View>
-    </Screen>
+            <View style={styles.expenseSection}>
+              <SectionHeader
+                meta={`${expenses.length}건`}
+                style={styles.sectionHeading}
+                title="보관된 지출과 대화"
+              />
+            </View>
+          </>
+        }
+        renderItem={renderArchivedExpense}
+        showsVerticalScrollIndicator={false}
+      />
+    </ScreenFrame>
   );
+}
+
+const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
+  expense,
+  isCrowned,
+  onOpen,
+}: {
+  expense: Expense;
+  isCrowned: boolean;
+  onOpen: (expenseId: string) => void;
+}) {
+  const comments = useExpenseComments(expense.id);
+  const profileUserIds = useMemo(
+    () => [
+      expense.userId,
+      ...comments.map((comment) => comment.userId),
+    ],
+    [comments, expense.userId],
+  );
+  const profilesById = useProfiles(profileUserIds);
+  const profile = profilesById.get(expense.userId);
+
+  return (
+    <View style={styles.expenseRecord}>
+      <ExpenseCard
+        amount={expense.amount}
+        avatar={profile?.avatar ?? "🙂"}
+        category={expense.category}
+        commentCount={
+          comments.filter((comment) => !comment.deletedAt).length
+        }
+        edited={expense.createdAt !== expense.updatedAt}
+        id={expense.id}
+        memo={expense.memo}
+        nickname={`${isCrowned ? "👑 " : ""}${profile?.nickname ?? "알 수 없음"}`}
+        occurredAtLabel={formatDateLabel(expense.occurredAt)}
+        onPress={onOpen}
+        photoUri={expense.photoUri ?? ""}
+      />
+      {comments.length ? (
+        <View style={styles.commentPreview}>
+          {comments.slice(0, 3).map((comment) => (
+            <View key={comment.id} style={styles.previewComment}>
+              <Text style={styles.previewAuthor}>
+                {profilesById.get(comment.userId)?.nickname ?? "알 수 없음"}
+              </Text>
+              <Text numberOfLines={1} style={styles.previewBody}>
+                {comment.deletedAt ? "삭제된 메시지" : comment.body}
+              </Text>
+            </View>
+          ))}
+          {comments.length > 3 ? (
+            <Text style={styles.moreComments}>
+              댓글 {comments.length - 3}개 더 보기
+            </Text>
+          ) : null}
+          <Pressable
+            onPress={() => onOpen(expense.id)}
+            style={styles.openThread}
+          >
+            <Text style={styles.openThreadText}>
+              읽기 전용 대화 전체 보기
+            </Text>
+            <MaterialCommunityIcons
+              color={palette.green}
+              name="chevron-right"
+              size={17}
+            />
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
+function ArchivedExpenseSeparator() {
+  return <View style={styles.expenseSeparator} />;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -328,6 +413,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 120,
+  },
   readOnlyBanner: { marginBottom: spacing.md },
   hero: {
     padding: spacing.xl,
@@ -452,7 +542,7 @@ const styles = StyleSheet.create({
   memberRemainingOver: { color: palette.danger },
   memberAmountLabel: { color: palette.muted, fontSize: 9, marginTop: 2 },
   expenseSection: { marginTop: spacing.xxxl },
-  expenses: { gap: spacing.xl },
+  expenseSeparator: { height: spacing.xl },
   expenseRecord: { gap: 0 },
   commentPreview: {
     padding: spacing.md,

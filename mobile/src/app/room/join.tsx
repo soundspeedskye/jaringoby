@@ -25,14 +25,15 @@ import {
   isValidInviteCodeFormat,
   normalizeInviteCode,
 } from "@/domain";
-import { useAppActions, useAppData } from "@/providers/app-provider";
+import { useAppActions } from "@/providers/app-actions-provider";
+import { useAppStatus } from "@/providers/app-status-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { formatWon } from "@/utils/format";
 
 export default function JoinRoomScreen() {
   const router = useRouter();
   const { joinRoom, previewInvite } = useAppActions();
-  const { loading } = useAppData();
+  const { loading } = useAppStatus();
   const [code, setCode] = useState("");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [message, setMessage] = useState<string | null>(null);
