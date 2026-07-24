@@ -21,11 +21,8 @@ export interface AppRepository {
   load(): Promise<AppSnapshot>;
   resetDemo(): Promise<AppSnapshot>;
   createRoom(input: CreateRoomInput): Promise<Room>;
-  increaseCapacity(roomId: string, capacity: number): Promise<Room>;
   previewInvite(inviteCode: string): Promise<InvitePreview>;
   joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember>;
-  leaveRoom(roomId: string, successorUserId?: string): Promise<void>;
-  closeRoom(roomId: string): Promise<Room>;
   addExpense(input: AddExpenseInput): Promise<Expense>;
   updateExpense(
     expenseId: string,

@@ -549,23 +549,11 @@ class FakeRepository implements AppRepository {
     throw new Error('not implemented');
   }
 
-  async increaseCapacity(_roomId: string, _capacity: number): Promise<Room> {
-    throw new Error('not implemented');
-  }
-
   async previewInvite(_inviteCode: string): Promise<InvitePreview> {
     throw new Error('not implemented');
   }
 
   async joinRoom(_inviteCode: string, _joinedAt?: string): Promise<RoomMember> {
-    throw new Error('not implemented');
-  }
-
-  async leaveRoom(_roomId: string, _successorUserId?: string): Promise<void> {
-    throw new Error('not implemented');
-  }
-
-  async closeRoom(_roomId: string): Promise<Room> {
     throw new Error('not implemented');
   }
 

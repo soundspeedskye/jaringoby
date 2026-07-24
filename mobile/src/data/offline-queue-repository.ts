@@ -179,9 +179,8 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
  * Offline-first decorator for the Supabase-backed repository.
  *
  * Mutations are durably written before network I/O and replayed in FIFO order.
- * Room creation, joining, invite preview, capacity changes, leaving and closing
- * intentionally remain direct server operations because their result depends on
- * current room state.
+ * Room creation, joining and invite preview intentionally remain direct server
+ * operations because their result depends on current room state.
  */
 export class OfflineQueueRepository implements AppRepository {
   private readonly storage: OfflineQueueStorage;
@@ -283,29 +282,12 @@ export class OfflineQueueRepository implements AppRepository {
     return result;
   }
 
-  async increaseCapacity(roomId: string, capacity: number): Promise<Room> {
-    const result = await this.base.increaseCapacity(roomId, capacity);
-    void this.refreshBase().catch(() => undefined);
-    return result;
-  }
-
   previewInvite(inviteCode: string): Promise<InvitePreview> {
     return this.base.previewInvite(inviteCode);
   }
 
   async joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember> {
     const result = await this.base.joinRoom(inviteCode, joinedAt);
-    void this.refreshBase().catch(() => undefined);
-    return result;
-  }
-
-  async leaveRoom(roomId: string, successorUserId?: string): Promise<void> {
-    await this.base.leaveRoom(roomId, successorUserId);
-    void this.refreshBase().catch(() => undefined);
-  }
-
-  async closeRoom(roomId: string): Promise<Room> {
-    const result = await this.base.closeRoom(roomId);
     void this.refreshBase().catch(() => undefined);
     return result;
   }
@@ -1079,7 +1061,6 @@ export class OfflineQueueRepository implements AppRepository {
         if (remote && expensePatchMatches(
           remote,
           operation.patch,
-          operation.baseEntity,
           expectedUpdatePhotoPath(operation),
         )) {
           const cleanupPath = replacedExpensePhotoPath(operation, remote);
@@ -1618,7 +1599,6 @@ function addProcessedRequest(snapshot: AppSnapshot, requestId: string): void {
 function expensePatchMatches(
   expense: Expense,
   patch: Partial<AddExpenseInput>,
-  baseEntity: Expense,
   expectedPhotoPath: string | undefined,
 ): boolean {
   return Object.entries(patch).every(([key, value]) => {

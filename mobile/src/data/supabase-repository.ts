@@ -24,6 +24,10 @@ import type { ExpenseCategory, LocalDate, MemberStatus, PeriodPhase } from '@/do
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
 const MAX_EXPENSE_PHOTO_BYTES = 10 * 1024 * 1024;
+const EXPENSE_COLUMNS =
+  'id,client_request_id,period_id,user_id,amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version';
+const COMMENT_COLUMNS =
+  'id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version';
 const REALTIME_TABLES = [
   'rooms',
   'room_members',
@@ -33,6 +37,7 @@ const REALTIME_TABLES = [
   'expenses',
   'comments',
 ] as const;
+type RealtimeTable = (typeof REALTIME_TABLES)[number];
 
 const CATEGORY_TO_DATABASE: Record<ExpenseCategory, DatabaseExpenseCategory> = {
   점심: 'lunch',
@@ -189,6 +194,27 @@ type SupabaseRepositoryOptions = {
   observeAuth?: boolean;
 };
 
+type ReloadJob = {
+  isFullReloadInFlight: boolean;
+  needsFullReload: boolean;
+  promise: Promise<AppSnapshot>;
+  tables: Set<RealtimeTable>;
+};
+
+function mergeReloadRequest(
+  job: ReloadJob,
+  tables: ReadonlySet<RealtimeTable> | undefined,
+): void {
+  if (tables === undefined) {
+    if (job.needsFullReload || job.isFullReloadInFlight) return;
+    job.needsFullReload = true;
+    job.tables.clear();
+    return;
+  }
+  if (job.needsFullReload) return;
+  tables.forEach((table) => job.tables.add(table));
+}
+
 export class SupabaseRepository implements AppRepository {
   private readonly listeners = new Set<(snapshot: AppSnapshot) => void>();
   private lastSnapshot: AppSnapshot | null = null;
@@ -196,7 +222,10 @@ export class SupabaseRepository implements AppRepository {
   private realtimeChannel: RealtimeChannel | null = null;
   private realtimeUserId: string | null = null;
   private realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly realtimeDirtyTables = new Set<RealtimeTable>();
+  private realtimeNeedsFullReload = false;
   private signedUrlRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private reloadJob: ReloadJob | null = null;
   private authUserId: string | null | undefined;
   private authGeneration = 0;
 
@@ -217,6 +246,7 @@ export class SupabaseRepository implements AppRepository {
         this.authGeneration += 1;
         this.lastSnapshot = null;
         this.loading = null;
+        this.reloadJob = null;
         void this.teardownRealtime();
       } else if (event === 'SIGNED_IN' && this.listeners.size > 0) {
         this.scheduleRealtimeReload();
@@ -252,6 +282,13 @@ export class SupabaseRepository implements AppRepository {
   }
 
   async load(): Promise<AppSnapshot> {
+    // A realtime or mutation refresh already in progress is newer than a
+    // standalone load. Joining it prevents a slower load from committing stale
+    // data after the refresh has completed.
+    if (this.reloadJob) {
+      mergeReloadRequest(this.reloadJob, undefined);
+      return clone(await this.reloadJob.promise);
+    }
     if (!this.loading) {
       const generation = this.authGeneration;
       const request = this.fetchSnapshot()
@@ -295,18 +332,6 @@ export class SupabaseRepository implements AppRepository {
     return clone(requireRoom(snapshot, id));
   }
 
-  async increaseCapacity(roomId: string, capacity: number): Promise<Room> {
-    await this.requireUserId();
-    const { error } = await this.client.rpc('update_room_settings', {
-      p_room_id: roomId,
-      p_name: null,
-      p_capacity: capacity,
-    });
-    if (error) throw translateError(error, '정원을 변경하지 못했어요.');
-    const snapshot = await this.reloadAndNotify();
-    return clone(requireRoom(snapshot, roomId));
-  }
-
   async previewInvite(inviteCode: string): Promise<InvitePreview> {
     await this.requireUserId();
     const normalized = inviteCode.trim().toUpperCase();
@@ -339,24 +364,6 @@ export class SupabaseRepository implements AppRepository {
     );
     if (!member) throw new RepositoryError('INVALID_RESPONSE', '참여 결과를 다시 불러오지 못했어요.');
     return clone(member);
-  }
-
-  async leaveRoom(roomId: string, successorUserId?: string): Promise<void> {
-    await this.requireUserId();
-    const { error } = await this.client.rpc('leave_room', {
-      p_room_id: roomId,
-      p_successor_user_id: successorUserId ?? null,
-    });
-    if (error) throw translateError(error, '방에서 나가지 못했어요.');
-    await this.reloadAndNotify();
-  }
-
-  async closeRoom(roomId: string): Promise<Room> {
-    await this.requireUserId();
-    const { error } = await this.client.rpc('close_room', { p_room_id: roomId });
-    if (error) throw translateError(error, '방을 닫지 못했어요.');
-    const snapshot = await this.reloadAndNotify();
-    return clone(requireRoom(snapshot, roomId));
   }
 
   async addExpense(input: AddExpenseInput): Promise<Expense> {
@@ -515,8 +522,8 @@ export class SupabaseRepository implements AppRepository {
       periodResultsResult,
       statsResult,
       invitesResult,
-      expensesResult,
-      commentsResult,
+      expenseRows,
+      commentRows,
       preferencesResult,
     ] = await Promise.all([
       this.client.from('profiles').select('id,nickname,avatar_path'),
@@ -544,14 +551,8 @@ export class SupabaseRepository implements AppRepository {
         .from('room_member_stats')
         .select('room_id,user_id,participated_week_count,achieved_week_count,crown_count,current_streak'),
       this.client.from('invite_codes').select('room_id,code,is_active').eq('is_active', true),
-      this.client
-        .from('expenses')
-        .select('id,client_request_id,period_id,user_id,amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version')
-        .order('created_at', { ascending: false }),
-      this.client
-        .from('comments')
-        .select('id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version')
-        .order('created_at', { ascending: true }),
+      this.fetchExpenseRows(),
+      this.fetchCommentRows(),
       this.client.from('user_room_preferences').select('room_id,is_hidden'),
     ]);
 
@@ -565,8 +566,6 @@ export class SupabaseRepository implements AppRepository {
       periodResultsResult,
       statsResult,
       invitesResult,
-      expensesResult,
-      commentsResult,
       preferencesResult,
     ];
     const failed = results.find((result) => result.error);
@@ -581,8 +580,6 @@ export class SupabaseRepository implements AppRepository {
     const periodResultRows = rows<PeriodResultRow>(periodResultsResult.data);
     const statsRows = rows<RoomMemberStatsRow>(statsResult.data);
     const inviteRows = rows<InviteCodeRow>(invitesResult.data);
-    const expenseRows = rows<ExpenseRow>(expensesResult.data);
-    const commentRows = rows<CommentRow>(commentsResult.data);
     const preferenceRows = rows<PreferenceRow>(preferencesResult.data);
 
     const [expenseSignedUrls, avatarSignedUrls] = await Promise.all([
@@ -615,10 +612,9 @@ export class SupabaseRepository implements AppRepository {
       .filter((row) => visibleRoomIds.has(row.room_id))
       .map((row) => mapPeriod(row, daysByPeriod.get(row.id) ?? []));
     const visiblePeriodIds = new Set(periods.map((period) => period.id));
-    const visibleExpenseRows = expenseRows.filter(
-      (row) => !row.period_id || visiblePeriodIds.has(row.period_id),
-    );
+    const visibleExpenseRows = filterVisibleExpenseRows(expenseRows, visiblePeriodIds);
     const visibleExpenseIds = new Set(visibleExpenseRows.map((row) => row.id));
+    const visibleCommentRows = filterVisibleCommentRows(commentRows, visibleExpenseIds);
 
     return {
       currentUserId: userId,
@@ -638,12 +634,31 @@ export class SupabaseRepository implements AppRepository {
         .filter((row) => visibleRoomIds.has(row.room_id))
         .map(mapStats),
       expenses: visibleExpenseRows.map((row) => mapExpense(row, expenseSignedUrls)),
-      comments: commentRows.filter((row) => visibleExpenseIds.has(row.expense_id)).map(mapComment),
-      processedRequestIds: [
-        ...expenseRows.filter((row) => row.user_id === userId).map((row) => row.client_request_id),
-        ...commentRows.filter((row) => row.user_id === userId).map((row) => row.client_request_id),
-      ],
+      comments: visibleCommentRows.map(mapComment),
+      processedRequestIds: collectProcessedRequestIds(expenseRows, commentRows, userId),
     };
+  }
+
+  private async fetchExpenseRows(): Promise<ExpenseRow[]> {
+    const result = await this.client
+      .from('expenses')
+      .select(EXPENSE_COLUMNS)
+      .order('created_at', { ascending: false });
+    if (result.error) {
+      throw translateError(result.error, '지출 데이터를 갱신하지 못했어요.');
+    }
+    return rows<ExpenseRow>(result.data);
+  }
+
+  private async fetchCommentRows(): Promise<CommentRow[]> {
+    const result = await this.client
+      .from('comments')
+      .select(COMMENT_COLUMNS)
+      .order('created_at', { ascending: true });
+    if (result.error) {
+      throw translateError(result.error, '댓글 데이터를 갱신하지 못했어요.');
+    }
+    return rows<CommentRow>(result.data);
   }
 
   private async requireUserId(): Promise<string> {
@@ -666,7 +681,7 @@ export class SupabaseRepository implements AppRepository {
       channel = channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table },
-        () => this.scheduleRealtimeReload(),
+        () => this.scheduleRealtimeReload(table),
       );
     }
     this.realtimeChannel = channel;
@@ -682,6 +697,8 @@ export class SupabaseRepository implements AppRepository {
     if (this.realtimeReloadTimer) clearTimeout(this.realtimeReloadTimer);
     if (this.signedUrlRefreshTimer) clearTimeout(this.signedUrlRefreshTimer);
     this.realtimeReloadTimer = null;
+    this.realtimeDirtyTables.clear();
+    this.realtimeNeedsFullReload = false;
     this.signedUrlRefreshTimer = null;
     const channel = this.realtimeChannel;
     this.realtimeChannel = null;
@@ -695,11 +712,20 @@ export class SupabaseRepository implements AppRepository {
     }
   }
 
-  private scheduleRealtimeReload(): void {
+  private scheduleRealtimeReload(table?: RealtimeTable): void {
+    if (table) this.realtimeDirtyTables.add(table);
+    else this.realtimeNeedsFullReload = true;
     if (this.realtimeReloadTimer) clearTimeout(this.realtimeReloadTimer);
     this.realtimeReloadTimer = setTimeout(() => {
       this.realtimeReloadTimer = null;
-      void this.reloadAndNotify().catch((error: unknown) => {
+      const needsFullReload = this.realtimeNeedsFullReload;
+      const dirtyTables = new Set(this.realtimeDirtyTables);
+      this.realtimeNeedsFullReload = false;
+      this.realtimeDirtyTables.clear();
+      const reload = needsFullReload
+        ? this.reloadAndNotify()
+        : this.reloadRealtimeTablesAndNotify(dirtyTables);
+      void reload.catch((error: unknown) => {
         console.warn('Supabase realtime 데이터 갱신 오류', error);
       });
     }, 120);
@@ -719,15 +745,152 @@ export class SupabaseRepository implements AppRepository {
   }
 
   private async reloadAndNotify(): Promise<AppSnapshot> {
-    // A mutation can race an older in-flight load. Let that load settle, then
-    // fetch once more so the emitted state always includes the committed row.
-    if (this.loading) await this.loading.catch(() => undefined);
-    const generation = this.authGeneration;
-    const snapshot = await this.fetchSnapshot();
-    this.assertCurrentAuthSnapshot(snapshot, generation);
-    this.lastSnapshot = snapshot;
-    this.listeners.forEach((listener) => listener(clone(snapshot)));
-    return clone(snapshot);
+    return this.requestReload();
+  }
+
+  private async reloadRealtimeTablesAndNotify(
+    tables: ReadonlySet<RealtimeTable>,
+  ): Promise<AppSnapshot> {
+    return this.requestReload(tables);
+  }
+
+  private async requestReload(
+    tables?: ReadonlySet<RealtimeTable>,
+  ): Promise<AppSnapshot> {
+    const activeJob = this.reloadJob;
+    if (activeJob) {
+      mergeReloadRequest(activeJob, tables);
+      return clone(await activeJob.promise);
+    }
+
+    let job: ReloadJob;
+    const promise = Promise.resolve().then(() => this.drainReloadRequests(job));
+    job = {
+      isFullReloadInFlight: false,
+      needsFullReload: tables === undefined,
+      promise,
+      tables: new Set(tables),
+    };
+    this.reloadJob = job;
+    void promise.then(
+      () => {
+        if (this.reloadJob === job) this.reloadJob = null;
+      },
+      () => {
+        if (this.reloadJob === job) this.reloadJob = null;
+      },
+    );
+    return clone(await promise);
+  }
+
+  private async drainReloadRequests(job: ReloadJob): Promise<AppSnapshot> {
+    let latestSnapshot: AppSnapshot | null = null;
+    let workingSnapshot = this.lastSnapshot;
+    while (job.needsFullReload || job.tables.size > 0) {
+      const needsFullReload = job.needsFullReload;
+      const tables = new Set(job.tables);
+      job.needsFullReload = false;
+      job.tables.clear();
+      // A mutation can race an older in-flight load. Let that load settle, then
+      // fetch once more so the emitted state always includes the committed row.
+      if (this.loading) await this.loading.catch(() => undefined);
+      const generation = this.authGeneration;
+      job.isFullReloadInFlight = needsFullReload;
+      let snapshot: AppSnapshot;
+      try {
+        snapshot = needsFullReload
+          ? await this.fetchSnapshot()
+          : await this.fetchRealtimeSnapshot(tables, workingSnapshot);
+      } finally {
+        job.isFullReloadInFlight = false;
+      }
+      this.assertCurrentAuthSnapshot(snapshot, generation);
+      if (this.reloadJob !== job) {
+        throw new RepositoryError(
+          'SESSION_CHANGED',
+          '로그인 사용자가 바뀌었어요. 현재 계정의 데이터를 다시 불러와 주세요.',
+        );
+      }
+      latestSnapshot = snapshot;
+      workingSnapshot = snapshot;
+      // New dirty/full requests may have arrived while the fetch was running.
+      // Do not expose an internally inconsistent intermediate snapshot; the
+      // next iteration patches from this working copy and only the final state
+      // is committed below.
+      if (job.needsFullReload || job.tables.size > 0) continue;
+      this.lastSnapshot = snapshot;
+      this.listeners.forEach((listener) => listener(clone(snapshot)));
+    }
+    if (!latestSnapshot) {
+      throw new RepositoryError('RELOAD_CANCELLED', '데이터 갱신 요청이 취소됐어요.');
+    }
+    return latestSnapshot;
+  }
+
+  private async fetchRealtimeSnapshot(
+    tables: ReadonlySet<RealtimeTable>,
+    baseSnapshot: AppSnapshot | null = this.lastSnapshot,
+  ): Promise<AppSnapshot> {
+    const canPatchSnapshot = [...tables].every(
+      (table) => table === 'expenses' || table === 'comments',
+    );
+    const previous = baseSnapshot;
+    if (!previous || !canPatchSnapshot || tables.size === 0) {
+      return this.fetchSnapshot();
+    }
+
+    const userId = await this.requireUserId();
+    const shouldFetchExpenses = tables.has('expenses');
+    const shouldFetchComments = tables.has('comments');
+    const [expenseRows, commentRows] = await Promise.all([
+      shouldFetchExpenses
+        ? this.fetchExpenseRows()
+        : Promise.resolve(null),
+      shouldFetchComments
+        ? this.fetchCommentRows()
+        : Promise.resolve(null),
+    ]);
+
+    const visiblePeriodIds = new Set(previous.periods.map((period) => period.id));
+    const visibleExpenseRows = expenseRows
+      ? filterVisibleExpenseRows(expenseRows, visiblePeriodIds)
+      : null;
+    let expenses = previous.expenses;
+    if (visibleExpenseRows) {
+      const expenseSignedUrls = new Map<string, string>();
+      previous.expenses.forEach((expense) => {
+        if (expense.photoPath && expense.photoUri) {
+          expenseSignedUrls.set(expense.photoPath, expense.photoUri);
+        }
+      });
+      const unsignedPaths = visibleExpenseRows
+        .filter((row) => row.deleted_at === null)
+        .map((row) => row.photo_path)
+        .filter(isString)
+        .filter((path) => !expenseSignedUrls.has(path));
+      const newSignedUrls = await this.createSignedUrlMap('expense-photos', unsignedPaths);
+      newSignedUrls.forEach((url, path) => expenseSignedUrls.set(path, url));
+      expenses = visibleExpenseRows.map((row) => mapExpense(row, expenseSignedUrls));
+      if (expenseSignedUrls.size > 0) this.scheduleSignedUrlRefresh(true);
+    }
+
+    const visibleExpenseIds = new Set(expenses.map((expense) => expense.id));
+    const comments = commentRows
+      ? filterVisibleCommentRows(commentRows, visibleExpenseIds).map(mapComment)
+      : visibleExpenseRows
+        ? previous.comments.filter((comment) => visibleExpenseIds.has(comment.expenseId))
+        : previous.comments;
+    const processedRequestIds = new Set(previous.processedRequestIds);
+    collectProcessedRequestIds(expenseRows ?? [], commentRows ?? [], userId)
+      .forEach((requestId) => processedRequestIds.add(requestId));
+
+    return {
+      ...previous,
+      currentUserId: userId,
+      expenses,
+      comments,
+      processedRequestIds: [...processedRequestIds],
+    };
   }
 
   private assertCurrentAuthSnapshot(snapshot: AppSnapshot, generation: number): void {
@@ -1154,6 +1317,37 @@ function requireComment(snapshot: AppSnapshot, id: string): Comment {
 
 function rows<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function filterVisibleExpenseRows(
+  expenseRows: ExpenseRow[],
+  visiblePeriodIds: ReadonlySet<string>,
+): ExpenseRow[] {
+  return expenseRows.filter(
+    (row) => !row.period_id || visiblePeriodIds.has(row.period_id),
+  );
+}
+
+function filterVisibleCommentRows(
+  commentRows: CommentRow[],
+  visibleExpenseIds: ReadonlySet<string>,
+): CommentRow[] {
+  return commentRows.filter((row) => visibleExpenseIds.has(row.expense_id));
+}
+
+function collectProcessedRequestIds(
+  expenseRows: ExpenseRow[],
+  commentRows: CommentRow[],
+  userId: string,
+): string[] {
+  return [
+    ...expenseRows
+      .filter((row) => row.user_id === userId)
+      .map((row) => row.client_request_id),
+    ...commentRows
+      .filter((row) => row.user_id === userId)
+      .map((row) => row.client_request_id),
+  ];
 }
 
 function firstObject(value: unknown): JsonObject | null {

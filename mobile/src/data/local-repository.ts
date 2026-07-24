@@ -23,12 +23,16 @@ import {
   createPeriodMemberPlan,
   createPeriodTimeline,
   createWeekdayCalendar,
+  createWeekdayCalendarFromPeriod,
   evaluateCommentMutationPermission,
   evaluateExpenseMutationPermission,
   evaluateExpenseEligibility,
+  generateInviteCode,
   getPeriodPhase,
   getWeekStart,
   isExpenseCategory,
+  isValidRoomCapacity,
+  isValidRoomName,
   isWeekday,
   normalizeCommentBody,
   resolveFirstWeekStart,
@@ -54,11 +58,6 @@ function clone<T>(value: T): T {
 
 function id(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function inviteCode(): string {
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
 function seoulStartOfDay(date: LocalDate): string {
@@ -94,13 +93,13 @@ export class LocalRepository implements AppRepository {
       if (duplicate) return clone(duplicate);
     }
     const name = input.name.trim();
-    if (!name || name.length > 40) throw new Error('방 이름은 1~40자로 입력해 주세요.');
+    if (!isValidRoomName(name)) throw new Error('방 이름은 1~40자로 입력해 주세요.');
     try {
       assertKrwAmount(input.baseAmount);
     } catch {
       throw new Error('기준금액은 1원 이상의 원 단위 정수로 입력해 주세요.');
     }
-    if (!Number.isInteger(input.capacity) || input.capacity < 1 || input.capacity > 10) {
+    if (!isValidRoomCapacity(input.capacity)) {
       throw new Error('정원은 1~10명으로 설정해 주세요.');
     }
 
@@ -110,7 +109,7 @@ export class LocalRepository implements AppRepository {
       id: id('room'),
       ownerId: state.currentUserId,
       name,
-      inviteCode: inviteCode(),
+      inviteCode: generateInviteCode(),
       baseAmount: input.baseAmount,
       capacity: input.capacity,
       status: 'OPEN',
@@ -131,20 +130,6 @@ export class LocalRepository implements AppRepository {
     this.upsertPeriodMember(state, room, period, state.currentUserId, today, now);
 
     if (input.clientRequestId) state.processedRequestIds.push(input.clientRequestId);
-    await this.persist();
-    return clone(room);
-  }
-
-  async increaseCapacity(roomId: string, capacity: number): Promise<Room> {
-    const state = await this.requireState();
-    const room = this.findRoom(state, roomId);
-    const activeCount = this.activeRoomMemberCount(state, roomId);
-    if (room.ownerId !== state.currentUserId) throw new Error('방장만 정원을 변경할 수 있어요.');
-    if (room.status === 'CLOSED') throw new Error('닫힌 방은 읽기 전용이에요.');
-    if (capacity < room.capacity) throw new Error('정원은 줄일 수 없고 늘리기만 할 수 있어요.');
-    if (capacity < activeCount) throw new Error('현재 참여자 수보다 정원을 줄일 수 없어요.');
-    if (capacity > 10) throw new Error('정원은 최대 10명이에요.');
-    room.capacity = capacity;
     await this.persist();
     return clone(room);
   }
@@ -225,57 +210,6 @@ export class LocalRepository implements AppRepository {
       participatesThisWeek: plan?.participatesThisWeek ?? false,
       canJoin: !existing && memberCount < room.capacity,
     };
-  }
-
-  async leaveRoom(roomId: string, successorUserId?: string): Promise<void> {
-    const state = await this.requireState();
-    const room = this.findRoom(state, roomId);
-    const member = state.roomMembers.find(
-      (item) => item.roomId === roomId && item.userId === state.currentUserId,
-    );
-    if (!member || member.status !== 'ACTIVE') throw new Error('참여 중인 방이 아니에요.');
-
-    if (member.role === 'OWNER') {
-      if (!successorUserId || successorUserId === state.currentUserId) {
-        throw new Error('방장이 나가려면 다른 참여자에게 방장을 넘겨야 해요.');
-      }
-      const successor = state.roomMembers.find(
-        (item) => item.roomId === roomId && item.userId === successorUserId && item.status === 'ACTIVE',
-      );
-      if (!successor) throw new Error('방장을 넘길 참여자를 찾을 수 없어요.');
-      member.role = 'MEMBER';
-      successor.role = 'OWNER';
-      room.ownerId = successorUserId;
-    }
-    member.status = 'LEFT';
-
-    // 시작 전 주차에서는 행을 제거하고, 진행 중 주차에서는 LEFT로 남긴다.
-    const now = Date.now();
-    state.periodMembers = state.periodMembers.filter((periodMember) => {
-      if (periodMember.userId !== state.currentUserId) return true;
-      const period = state.periods.find((item) => item.id === periodMember.periodId);
-      if (!period || period.roomId !== roomId) return true;
-      return now >= createPeriodTimeline(period.weekStart).S;
-    });
-    for (const periodMember of state.periodMembers) {
-      if (periodMember.userId !== state.currentUserId || periodMember.status !== 'ACTIVE') continue;
-      const period = state.periods.find((item) => item.id === periodMember.periodId);
-      if (!period || period.roomId !== roomId) continue;
-      const timeline = createPeriodTimeline(period.weekStart);
-      if (now >= timeline.S && now < timeline.E) periodMember.status = 'LEFT';
-    }
-    await this.persist();
-  }
-
-  async closeRoom(roomId: string): Promise<Room> {
-    const state = await this.requireState();
-    const room = this.findRoom(state, roomId);
-    if (room.ownerId !== state.currentUserId) throw new Error('방장만 방을 닫을 수 있어요.');
-    if (room.status === 'CLOSED') return clone(room);
-    room.status = 'CLOSED';
-    room.closedAt = new Date().toISOString();
-    await this.persist();
-    return clone(room);
   }
 
   async addExpense(input: AddExpenseInput): Promise<Expense> {
@@ -519,14 +453,7 @@ export class LocalRepository implements AppRepository {
   }
 
   private calendarOf(period: Period): WeekdayCalendar {
-    return createWeekdayCalendar({
-      weekStart: period.weekStart,
-      holidaySnapshot: createKoreanHolidaySnapshot({
-        version: period.holidayVersionId || 'demo-empty',
-        capturedAt: period.createdAt,
-        dates: period.holidayDates,
-      }),
-    });
+    return createWeekdayCalendarFromPeriod(period);
   }
 
   /** now가 E 이전인 최신 주차 (WAITING 또는 ACTIVE). */
