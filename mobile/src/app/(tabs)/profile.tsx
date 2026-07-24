@@ -1,80 +1,137 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { memo, useCallback, useMemo } from "react";
+import {
+  Pressable,
+  SectionList,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+  type SectionListRenderItemInfo,
+} from "react-native";
 
 import { GlassSurface } from "@/components/ui/glass-surface";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen } from "@/components/ui/screen";
+import { ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
 import { palette, radii, spacing } from "@/constants/design";
 import type { OfflineMutationSummary } from "@/data/offline-queue-repository";
-import { useAppActions, useAppData } from "@/providers/app-provider";
+import { useAppActions } from "@/providers/app-actions-provider";
+import {
+  useAppDataMode,
+  useCurrentUser,
+  useHistory,
+} from "@/providers/app-data-hooks";
 import { useAppDialog } from "@/providers/app-dialog-provider";
 import { useSession } from "@/providers/session-provider";
+import { useSyncQueue } from "@/providers/sync-provider";
 import {
-  DEFAULT_NOTIFICATION_PREFERENCES,
-  loadNotificationPreferences,
-  requestNotificationPermission,
-  saveNotificationPreferences,
+  useNotificationPreferences,
   type NotificationPreferences,
-} from "@/services/notification-service";
+} from "@/services/notification-preferences-store";
+import { requestNotificationPermission } from "@/services/notification-service";
+
+type ProfileListItem =
+  | {
+      key: string;
+      type: "setting";
+      icon: keyof typeof MaterialCommunityIcons.glyphMap;
+      label: string;
+      value?: string;
+      onPress: () => void;
+    }
+  | {
+      key: string;
+      type: "toggle";
+      icon: keyof typeof MaterialCommunityIcons.glyphMap;
+      label: string;
+      value: boolean;
+      onChange: (value: boolean) => void;
+    }
+  | {
+      key: string;
+      type: "sync";
+      operation: OfflineMutationSummary;
+    };
+
+type ProfileSection = {
+  key: string;
+  title: string;
+  data: ProfileListItem[];
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { currentUser, dataMode, pastPeriods, syncOperations } = useAppData();
+  const currentUser = useCurrentUser();
+  const { pastPeriods } = useHistory();
+  const dataMode = useAppDataMode();
+  const { resetDemo } = useAppActions();
   const {
-    discardSyncOperation,
-    getCopyableSyncError,
-    resetDemo,
-    retrySyncOperation,
-  } = useAppActions();
+    discardOperation: discardSyncOperation,
+    getCopyableError: getCopyableSyncError,
+    operations: syncOperations,
+    retryOperation: retrySyncOperation,
+  } = useSyncQueue();
   const { showDialog } = useAppDialog();
   const { requiresAuth, signOut } = useSession();
-  const [notifications, setNotifications] = useState<NotificationPreferences>(
-    DEFAULT_NOTIFICATION_PREFERENCES,
+  const {
+    preferences: notifications,
+    updatePreference,
+  } = useNotificationPreferences();
+
+  const updateNotifications = useCallback(
+    async (key: keyof NotificationPreferences, value: boolean) => {
+      if (value && !(await requestNotificationPermission())) {
+        showDialog(
+          "알림 권한이 필요해요",
+          "기기 설정에서 자린고비 알림을 허용해 주세요.",
+        );
+        return;
+      }
+      try {
+        await updatePreference(key, value);
+      } catch {
+        showDialog(
+          "알림 설정을 저장하지 못했어요",
+          "잠시 후 다시 시도해 주세요.",
+        );
+      }
+    },
+    [showDialog, updatePreference],
   );
 
-  useEffect(() => {
-    void loadNotificationPreferences().then(setNotifications);
-  }, []);
-
-  const updateNotifications = async (
-    key: keyof NotificationPreferences,
-    value: boolean,
-  ) => {
-    if (value && !(await requestNotificationPermission())) {
+  const copySyncError = useCallback(
+    async (operationId: string) => {
+      const message = await getCopyableSyncError(operationId);
+      if (!message) return;
+      await Clipboard.setStringAsync(message);
       showDialog(
-        "알림 권한이 필요해요",
-        "기기 설정에서 자린고비 알림을 허용해 주세요.",
+        "오류 내용을 복사했어요",
+        "고객지원 문의에 붙여 넣어 주세요.",
       );
-      return;
-    }
-    const next = { ...notifications, [key]: value };
-    setNotifications(next);
-    await saveNotificationPreferences(next);
-  };
+    },
+    [getCopyableSyncError, showDialog],
+  );
 
-  const copySyncError = async (operationId: string) => {
-    const message = await getCopyableSyncError(operationId);
-    if (!message) return;
-    await Clipboard.setStringAsync(message);
-    showDialog("오류 내용을 복사했어요", "고객지원 문의에 붙여 넣어 주세요.");
-  };
+  const runSyncAction = useCallback(
+    async (action: () => Promise<void>, fallback: string) => {
+      try {
+        await action();
+      } catch (reason) {
+        showDialog(
+          fallback,
+          reason instanceof Error
+            ? reason.message
+            : "동기화 작업을 처리하지 못했어요.",
+        );
+      }
+    },
+    [showDialog],
+  );
 
-  const runSyncAction = async (action: () => Promise<void>, fallback: string) => {
-    try {
-      await action();
-    } catch (reason) {
-      showDialog(
-        fallback,
-        reason instanceof Error ? reason.message : "동기화 작업을 처리하지 못했어요.",
-      );
-    }
-  };
-
-  const confirmSignOut = () => {
+  const confirmSignOut = useCallback(() => {
     const pending = syncOperations.length;
     showDialog(
       "로그아웃할까요?",
@@ -98,9 +155,9 @@ export default function ProfileScreen() {
         },
       ],
     );
-  };
+  }, [showDialog, signOut, syncOperations.length]);
 
-  const manageSyncOperation = (operation: (typeof syncOperations)[number]) => {
+  const manageSyncOperation = useCallback((operation: OfflineMutationSummary) => {
     const failureMessage = operation.failure?.message ?? "연결이 복구되면 자동으로 다시 시도합니다.";
     if (operation.status === "PENDING") {
       showDialog("동기화 대기 중", failureMessage);
@@ -163,131 +220,261 @@ export default function ProfileScreen() {
         },
       ],
     );
-  };
-
-  return (
-    <Screen testID="profile-screen">
-      <Text style={styles.title}>내 정보</Text>
-
-      <GlassSurface style={styles.profileCard}>
-        <Text style={styles.avatar}>{currentUser?.avatar ?? "🙂"}</Text>
-        <Text style={styles.name}>{currentUser?.nickname ?? "사용자"}</Text>
-      </GlassSurface>
-
-      <SectionHeader style={styles.sectionHeader} title="기록" variant="form" />
-      <SettingRow
-        icon="archive-outline"
-        label="지난 주차"
-        onPress={() => router.push("/history")}
-        value={`${pastPeriods.length}개`}
-      />
-
-      {syncOperations.length > 0 ? (
-        <>
-          <SectionHeader
-            style={styles.sectionHeader}
-            title="동기화"
-            variant="form"
+  }, [
+    copySyncError,
+    discardSyncOperation,
+    retrySyncOperation,
+    runSyncAction,
+    showDialog,
+  ]);
+  const sections = useMemo<ProfileSection[]>(() => [
+    {
+      key: "history",
+      title: "기록",
+      data: [
+        {
+          key: "history",
+          type: "setting",
+          icon: "archive-outline",
+          label: "지난 주차",
+          value: `${pastPeriods.length}개`,
+          onPress: () => router.push("/history"),
+        },
+      ],
+    },
+    ...(syncOperations.length
+      ? [
+          {
+            key: "sync",
+            title: "동기화",
+            data: syncOperations.map(
+              (operation): ProfileListItem => ({
+                key: operation.operationId,
+                type: "sync",
+                operation,
+              }),
+            ),
+          },
+        ]
+      : []),
+    {
+      key: "notifications",
+      title: "알림",
+      data: [
+        {
+          key: "social-events",
+          type: "toggle",
+          icon: "message-reply-text-outline",
+          label: "댓글·답글",
+          value: notifications.socialEvents,
+          onChange: (value) =>
+            void updateNotifications("socialEvents", value),
+        },
+        {
+          key: "period-events",
+          type: "toggle",
+          icon: "bell-outline",
+          label: "시작·보정·정산",
+          value: notifications.periodEvents,
+          onChange: (value) =>
+            void updateNotifications("periodEvents", value),
+        },
+      ],
+    },
+    {
+      key: "safety",
+      title: "안전과 데이터",
+      data: [
+        {
+          key: "block-report",
+          type: "setting",
+          icon: "shield-check-outline",
+          label: "차단·신고 관리",
+          onPress: () =>
+            showDialog(
+              "준비된 정책",
+              "차단한 멤버의 금액은 유지하고 사진·댓글만 흐림 처리합니다.",
+            ),
+        },
+        {
+          key: "privacy",
+          type: "setting",
+          icon: "file-document-outline",
+          label: "개인정보 및 보관 정책",
+          onPress: () =>
+            showDialog(
+              "보관 정책",
+              "완료 기록은 읽기 전용으로 보관하며 삭제 요청 시 콘텐츠를 비식별화합니다.",
+            ),
+        },
+      ],
+    },
+    ...(requiresAuth
+      ? [
+          {
+            key: "account",
+            title: "계정",
+            data: [
+              {
+                key: "sign-out",
+                type: "setting" as const,
+                icon: "logout" as const,
+                label: "로그아웃",
+                onPress: confirmSignOut,
+              },
+            ],
+          },
+        ]
+      : []),
+  ], [
+    confirmSignOut,
+    notifications.periodEvents,
+    notifications.socialEvents,
+    pastPeriods.length,
+    requiresAuth,
+    router,
+    showDialog,
+    syncOperations,
+    updateNotifications,
+  ]);
+  const renderProfileItem = useCallback(
+    ({
+      item,
+    }: SectionListRenderItemInfo<ProfileListItem, ProfileSection>) => {
+      if (item.type === "sync") {
+        return (
+          <SyncOperationRow
+            onPress={manageSyncOperation}
+            operation={item.operation}
           />
-          {syncOperations.map((operation) => (
-            <Pressable
-              accessibilityHint="동기화 실패 이유와 해결 방법을 확인합니다"
-              accessibilityRole="button"
-              key={operation.operationId}
-              onPress={() => manageSyncOperation(operation)}
-              style={styles.row}
-              testID={`sync-operation-${operation.operationId}`}>
-              <MaterialCommunityIcons
-                color={operation.status === "FAILED" ? palette.danger : palette.green}
-                name={operation.status === "FAILED" ? "cloud-alert-outline" : "cloud-sync-outline"}
-                size={21}
-              />
-              <View style={styles.syncText}>
-                <Text style={styles.rowLabel}>{syncOperationLabel(operation.kind)}</Text>
-                <Text style={styles.syncStatus}>
-                  {operation.status === "FAILED" ? "동기화 실패 · 눌러서 해결" : "동기화 대기"}
-                </Text>
-              </View>
-              <MaterialCommunityIcons color={palette.muted} name="chevron-right" size={20} />
-            </Pressable>
-          ))}
-        </>
-      ) : null}
-
-      <SectionHeader style={styles.sectionHeader} title="알림" variant="form" />
-      <ToggleRow
-        icon="message-reply-text-outline"
-        label="댓글·답글"
-        onChange={(value) => void updateNotifications("socialEvents", value)}
-        value={notifications.socialEvents}
-      />
-      <ToggleRow
-        icon="bell-outline"
-        label="시작·보정·정산"
-        onChange={(value) => void updateNotifications("periodEvents", value)}
-        value={notifications.periodEvents}
-      />
-
+        );
+      }
+      if (item.type === "toggle") {
+        return (
+          <ToggleRow
+            icon={item.icon}
+            label={item.label}
+            onChange={item.onChange}
+            value={item.value}
+          />
+        );
+      }
+      return (
+        <SettingRow
+          icon={item.icon}
+          label={item.label}
+          onPress={item.onPress}
+          value={item.value}
+        />
+      );
+    },
+    [manageSyncOperation],
+  );
+  const renderProfileSectionHeader = useCallback(
+    ({ section }: { section: ProfileSection }) => (
       <SectionHeader
         style={styles.sectionHeader}
-        title="안전과 데이터"
+        title={section.title}
         variant="form"
       />
-      <SettingRow
-        icon="shield-check-outline"
-        label="차단·신고 관리"
-        onPress={() =>
-          showDialog(
-            "준비된 정책",
-            "차단한 멤버의 금액은 유지하고 사진·댓글만 흐림 처리합니다.",
-          )
-        }
-      />
-      <SettingRow
-        icon="file-document-outline"
-        label="개인정보 및 보관 정책"
-        onPress={() =>
-          showDialog(
-            "보관 정책",
-            "완료 기록은 읽기 전용으로 보관하며 삭제 요청 시 콘텐츠를 비식별화합니다.",
-          )
-        }
-      />
+    ),
+    [],
+  );
 
-      {requiresAuth ? (
-        <>
-          <SectionHeader
-            style={styles.sectionHeader}
-            title="계정"
-            variant="form"
-          />
-          <SettingRow icon="logout" label="로그아웃" onPress={confirmSignOut} />
-        </>
-      ) : null}
-
-      {dataMode === "demo" ? <View style={styles.resetSection}>
-        <PrimaryButton
-          label="데모 데이터 초기화"
-          onPress={() =>
-            showDialog(
-              "초기화할까요?",
-              "앱의 로컬 데모 기록을 처음 상태로 되돌립니다.",
-              [
-                { text: "취소", style: "cancel" },
-                {
-                  text: "초기화",
-                  style: "destructive",
-                  onPress: () => void resetDemo(),
-                },
-              ],
-            )
-          }
-          variant="secondary"
-        />
-      </View> : null}
-    </Screen>
+  return (
+    <ScreenFrame testID="profile-screen">
+      <SectionList
+        contentContainerStyle={styles.content}
+        keyExtractor={(item) => item.key}
+        ListFooterComponent={
+          dataMode === "demo" ? (
+            <View style={styles.resetSection}>
+              <PrimaryButton
+                label="데모 데이터 초기화"
+                onPress={() =>
+                  showDialog(
+                    "초기화할까요?",
+                    "앱의 로컬 데모 기록을 처음 상태로 되돌립니다.",
+                    [
+                      { text: "취소", style: "cancel" },
+                      {
+                        text: "초기화",
+                        style: "destructive",
+                        onPress: () => void resetDemo(),
+                      },
+                    ],
+                  )
+                }
+                variant="secondary"
+              />
+            </View>
+          ) : null
+        }
+        ListHeaderComponent={
+          <>
+            <Text style={styles.title}>내 정보</Text>
+            <GlassSurface style={styles.profileCard}>
+              <Text style={styles.avatar}>{currentUser?.avatar ?? "🙂"}</Text>
+              <Text style={styles.name}>
+                {currentUser?.nickname ?? "사용자"}
+              </Text>
+            </GlassSurface>
+          </>
+        }
+        renderItem={renderProfileItem}
+        renderSectionHeader={renderProfileSectionHeader}
+        sections={sections}
+        showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
+      />
+    </ScreenFrame>
   );
 }
+
+const SyncOperationRow = memo(function SyncOperationRow({
+  onPress,
+  operation,
+}: {
+  onPress: (operation: OfflineMutationSummary) => void;
+  operation: OfflineMutationSummary;
+}) {
+  return (
+    <Pressable
+      accessibilityHint="동기화 실패 이유와 해결 방법을 확인합니다"
+      accessibilityRole="button"
+      onPress={() => onPress(operation)}
+      style={styles.row}
+      testID={`sync-operation-${operation.operationId}`}
+    >
+      <MaterialCommunityIcons
+        color={
+          operation.status === "FAILED" ? palette.danger : palette.green
+        }
+        name={
+          operation.status === "FAILED"
+            ? "cloud-alert-outline"
+            : "cloud-sync-outline"
+        }
+        size={21}
+      />
+      <View style={styles.syncText}>
+        <Text style={styles.rowLabel}>
+          {syncOperationLabel(operation.kind)}
+        </Text>
+        <Text style={styles.syncStatus}>
+          {operation.status === "FAILED"
+            ? "동기화 실패 · 눌러서 해결"
+            : "동기화 대기"}
+        </Text>
+      </View>
+      <MaterialCommunityIcons
+        color={palette.muted}
+        name="chevron-right"
+        size={20}
+      />
+    </Pressable>
+  );
+});
 
 function syncOperationLabel(kind: OfflineMutationSummary["kind"]): string {
   const labels = {
@@ -301,7 +488,7 @@ function syncOperationLabel(kind: OfflineMutationSummary["kind"]): string {
   return labels[kind];
 }
 
-function SettingRow({
+const SettingRow = memo(function SettingRow({
   icon,
   label,
   value,
@@ -324,9 +511,9 @@ function SettingRow({
       />
     </Pressable>
   );
-}
+});
 
-function ToggleRow({
+const ToggleRow = memo(function ToggleRow({
   icon,
   label,
   value,
@@ -350,9 +537,14 @@ function ToggleRow({
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 120,
+  },
   title: {
     color: palette.ink,
     fontSize: 30,
