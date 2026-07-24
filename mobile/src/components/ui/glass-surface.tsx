@@ -1,8 +1,11 @@
-import { useEffect, useState, type PropsWithChildren } from 'react';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { type PropsWithChildren } from 'react';
+import {
+  GlassView,
+  isGlassEffectAPIAvailable,
+  isLiquidGlassAvailable,
+} from 'expo-glass-effect';
 import { BlurView } from 'expo-blur';
 import {
-  AccessibilityInfo,
   Platform,
   StyleSheet,
   View,
@@ -12,6 +15,7 @@ import {
 } from 'react-native';
 
 import { palette, radii, shadow } from '@/constants/design';
+import { useReduceTransparency } from '@/hooks/use-reduce-transparency';
 
 type GlassSurfaceProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
@@ -27,6 +31,11 @@ const webBackdropStyle = {
   WebkitBackdropFilter: 'blur(24px) saturate(150%)',
 } as unknown as ViewStyle;
 
+const liquidGlassAvailable =
+  Platform.OS === 'ios' &&
+  isLiquidGlassAvailable() &&
+  isGlassEffectAPIAvailable();
+
 export function GlassSurface({
   children,
   style,
@@ -36,7 +45,7 @@ export function GlassSurface({
   accessibilityLabel,
   accessibilityRole,
 }: GlassSurfaceProps) {
-  const [reduceTransparency, setReduceTransparency] = useState(false);
+  const reduceTransparency = useReduceTransparency();
   const surfaceStyle = [styles.base, style];
   const accessibilityProps = { accessible, accessibilityLabel, accessibilityRole, testID };
   const content = (
@@ -57,24 +66,6 @@ export function GlassSurface({
     </>
   );
 
-  useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-
-    let mounted = true;
-    void AccessibilityInfo.isReduceTransparencyEnabled()
-      .then((enabled) => {
-        if (mounted) setReduceTransparency(enabled);
-      })
-      .catch(() => {
-        if (mounted) setReduceTransparency(false);
-      });
-    const subscription = AccessibilityInfo.addEventListener('reduceTransparencyChanged', setReduceTransparency);
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
-
   if (reduceTransparency) {
     return (
       <View {...accessibilityProps} style={[surfaceStyle, styles.opaqueFallback]}>
@@ -83,7 +74,7 @@ export function GlassSurface({
     );
   }
 
-  if (Platform.OS === 'ios' && isLiquidGlassAvailable()) {
+  if (liquidGlassAvailable) {
     return (
       <GlassView
         {...accessibilityProps}
