@@ -54,33 +54,6 @@ export function ChoiceChip({
   );
 }
 
-export function ActionChip({ label, icon, onPress, style }: ChipBaseProps) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        styles.action,
-        pressed && styles.pressed,
-        style,
-      ]}
-    >
-      {icon ? (
-        <MaterialCommunityIcons
-          accessibilityElementsHidden
-          color={palette.green}
-          importantForAccessibility="no"
-          name={icon}
-          size={18}
-        />
-      ) : null}
-      <Text style={styles.label}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   chip: {
     minHeight: 36,
@@ -94,10 +67,6 @@ const styles = StyleSheet.create({
     borderColor: palette.line,
     borderRadius: radii.pill,
     backgroundColor: "rgba(255,255,255,0.44)",
-  },
-  action: {
-    borderColor: palette.green,
-    backgroundColor: "rgba(255,255,255,0.48)",
   },
   selected: { borderColor: palette.green, backgroundColor: palette.green },
   label: { color: palette.green, fontSize: 12, fontWeight: "600" },
