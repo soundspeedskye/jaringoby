@@ -1,17 +1,27 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
-import * as ImageManipulator from "expo-image-manipulator";
-import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type ListRenderItemInfo,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -22,7 +32,7 @@ import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen } from "@/components/ui/screen";
+import { Screen, ScreenFrame } from "@/components/ui/screen";
 import { palette, radii, spacing } from "@/constants/design";
 import type {
   AddCommentInput,
@@ -34,19 +44,32 @@ import type {
   Room,
 } from "@/data/types";
 import {
+  COMMENT_EDIT_WINDOW_MS,
+  COMMENT_MAX_CHARACTERS,
   createCommentCommand,
   createPeriodTimeline,
   EXPENSE_CATEGORIES,
   getPeriodPhase,
+  isCommentMutationPhase,
+  isExpenseMutationPhase,
   prepareReplyDraft,
   validateCommentBody,
   type PeriodPhase,
   type ExpenseCategory,
   type ReplyDraft,
 } from "@/domain";
-import { useAppActions, useAppData } from "@/providers/app-provider";
+import { useAppActions } from "@/providers/app-actions-provider";
+import {
+  useCurrentUser,
+  useExpense,
+  useExpenseComments,
+  usePeriod,
+  useProfiles,
+  useRoom,
+} from "@/providers/app-data-hooks";
 import { useAppDialog } from "@/providers/app-dialog-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
+import { pickSanitizedExpensePhoto } from "@/services/expense-photo-picker";
 import { formatDateLabel, formatWon } from "@/utils/format";
 import { createUuid } from "@/utils/uuid";
 
@@ -63,24 +86,13 @@ export default function ExpenseDetailScreen() {
     updateComment,
     updateExpense,
   } = useAppActions();
-  const {
-    currentUser,
-    getComments,
-    getExpense,
-    getPeriod,
-    getProfile,
-    getRoom,
-    snapshot,
-  } = useAppData();
+  const currentUser = useCurrentUser();
   // 저장 직후 오프라인 큐가 낙관적 ID를 서버 ID로 교체하면 라우트의 id로는
   // 더 이상 찾을 수 없다. 교체 전후로 불변인 멱등 키(rid)로 폴백 조회한다.
-  const expense =
-    (expenseId ? getExpense(expenseId) : undefined) ??
-    (requestId
-      ? snapshot?.expenses.find((item) => item.clientRequestId === requestId)
-      : undefined);
-  const period = expense?.periodId ? getPeriod(expense.periodId) : undefined;
-  const room = period ? getRoom(period.roomId) : undefined;
+  const expense = useExpense(expenseId, requestId);
+  const period = usePeriod(expense?.periodId);
+  const room = useRoom(period?.roomId);
+  const expenseComments = useExpenseComments(expense?.id);
   const timeline = useMemo(
     () => (period ? createPeriodTimeline(period.weekStart) : null),
     [period],
@@ -92,21 +104,21 @@ export default function ExpenseDetailScreen() {
   const comments = useMemo(
     () =>
       expense
-        ? [...getComments(expense.id)].sort(
+        ? [...expenseComments].sort(
             (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt),
           )
         : [],
-    [expense, getComments],
+    [expense, expenseComments],
   );
-  const profilesById = useMemo(() => {
-    const profiles = new Map<string, Profile>();
-    comments.forEach((comment) => {
-      const profile = getProfile(comment.userId);
-      if (profile) profiles.set(profile.id, profile);
-    });
-    return profiles;
-  }, [comments, getProfile]);
-  const author = expense ? getProfile(expense.userId) : undefined;
+  const profileUserIds = useMemo(
+    () => [
+      ...(expense ? [expense.userId] : []),
+      ...comments.map((comment) => comment.userId),
+    ],
+    [comments, expense],
+  );
+  const profilesById = useProfiles(profileUserIds);
+  const author = expense ? profilesById.get(expense.userId) : undefined;
   const phase = timeline
     ? getPeriodPhase(timeline, renderedAt)
     : null;
@@ -114,10 +126,9 @@ export default function ExpenseDetailScreen() {
     expense &&
     currentUser &&
     expense.userId === currentUser.id &&
-    (phase === "ACTIVE" || phase === "ADJUSTMENT"),
+    phase && isExpenseMutationPhase(phase),
   );
-  const canMutateComments =
-    phase === "ACTIVE" || phase === "ADJUSTMENT" || phase === "SETTLEMENT";
+  const canMutateComments = phase ? isCommentMutationPhase(phase) : false;
   const [editingExpense, setEditingExpense] = useState(false);
   const [expenseError, setExpenseError] = useState<string | null>(null);
 
@@ -168,58 +179,7 @@ export default function ExpenseDetailScreen() {
   };
 
   return (
-    <Screen testID="expense-detail-screen">
-      <PageHeader onBack={() => router.back()} title="지출 상세" />
-
-      {phase === "ARCHIVED" ? (
-        <NoticeBanner icon="archive-lock-outline" style={styles.readOnlyBanner}>
-          완료된 챌린지의 읽기 전용 기록이에요.
-        </NoticeBanner>
-      ) : phase === "SETTLEMENT" ? (
-        <NoticeBanner
-          icon="calculator-variant-outline"
-          style={styles.readOnlyBanner}
-        >
-          정산 중이라 지출은 잠겼지만 댓글은 남길 수 있어요.
-        </NoticeBanner>
-      ) : null}
-
-      <ExpenseSummary author={author} period={period} room={room} expense={expense} />
-
-      {canMutateExpense && !editingExpense ? (
-        <View style={styles.expenseActions}>
-          <PrimaryButton
-            label="내 지출 수정"
-            onPress={() => {
-              setExpenseError(null);
-              setEditingExpense(true);
-            }}
-            variant="secondary"
-            style={styles.flexButton}
-          />
-          <Pressable
-            accessibilityRole="button"
-            onPress={removeExpense}
-            style={styles.deleteExpenseButton}
-          >
-            <MaterialCommunityIcons
-              color={palette.danger}
-              name="trash-can-outline"
-              size={20}
-            />
-          </Pressable>
-        </View>
-      ) : null}
-
-      {editingExpense ? (
-        <ExpenseEditor
-          expense={expense}
-          onClose={() => setEditingExpense(false)}
-          updateExpense={updateExpense}
-        />
-      ) : null}
-
-      <FormMessage message={expenseError} style={styles.threadError} />
+    <ScreenFrame testID="expense-detail-screen">
       <CommentSection
         addComment={addComment}
         canMutate={canMutateComments}
@@ -227,11 +187,77 @@ export default function ExpenseDetailScreen() {
         currentUserId={currentUser?.id}
         deleteComment={deleteComment}
         expenseId={expense.id}
+        header={
+          <>
+            <PageHeader onBack={() => router.back()} title="지출 상세" />
+
+            {phase === "ARCHIVED" ? (
+              <NoticeBanner
+                icon="archive-lock-outline"
+                style={styles.readOnlyBanner}
+              >
+                완료된 챌린지의 읽기 전용 기록이에요.
+              </NoticeBanner>
+            ) : phase === "SETTLEMENT" ? (
+              <NoticeBanner
+                icon="calculator-variant-outline"
+                style={styles.readOnlyBanner}
+              >
+                정산 중이라 지출은 잠겼지만 댓글은 남길 수 있어요.
+              </NoticeBanner>
+            ) : null}
+
+            <ExpenseSummary
+              author={author}
+              expense={expense}
+              period={period}
+              room={room}
+            />
+
+            {canMutateExpense && !editingExpense ? (
+              <View style={styles.expenseActions}>
+                <PrimaryButton
+                  label="내 지출 수정"
+                  onPress={() => {
+                    setExpenseError(null);
+                    setEditingExpense(true);
+                  }}
+                  style={styles.flexButton}
+                  variant="secondary"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={removeExpense}
+                  style={styles.deleteExpenseButton}
+                >
+                  <MaterialCommunityIcons
+                    color={palette.danger}
+                    name="trash-can-outline"
+                    size={20}
+                  />
+                </Pressable>
+              </View>
+            ) : null}
+
+            {editingExpense ? (
+              <ExpenseEditor
+                expense={expense}
+                onClose={() => setEditingExpense(false)}
+                updateExpense={updateExpense}
+              />
+            ) : null}
+
+            <FormMessage
+              message={expenseError}
+              style={styles.threadError}
+            />
+          </>
+        }
         phase={phase}
         profilesById={profilesById}
         updateComment={updateComment}
       />
-    </Screen>
+    </ScreenFrame>
   );
 }
 
@@ -316,27 +342,9 @@ function ExpenseEditor({
 
   const replacePhoto = async () => {
     try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setError("사진 보관함 권한이 필요해요.");
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        allowsMultipleSelection: false,
-        exif: false,
-        mediaTypes: ["images"],
-        quality: 0.78,
-      });
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        const sanitized = await ImageManipulator.manipulateAsync(
-          asset.uri,
-          asset.width > 1_600 ? [{ resize: { width: 1_600 } }] : [],
-          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
-        );
-        setDraftPhoto(sanitized.uri);
+      const result = await pickSanitizedExpensePhoto("library");
+      if (result.status === "selected") {
+        setDraftPhoto(result.uri);
       }
     } catch (reason) {
       setError(
@@ -464,6 +472,7 @@ function CommentSection({
   currentUserId,
   deleteComment,
   expenseId,
+  header,
   phase,
   profilesById,
   updateComment,
@@ -472,6 +481,7 @@ function CommentSection({
   comments: Comment[];
   currentUserId?: string;
   expenseId: string;
+  header: ReactNode;
   phase: PeriodPhase | null;
   profilesById: ReadonlyMap<string, Profile>;
 }) {
@@ -491,7 +501,7 @@ function CommentSection({
           (comment) =>
             comment.userId === currentUserId && !comment.deletedAt,
         )
-        .map((comment) => Date.parse(comment.createdAt) + 5 * 60 * 1_000),
+        .map((comment) => Date.parse(comment.createdAt) + COMMENT_EDIT_WINDOW_MS),
     [comments, currentUserId],
   );
   const renderedAt = useDeadlineNow(editDeadlines, canMutate);
@@ -516,101 +526,219 @@ function CommentSection({
     },
     [profilesById],
   );
-  const beginEdit = useCallback((commentId: string) => {
-    setEditingCommentId(commentId);
+  const beginEdit = useCallback((comment: Comment) => {
+    setEditingCommentId(comment.id);
   }, []);
   const finishEdit = useCallback(() => {
     setEditingCommentId(null);
   }, []);
+  const renderComment = useCallback(
+    ({ item: comment }: ListRenderItemInfo<Comment>) => {
+      const replied = comment.replyToId
+        ? commentsById.get(comment.replyToId)
+        : undefined;
+      const canEdit =
+        comment.userId === currentUserId &&
+        !comment.deletedAt &&
+        renderedAt < Date.parse(comment.createdAt) + COMMENT_EDIT_WINDOW_MS;
+      return (
+        <CommentItem
+          canEdit={canEdit}
+          canMutate={canMutate}
+          comment={comment}
+          currentUserId={currentUserId}
+          deleteComment={deleteComment}
+          editing={editingCommentId === comment.id && canMutate && canEdit}
+          onBeginEdit={beginEdit}
+          onError={setError}
+          onFeedback={setFeedback}
+          onFinishEdit={finishEdit}
+          onReply={selectReply}
+          profile={profilesById.get(comment.userId)}
+          replied={replied}
+          repliedProfile={
+            replied ? profilesById.get(replied.userId) : undefined
+          }
+          updateComment={updateComment}
+        />
+      );
+    },
+    [
+      beginEdit,
+      canMutate,
+      commentsById,
+      currentUserId,
+      deleteComment,
+      editingCommentId,
+      finishEdit,
+      profilesById,
+      renderedAt,
+      selectReply,
+      updateComment,
+    ],
+  );
 
   return (
-    <>
-      <View style={styles.threadHeader}>
-        <View>
-          <Text style={styles.threadTitle}>댓글 {commentCount}</Text>
-          <Text style={styles.threadRule}>
-            메시지를 길게 눌러 답글·복사 · 본인 댓글은 작성 후 5분 내 수정
-          </Text>
-        </View>
-        <MaterialCommunityIcons
-          color={palette.greenSoft}
-          name="message-text-outline"
-          size={23}
-        />
-      </View>
-
-      <View accessibilityLabel="지출 댓글 대화" style={styles.messages}>
-        {comments.length ? (
-          comments.map((comment) => {
-            const replied = comment.replyToId
-              ? commentsById.get(comment.replyToId)
-              : undefined;
-            const canEdit =
-              comment.userId === currentUserId &&
-              !comment.deletedAt &&
-              renderedAt < Date.parse(comment.createdAt) + 5 * 60 * 1_000;
-            return (
-              <CommentItem
-                canEdit={canEdit}
-                canMutate={canMutate}
-                comment={comment}
-                currentUserId={currentUserId}
-                deleteComment={deleteComment}
-                editing={
-                  editingCommentId === comment.id && canMutate && canEdit
-                }
-                key={comment.id}
-                onBeginEdit={beginEdit}
-                onError={setError}
-                onFeedback={setFeedback}
-                onFinishEdit={finishEdit}
-                onReply={selectReply}
-                profile={profilesById.get(comment.userId)}
-                replied={replied}
-                repliedProfile={
-                  replied ? profilesById.get(replied.userId) : undefined
-                }
-                updateComment={updateComment}
-              />
-            );
-          })
-        ) : (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.commentScreen}
+    >
+      <FlatList
+        accessibilityLabel="지출 댓글 대화"
+        contentContainerStyle={styles.commentListContent}
+        data={comments}
+        keyboardShouldPersistTaps="handled"
+        keyExtractor={(comment) => comment.id}
+        ListEmptyComponent={
           <EmptyState
             title="아직 댓글이 없어요. 첫 응원을 남겨 보세요."
             variant="compact"
           />
+        }
+        ListHeaderComponent={
+          <>
+            {header}
+            <View style={styles.threadHeader}>
+              <View>
+                <Text style={styles.threadTitle}>댓글 {commentCount}</Text>
+                <Text style={styles.threadRule}>
+                  메시지를 길게 눌러 답글·복사 · 본인 댓글은 작성 후 5분 내
+                  수정
+                </Text>
+              </View>
+              <MaterialCommunityIcons
+                color={palette.greenSoft}
+                name="message-text-outline"
+                size={23}
+              />
+            </View>
+          </>
+        }
+        ItemSeparatorComponent={CommentSeparator}
+        renderItem={renderComment}
+        showsVerticalScrollIndicator={false}
+      />
+
+      <CommentComposerDock
+        addComment={addComment}
+        canMutate={canMutate}
+        error={error}
+        expenseId={expenseId}
+        feedback={feedback}
+        inputRef={composerRef}
+        onError={setError}
+        onFeedback={setFeedback}
+        onReplyChange={setReplyDraft}
+        phase={phase}
+        replyDraft={replyDraft}
+      />
+    </KeyboardAvoidingView>
+  );
+}
+
+function CommentComposerDock({
+  addComment,
+  canMutate,
+  error,
+  expenseId,
+  feedback,
+  inputRef,
+  onError,
+  onFeedback,
+  onReplyChange,
+  phase,
+  replyDraft,
+}: Pick<CommentActionProps, "addComment"> & {
+  canMutate: boolean;
+  error: string | null;
+  expenseId: string;
+  feedback: string | null;
+  inputRef: React.RefObject<TextInput | null>;
+  onError: (message: string | null) => void;
+  onFeedback: (message: string | null) => void;
+  onReplyChange: (replyDraft: ReplyDraft | null) => void;
+  phase: PeriodPhase | null;
+  replyDraft: ReplyDraft | null;
+}) {
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [clientRequestId, setClientRequestId] = useState(createUuid);
+  const sendComment = useCallback(async () => {
+    onError(null);
+    try {
+      const command = createCommentCommand(body, replyDraft);
+      setSending(true);
+      await addComment({
+        expenseId,
+        body: command.body,
+        replyToId: command.replyToMessageId ?? undefined,
+        clientRequestId,
+      });
+      setBody("");
+      onReplyChange(null);
+      onFeedback(null);
+      setClientRequestId(createUuid());
+    } catch (reason) {
+      onError(
+        reason instanceof Error
+          ? reason.message
+          : "댓글을 보내지 못했어요. 다시 시도해 주세요.",
+      );
+    } finally {
+      setSending(false);
+    }
+  }, [
+    addComment,
+    body,
+    clientRequestId,
+    expenseId,
+    onError,
+    onFeedback,
+    onReplyChange,
+    replyDraft,
+  ]);
+
+  return (
+    <SafeAreaView edges={["bottom"]} style={styles.composerSafeArea}>
+      <View style={styles.composerDock}>
+        <FormMessage
+          message={feedback}
+          style={styles.feedback}
+          tone="success"
+        />
+        <FormMessage message={error} style={styles.threadError} />
+
+        {canMutate ? (
+          <CommentComposer
+            body={body}
+            inputRef={inputRef}
+            onBodyChange={setBody}
+            onReplyChange={onReplyChange}
+            onSend={sendComment}
+            replyDraft={replyDraft}
+            sending={sending}
+          />
+        ) : (
+          <View style={styles.closedComposer}>
+            <MaterialCommunityIcons
+              color={palette.muted}
+              name="lock-outline"
+              size={17}
+            />
+            <Text style={styles.closedComposerText}>
+              {phase === "WAITING"
+                ? "챌린지가 시작되면 댓글을 남길 수 있어요."
+                : "완료된 대화는 읽기 전용으로 보관돼요."}
+            </Text>
+          </View>
         )}
       </View>
-
-      <FormMessage message={feedback} style={styles.feedback} tone="success" />
-      <FormMessage message={error} style={styles.threadError} />
-
-      {canMutate ? (
-        <CommentComposer
-          addComment={addComment}
-          expenseId={expenseId}
-          inputRef={composerRef}
-          onError={setError}
-          onFeedback={setFeedback}
-          onReplyChange={setReplyDraft}
-          replyDraft={replyDraft}
-        />
-      ) : (
-        <View style={styles.closedComposer}>
-          <MaterialCommunityIcons
-            color={palette.muted}
-            name="lock-outline"
-            size={17}
-          />
-          <Text style={styles.closedComposerText}>
-            {phase === "WAITING"
-              ? "챌린지가 시작되면 댓글을 남길 수 있어요."
-              : "완료된 대화는 읽기 전용으로 보관돼요."}
-          </Text>
-        </View>
-      )}
-    </>
+    </SafeAreaView>
   );
+}
+
+function CommentSeparator() {
+  return <View style={styles.commentSeparator} />;
 }
 
 const CommentItem = memo(function CommentItem({
@@ -635,7 +763,7 @@ const CommentItem = memo(function CommentItem({
   comment: Comment;
   currentUserId?: string;
   editing: boolean;
-  onBeginEdit: (commentId: string) => void;
+  onBeginEdit: (comment: Comment) => void;
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
   onFinishEdit: () => void;
@@ -645,8 +773,8 @@ const CommentItem = memo(function CommentItem({
   repliedProfile?: Profile;
 }) {
   const { showDialog } = useAppDialog();
-  const mine = comment.userId === currentUserId;
   const [editingBody, setEditingBody] = useState(comment.body);
+  const mine = comment.userId === currentUserId;
 
   const copyMessage = useCallback(async () => {
     if (comment.deletedAt) return;
@@ -672,7 +800,7 @@ const CommentItem = memo(function CommentItem({
     if (!validation.valid) {
       onError(
         validation.reason === "TOO_LONG"
-          ? "댓글은 앞뒤 공백을 제외하고 500자까지 입력할 수 있어요."
+          ? `댓글은 앞뒤 공백을 제외하고 ${COMMENT_MAX_CHARACTERS}자까지 입력할 수 있어요.`
           : "댓글 내용을 입력해 주세요.",
       );
       return;
@@ -745,7 +873,7 @@ const CommentItem = memo(function CommentItem({
           {editing ? (
             <TextInput
               autoFocus
-              maxLength={500}
+              maxLength={COMMENT_MAX_CHARACTERS}
               multiline
               onChangeText={setEditingBody}
               style={styles.editCommentInput}
@@ -793,7 +921,7 @@ const CommentItem = memo(function CommentItem({
               <Pressable
                 onPress={() => {
                   setEditingBody(comment.body);
-                  onBeginEdit(comment.id);
+                  onBeginEdit(comment);
                 }}
               >
                 <Text style={styles.commentAction}>수정</Text>
@@ -810,50 +938,23 @@ const CommentItem = memo(function CommentItem({
 });
 
 const CommentComposer = memo(function CommentComposer({
-  addComment,
-  expenseId,
+  body,
   inputRef,
-  onError,
-  onFeedback,
+  onBodyChange,
   onReplyChange,
+  onSend,
   replyDraft,
-}: Pick<CommentActionProps, "addComment"> & {
-  expenseId: string;
+  sending,
+}: {
+  body: string;
   inputRef: React.RefObject<TextInput | null>;
-  onError: (message: string | null) => void;
-  onFeedback: (message: string | null) => void;
+  onBodyChange: (body: string) => void;
   onReplyChange: (replyDraft: ReplyDraft | null) => void;
+  onSend: () => Promise<void>;
   replyDraft: ReplyDraft | null;
+  sending: boolean;
 }) {
-  const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const [clientRequestId, setClientRequestId] = useState(createUuid);
   const bodyValid = validateCommentBody(body).valid;
-  const send = async () => {
-    onError(null);
-    try {
-      const command = createCommentCommand(body, replyDraft);
-      setSending(true);
-      await addComment({
-        expenseId,
-        body: command.body,
-        replyToId: command.replyToMessageId ?? undefined,
-        clientRequestId,
-      });
-      setBody("");
-      onReplyChange(null);
-      onFeedback(null);
-      setClientRequestId(createUuid());
-    } catch (reason) {
-      onError(
-        reason instanceof Error
-          ? reason.message
-          : "댓글을 보내지 못했어요. 다시 시도해 주세요.",
-      );
-    } finally {
-      setSending(false);
-    }
-  };
 
   return (
     <GlassSurface
@@ -891,9 +992,9 @@ const CommentComposer = memo(function CommentComposer({
       <View style={styles.composerRow}>
         <TextInput
           accessibilityLabel="댓글 입력"
-          maxLength={500}
+          maxLength={COMMENT_MAX_CHARACTERS}
           multiline
-          onChangeText={setBody}
+          onChangeText={onBodyChange}
           placeholder="응원이나 피드백을 남겨요"
           placeholderTextColor={palette.muted}
           ref={inputRef}
@@ -903,7 +1004,7 @@ const CommentComposer = memo(function CommentComposer({
         <Pressable
           accessibilityLabel="댓글 보내기"
           disabled={sending || !bodyValid}
-          onPress={() => void send()}
+          onPress={() => void onSend()}
           style={[
             styles.sendButton,
             (sending || !bodyValid) && styles.sendButtonDisabled,
@@ -969,6 +1070,20 @@ function formatFullDate(value: Date): string {
 }
 
 const styles = StyleSheet.create({
+  commentScreen: { flex: 1 },
+  commentListContent: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
+  composerSafeArea: { backgroundColor: palette.cream },
+  composerDock: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.line,
+    backgroundColor: palette.cream,
+  },
   readOnlyBanner: { marginBottom: spacing.md },
   expenseCard: {
     overflow: "hidden",
@@ -1066,7 +1181,7 @@ const styles = StyleSheet.create({
   },
   threadTitle: { color: palette.ink, fontSize: 20, fontWeight: "800" },
   threadRule: { color: palette.muted, fontSize: 10, marginTop: 4 },
-  messages: { gap: spacing.md },
+  commentSeparator: { height: spacing.md },
   messageRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1166,7 +1281,6 @@ const styles = StyleSheet.create({
   },
   composer: {
     padding: spacing.md,
-    marginTop: spacing.xl,
     backgroundColor: "rgba(255,253,247,0.72)",
   },
   replyChip: {
@@ -1214,7 +1328,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: "center",
     padding: spacing.md,
-    marginTop: spacing.xl,
     borderRadius: radii.md,
     backgroundColor: "rgba(52,49,40,0.06)",
   },

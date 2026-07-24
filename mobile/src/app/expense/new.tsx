@@ -1,7 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Image } from "expo-image";
-import * as ImageManipulator from "expo-image-manipulator";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -18,16 +16,22 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { palette, radii, spacing } from "@/constants/design";
 import type { Period, PeriodMember } from "@/data/types";
 import {
-  addLocalDays,
   createPeriodTimeline,
+  effectiveDatesOfPeriod,
   EXPENSE_CATEGORIES,
   getPeriodPhase,
+  isExpenseMutationPhase,
   toSeoulLocalDate,
   type ExpenseCategory,
   type LocalDate,
 } from "@/domain";
-import { useAppActions, useAppData } from "@/providers/app-provider";
+import { useAppActions } from "@/providers/app-actions-provider";
+import { useCurrentRoom, usePeriodMembers } from "@/providers/app-data-hooks";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
+import {
+  pickSanitizedExpensePhoto,
+  type ExpensePhotoSource,
+} from "@/services/expense-photo-picker";
 import { createUuid } from "@/utils/uuid";
 
 const CATEGORY_ICONS: Record<
@@ -45,10 +49,11 @@ const CATEGORY_ICONS: Record<
 export default function NewExpenseScreen() {
   const router = useRouter();
   const { addExpense } = useAppActions();
-  const { activeRoom, currentPeriod, currentUser, getMembers } = useAppData();
+  const { activeRoom, currentPeriod, currentUser } = useCurrentRoom();
+  const members = usePeriodMembers(currentPeriod?.id);
   const currentMember =
     currentPeriod && currentUser
-      ? getMembers(currentPeriod.id).find(
+      ? members.find(
           (member) => member.userId === currentUser.id,
         )
       : undefined;
@@ -96,60 +101,17 @@ export default function NewExpenseScreen() {
 
   if (!timeline) return null;
   const phase = getPeriodPhase(timeline, now);
-  const canMutate = phase === "ACTIVE" || phase === "ADJUSTMENT";
-  const effectiveDates = enumerateEffectiveDates(currentPeriod);
+  const canMutate = isExpenseMutationPhase(phase);
+  const effectiveDates = effectiveDatesOfPeriod(currentPeriod);
 
-  const pickPhoto = async (source: "camera" | "library") => {
+  const pickPhoto = async (source: ExpensePhotoSource) => {
     setFormError(null);
     try {
-      if (source === "camera") {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          setFormError("카메라 권한을 허용해야 사진을 촬영할 수 있어요.");
-          return;
-        }
-      } else {
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          setFormError(
-            "사진 보관함 권한을 허용해야 이미지를 선택할 수 있어요.",
-          );
-          return;
-        }
-      }
-
-      const result =
-        source === "camera"
-          ? await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              allowsMultipleSelection: false,
-              exif: false,
-              mediaTypes: ["images"],
-              quality: 0.78,
-            })
-          : await ImagePicker.launchImageLibraryAsync({
-              allowsEditing: true,
-              allowsMultipleSelection: false,
-              exif: false,
-              mediaTypes: ["images"],
-              quality: 0.78,
-            });
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        const actions: ImageManipulator.Action[] =
-          asset.width > 1_600 ? [{ resize: { width: 1_600 } }] : [];
-        // A newly encoded file drops the original EXIF block (including GPS data)
-        // before it is shown in the preview or handed to the repository upload path.
-        const sanitized = await ImageManipulator.manipulateAsync(
-          asset.uri,
-          actions,
-          {
-            compress: 0.8,
-            format: ImageManipulator.SaveFormat.JPEG,
-          },
-        );
-        setPhotoUri(sanitized.uri);
+      const result = await pickSanitizedExpensePhoto(source);
+      if (result.status === "permission-denied") {
+        setFormError("카메라 권한을 허용해야 사진을 촬영할 수 있어요.");
+      } else if (result.status === "selected") {
+        setPhotoUri(result.uri);
       }
     } catch (reason) {
       setFormError(
@@ -434,20 +396,13 @@ function chooseInitialOccurrence(
 ): Date {
   if (!period) return new Date(now);
   const joinedDate = member?.joinedDate;
-  const effectiveDates = enumerateEffectiveDates(period).filter(
+  const effectiveDates = effectiveDatesOfPeriod(period).filter(
     (date) => !joinedDate || date >= joinedDate,
   );
   const today = toSeoulLocalDate(now);
   if (effectiveDates.includes(today)) return new Date(now);
   const fallback = effectiveDates.at(-1) ?? period.weekEnd;
   return new Date(`${fallback}T12:00:00+09:00`);
-}
-
-/** 주차의 월~금 중 공휴일을 뺀 날짜 목록. */
-function enumerateEffectiveDates(period: Period): LocalDate[] {
-  return Array.from({ length: period.selectedDayCount }, (_, index) =>
-    addLocalDays(period.weekStart, index),
-  ).filter((date) => !period.holidayDates.includes(date));
 }
 
 function dateAtSeoulNoon(date: LocalDate): Date {
