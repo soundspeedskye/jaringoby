@@ -1,14 +1,33 @@
 import type { PropsWithChildren } from 'react';
-import { ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { palette, spacing } from '@/constants/design';
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
-  contentStyle?: ViewStyle;
+  contentStyle?: StyleProp<ViewStyle>;
   testID?: string;
 }>;
+
+type ScreenFrameProps = PropsWithChildren<{
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+}>;
+
+export function ScreenFrame({ children, style, testID }: ScreenFrameProps) {
+  return (
+    <SafeAreaView edges={['top']} style={styles.safeArea} testID={testID}>
+      <View style={[styles.frame, style]}>{children}</View>
+    </SafeAreaView>
+  );
+}
 
 export function Screen({ children, scroll = true, contentStyle, testID }: ScreenProps) {
   const content = <View style={[styles.content, contentStyle]}>{children}</View>;
@@ -44,5 +63,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
     paddingBottom: 120,
+  },
+  frame: {
+    width: '100%',
+    maxWidth: 520,
+    flex: 1,
+    alignSelf: 'center',
   },
 });
