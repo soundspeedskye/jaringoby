@@ -1,24 +1,35 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo } from "react";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Pressable,
+  SectionList,
   StyleSheet,
   Text,
   View,
+  type SectionListRenderItemInfo,
 } from "react-native";
 
+import {
+  MemberExpenseRow,
+  MemberExpenseSectionFooter,
+  MemberExpenseSectionHeader,
+} from "@/components/expense/member-expense-section";
 import { CalculationCard } from "@/components/room/calculation-card";
 import { RoomHero } from "@/components/room/room-hero";
 import {
   MemberList,
   type MemberListItem,
 } from "@/components/room/member-list";
-import { MemberExpenseDropdown } from "@/components/expense/member-expense-dropdown";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen } from "@/components/ui/screen";
+import { Screen, ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
 import { palette, radii, shadow, spacing } from "@/constants/design";
 import {
@@ -26,52 +37,66 @@ import {
   expensePendingDelta,
   hasPendingExpenseProjection,
 } from "@/data/expense-sync";
-import type { Expense } from "@/data/types";
+import type {
+  Expense,
+  Period,
+  PeriodMember,
+  Profile,
+  Room,
+} from "@/data/types";
 import {
   addLocalDays,
   countRemainingEligibleDays,
   createPeriodTimeline,
-  createKoreanHolidaySnapshot,
-  createWeekdayCalendar,
+  createWeekdayCalendarFromPeriod,
   getPeriodPhase,
+  isExpenseMutationPhase,
   startOfSeoulDate,
   toSeoulLocalDate,
+  type PeriodPhase,
 } from "@/domain";
-import { useAppActions, useAppData } from "@/providers/app-provider";
+import {
+  useCommentCounts,
+  useCrownIds,
+  useCurrentRoom,
+  usePeriodExpenses,
+  usePeriodMembers,
+  useProfiles,
+} from "@/providers/app-data-hooks";
+import { useAppStatus, useAppStatusActions } from "@/providers/app-status-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { formatDateLabel, formatWon } from "@/utils/format";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EMPTY_EXPENSES: Expense[] = [];
+type MemberExpenseSectionData = {
+  key: string;
+  member: MemberListItem;
+  expenses: Expense[];
+  expanded: boolean;
+  data: Expense[];
+};
 
 export default function RoomHomeScreen() {
   const router = useRouter();
-  const {
-    activeRoom,
-    currentPeriod,
-    currentUser,
-    error,
-    getComments,
-    getCrownIds,
-    getExpenses,
-    getMembers,
-    getProfile,
-    loading,
-  } = useAppData();
-  const { clearError, refresh } = useAppActions();
-  const members = useMemo(
-    () => (currentPeriod ? getMembers(currentPeriod.id) : []),
-    [currentPeriod, getMembers],
+  const { activeRoom, currentPeriod, currentUser } = useCurrentRoom();
+  const { error, loading } = useAppStatus();
+  const { clearError, refresh } = useAppStatusActions();
+  const members = usePeriodMembers(currentPeriod?.id);
+  const periodExpenses = usePeriodExpenses(currentPeriod?.id);
+  const memberUserIds = useMemo(
+    () => members.map((member) => member.userId),
+    [members],
   );
+  const profilesById = useProfiles(memberUserIds);
   const expenses = useMemo(
-    () =>
-      currentPeriod
-        ? [...getExpenses(currentPeriod.id)].sort(
-            (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
-          )
-        : [],
-    [currentPeriod, getExpenses],
+    () => [...periodExpenses].sort(
+      (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+    ),
+    [periodExpenses],
   );
+  const commentCounts = useCommentCounts(expenses);
+  const crownIds = useCrownIds(currentPeriod?.id);
   const expensesByUserId = useMemo(() => {
     const grouped = new Map<string, Expense[]>();
     expenses.forEach((expense) => {
@@ -81,15 +106,27 @@ export default function RoomHomeScreen() {
     });
     return grouped;
   }, [expenses]);
-  const getCommentCount = useCallback(
-    (expenseId: string) =>
-      getComments(expenseId).filter((comment) => !comment.deletedAt).length,
-    [getComments],
-  );
+  const sectionExpensesByUserId = useMemo(() => {
+    const sorted = new Map<string, Expense[]>();
+    expensesByUserId.forEach((memberExpenses, userId) => {
+      sorted.set(userId, [...memberExpenses].sort((a, b) => {
+        const occurredAtDifference =
+          Date.parse(b.occurredAt) - Date.parse(a.occurredAt);
+        return (
+          occurredAtDifference ||
+          Date.parse(b.createdAt) - Date.parse(a.createdAt)
+        );
+      }));
+    });
+    return sorted;
+  }, [expensesByUserId]);
   const openExpense = useCallback(
     (expenseId: string) => router.push(`/expense/${expenseId}`),
     [router],
   );
+  const joinRoom = useCallback(() => router.push("/room/join"), [router]);
+  const createRoom = useCallback(() => router.push("/room/create"), [router]);
+  const addExpense = useCallback(() => router.push("/expense/new"), [router]);
   const timeline = useMemo(
     () => (currentPeriod ? createPeriodTimeline(currentPeriod.weekStart) : null),
     [currentPeriod],
@@ -109,7 +146,35 @@ export default function RoomHomeScreen() {
       : [],
     Boolean(timeline),
   );
-
+  const memberRows = useMemo<MemberListItem[]>(() => {
+    if (!currentUser) return [];
+    return members
+      .filter((member) => member.status === "ACTIVE")
+      .map((member) => {
+        const profile = profilesById.get(member.userId);
+        const memberExpenses =
+          expensesByUserId.get(member.userId) ?? EMPTY_EXPENSES;
+        const spent = memberExpenses.reduce(
+          (sum, expense) => sum + expenseOfficialAmount(expense),
+          0,
+        );
+        const latestCreatedExpense = memberExpenses[0];
+        return {
+          id: member.userId,
+          nickname: profile?.nickname ?? "알 수 없음",
+          avatar: profile?.avatar ?? "🙂",
+          detail: latestCreatedExpense
+            ? `${latestCreatedExpense.category} ${formatWon(latestCreatedExpense.amount)}`
+            : member.isLateJoiner
+              ? `${member.joinedDate} 합류`
+              : "아직 지출 없음",
+          remaining: member.appliedLimit - spent,
+          isCrowned: crownIds.includes(member.userId),
+          isLateJoiner: member.isLateJoiner,
+          isCurrentUser: member.userId === currentUser.id,
+        };
+      });
+  }, [crownIds, currentUser, expensesByUserId, members, profilesById]);
   // Rendered by every branch below: a failed initial load leaves activeRoom
   // and currentUser empty, so an error shown only by the loaded view is invisible
   // exactly when it matters most.
@@ -192,46 +257,230 @@ export default function RoomHomeScreen() {
         DAY_MS,
     ),
   );
-  const crownIds = getCrownIds(currentPeriod.id);
-  const memberRows: MemberListItem[] = members
-    .filter((member) => member.status === "ACTIVE")
-    .map((member) => {
-      const profile = getProfile(member.userId);
-      const memberExpenses =
-        expensesByUserId.get(member.userId) ?? EMPTY_EXPENSES;
-      const spent = memberExpenses
-        .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
-      const latest = memberExpenses[0];
-      return {
-        id: member.userId,
-        nickname: profile?.nickname ?? "알 수 없음",
-        avatar: profile?.avatar ?? "🙂",
-        detail: latest
-          ? `${latest.category} ${formatWon(latest.amount)}`
-          : member.isLateJoiner
-            ? `${member.joinedDate} 합류`
-            : "아직 지출 없음",
-        remaining: member.appliedLimit - spent,
-        isCrowned: crownIds.includes(member.userId),
-        isLateJoiner: member.isLateJoiner,
-        isCurrentUser: member.userId === currentUser.id,
-      };
-    });
-  const periodCalendar = createWeekdayCalendar({
-    weekStart: currentPeriod.weekStart,
-    holidaySnapshot: createKoreanHolidaySnapshot({
-      version: currentPeriod.holidayVersionId || "server",
-      capturedAt: currentPeriod.createdAt,
-      dates: currentPeriod.holidayDates,
-    }),
-  });
+  const periodCalendar = createWeekdayCalendarFromPeriod(currentPeriod);
   const remainingEffectiveDays = countRemainingEligibleDays(
     periodCalendar,
     currentMember?.joinedDate ?? currentPeriod.weekStart,
   );
 
   return (
-    <Screen testID="room-home-screen">
+    <ScreenFrame testID="room-home-screen">
+      <MemberExpenseList
+        activeRoom={activeRoom}
+        addExpense={addExpense}
+        appliedLimit={appliedLimit}
+        clearError={clearError}
+        commentCounts={commentCounts}
+        createRoom={createRoom}
+        currentMember={currentMember}
+        currentPeriod={currentPeriod}
+        currentUser={currentUser}
+        daysRemaining={daysRemaining}
+        error={error}
+        expensesByUserId={sectionExpensesByUserId}
+        joinRoom={joinRoom}
+        memberRows={memberRows}
+        myPendingCount={myPendingCount}
+        myPendingDelta={myPendingDelta}
+        mySpent={mySpent}
+        onOpenExpense={openExpense}
+        phase={phase}
+        remainingEffectiveDays={remainingEffectiveDays}
+        timeline={timeline}
+      />
+    </ScreenFrame>
+  );
+}
+
+const MemberExpenseList = memo(function MemberExpenseList({
+  activeRoom,
+  addExpense,
+  appliedLimit,
+  clearError,
+  commentCounts,
+  createRoom,
+  currentMember,
+  currentPeriod,
+  currentUser,
+  daysRemaining,
+  error,
+  expensesByUserId,
+  joinRoom,
+  memberRows,
+  myPendingCount,
+  myPendingDelta,
+  mySpent,
+  onOpenExpense,
+  phase,
+  remainingEffectiveDays,
+  timeline,
+}: {
+  activeRoom: Room;
+  addExpense: () => void;
+  appliedLimit: number;
+  clearError: () => void;
+  commentCounts: ReadonlyMap<string, number>;
+  createRoom: () => void;
+  currentMember: PeriodMember | undefined;
+  currentPeriod: Period;
+  currentUser: Profile;
+  daysRemaining: number;
+  error: string | null;
+  expensesByUserId: ReadonlyMap<string, Expense[]>;
+  joinRoom: () => void;
+  memberRows: MemberListItem[];
+  myPendingCount: number;
+  myPendingDelta: number;
+  mySpent: number;
+  onOpenExpense: (expenseId: string) => void;
+  phase: PeriodPhase;
+  remainingEffectiveDays: number;
+  timeline: ReturnType<typeof createPeriodTimeline>;
+}) {
+  const [expandedMemberIds, setExpandedMemberIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const toggleMemberExpenses = useCallback((memberId: string) => {
+    setExpandedMemberIds((current) => {
+      const next = new Set(current);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  }, []);
+  const memberSections = useMemo<MemberExpenseSectionData[]>(
+    () =>
+      memberRows.map((member) => {
+        const memberExpenses =
+          expensesByUserId.get(member.id) ?? EMPTY_EXPENSES;
+        const expanded = expandedMemberIds.has(member.id);
+        return {
+          key: member.id,
+          member,
+          expenses: memberExpenses,
+          expanded,
+          data: expanded ? memberExpenses : EMPTY_EXPENSES,
+        };
+      }),
+    [expandedMemberIds, expensesByUserId, memberRows],
+  );
+  const renderMemberExpense = useCallback(
+    ({
+      item: expense,
+      section,
+    }: SectionListRenderItemInfo<Expense, MemberExpenseSectionData>) => (
+      <MemberExpenseRow
+        avatar={section.member.avatar}
+        commentCount={commentCounts.get(expense.id) ?? 0}
+        displayName={
+          section.member.isCurrentUser ? "나" : section.member.nickname
+        }
+        expense={expense}
+        isCrowned={section.member.isCrowned}
+        onPress={onOpenExpense}
+      />
+    ),
+    [commentCounts, onOpenExpense],
+  );
+  const renderMemberSectionFooter = useCallback(
+    ({ section }: { section: MemberExpenseSectionData }) => (
+      <MemberExpenseSectionFooter
+        expanded={section.expanded}
+        hasExpenses={section.expenses.length > 0}
+        member={section.member}
+      />
+    ),
+    [],
+  );
+  const renderMemberSectionHeader = useCallback(
+    ({ section }: { section: MemberExpenseSectionData }) => (
+      <MemberExpenseSectionHeader
+        expanded={section.expanded}
+        expenses={section.expenses}
+        member={section.member}
+        onToggle={toggleMemberExpenses}
+      />
+    ),
+    [toggleMemberExpenses],
+  );
+
+  return (
+    <SectionList
+      contentContainerStyle={styles.content}
+      keyExtractor={(expense) => expense.id}
+      ListHeaderComponent={
+        <RoomHomeHeader
+          activeRoom={activeRoom}
+          addExpense={addExpense}
+          appliedLimit={appliedLimit}
+          clearError={clearError}
+          createRoom={createRoom}
+          currentMember={currentMember}
+          currentPeriod={currentPeriod}
+          currentUser={currentUser}
+          daysRemaining={daysRemaining}
+          error={error}
+          joinRoom={joinRoom}
+          memberRows={memberRows}
+          myPendingCount={myPendingCount}
+          myPendingDelta={myPendingDelta}
+          mySpent={mySpent}
+          phase={phase}
+          remainingEffectiveDays={remainingEffectiveDays}
+          timeline={timeline}
+        />
+      }
+      renderItem={renderMemberExpense}
+      renderSectionFooter={renderMemberSectionFooter}
+      renderSectionHeader={renderMemberSectionHeader}
+      sections={memberSections}
+      showsVerticalScrollIndicator={false}
+      stickySectionHeadersEnabled={false}
+    />
+  );
+});
+
+const RoomHomeHeader = memo(function RoomHomeHeader({
+  activeRoom,
+  addExpense,
+  appliedLimit,
+  clearError,
+  createRoom,
+  currentMember,
+  currentPeriod,
+  currentUser,
+  daysRemaining,
+  error,
+  joinRoom,
+  memberRows,
+  myPendingCount,
+  myPendingDelta,
+  mySpent,
+  phase,
+  remainingEffectiveDays,
+  timeline,
+}: {
+  activeRoom: Room;
+  addExpense: () => void;
+  appliedLimit: number;
+  clearError: () => void;
+  createRoom: () => void;
+  currentMember: PeriodMember | undefined;
+  currentPeriod: Period;
+  currentUser: Profile;
+  daysRemaining: number;
+  error: string | null;
+  joinRoom: () => void;
+  memberRows: MemberListItem[];
+  myPendingCount: number;
+  myPendingDelta: number;
+  mySpent: number;
+  phase: PeriodPhase;
+  remainingEffectiveDays: number;
+  timeline: ReturnType<typeof createPeriodTimeline>;
+}) {
+  return (
+    <>
       <View style={styles.topActions}>
         <Text style={styles.greeting}>
           {currentUser.nickname}님, 이번주도 아껴볼까요?
@@ -239,7 +488,7 @@ export default function RoomHomeScreen() {
         <View style={styles.actionButtons}>
           <Pressable
             accessibilityLabel="코드로 참여"
-            onPress={() => router.push("/room/join")}
+            onPress={joinRoom}
             style={styles.circleButton}
           >
             <MaterialCommunityIcons
@@ -250,7 +499,7 @@ export default function RoomHomeScreen() {
           </Pressable>
           <Pressable
             accessibilityLabel="새 챌린지 만들기"
-            onPress={() => router.push("/room/create")}
+            onPress={createRoom}
             style={styles.circleButton}
           >
             <MaterialCommunityIcons
@@ -262,7 +511,16 @@ export default function RoomHomeScreen() {
         </View>
       </View>
 
-      {errorBanner}
+      {error ? (
+        <Pressable
+          accessibilityRole="alert"
+          onPress={clearError}
+          style={styles.errorBanner}
+        >
+          <Text style={styles.errorText}>{error}</Text>
+          <MaterialCommunityIcons color={palette.danger} name="close" size={18} />
+        </Pressable>
+      ) : null}
 
       <RoomHero
         appliedLimit={appliedLimit}
@@ -330,10 +588,12 @@ export default function RoomHomeScreen() {
 
       <SectionHeader
         right={
-          !currentPeriod.isRestWeek && currentMember && (phase === "ACTIVE" || phase === "ADJUSTMENT") ? (
+          !currentPeriod.isRestWeek
+          && currentMember
+          && isExpenseMutationPhase(phase) ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/expense/new")}
+              onPress={addExpense}
               style={styles.addButton}
             >
               <MaterialCommunityIcons
@@ -348,27 +608,15 @@ export default function RoomHomeScreen() {
         style={styles.feedHeader}
         title="멤버별 최근 지출"
       />
-
-      <View style={styles.memberExpenseList}>
-        {memberRows.map((member) => (
-          <MemberExpenseDropdown
-            expenses={expensesByUserId.get(member.id) ?? EMPTY_EXPENSES}
-            getCommentCount={getCommentCount}
-            key={member.id}
-            member={member}
-            onExpensePress={openExpense}
-          />
-        ))}
-      </View>
-    </Screen>
+    </>
   );
-}
+});
 
 function PhaseBanner({
   phase,
   timeline,
 }: {
-  phase: string;
+  phase: PeriodPhase;
   timeline: { E: number; C: number; F: number };
 }) {
   if (phase === "ACTIVE" || phase === "WAITING") return null;
@@ -386,6 +634,11 @@ function PhaseBanner({
 }
 
 const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 120,
+  },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   topActions: {
     flexDirection: "row",
@@ -483,7 +736,6 @@ const styles = StyleSheet.create({
     ...shadow,
   },
   addButtonText: { color: palette.cream, fontSize: 13, fontWeight: "700" },
-  memberExpenseList: { gap: spacing.sm },
   emptyHeader: { paddingTop: 90, paddingBottom: spacing.xxl },
   emptyTitle: {
     color: palette.ink,

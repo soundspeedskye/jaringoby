@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { palette, radii, shadow, spacing } from '@/constants/design';
@@ -19,7 +20,7 @@ type ExpenseCardProps = {
   onPress?: (id: string) => void;
 };
 
-export function ExpenseCard(props: ExpenseCardProps) {
+export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -51,7 +52,7 @@ export function ExpenseCard(props: ExpenseCardProps) {
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: { overflow: 'hidden', backgroundColor: palette.paper, borderRadius: radii.lg, ...shadow },
