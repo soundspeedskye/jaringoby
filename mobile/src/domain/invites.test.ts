@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_MAX_ACTIVE_MEMBERS,
   INVITE_CODE_ALPHABET,
   INVITE_CODE_LENGTH,
+  ROOM_NAME_MAX_CHARACTERS,
+  generateInviteCode,
   isValidInviteCodeFormat,
+  isValidRoomCapacity,
+  isValidRoomName,
   normalizeInviteCode,
 } from '@/domain/invites';
 
@@ -46,5 +51,28 @@ describe('isValidInviteCodeFormat', () => {
     expect(INVITE_CODE_LENGTH).toBe(6);
     const everyCharacterCode = INVITE_CODE_ALPHABET.slice(0, INVITE_CODE_LENGTH);
     expect(isValidInviteCodeFormat(everyCharacterCode)).toBe(true);
+  });
+});
+
+describe('shared room and invite rules', () => {
+  it('generates codes from the same alphabet and length used by validation', () => {
+    expect(generateInviteCode(() => 0)).toBe(
+      INVITE_CODE_ALPHABET[0]?.repeat(INVITE_CODE_LENGTH),
+    );
+    expect(isValidInviteCodeFormat(generateInviteCode(() => 0.5))).toBe(true);
+  });
+
+  it('rejects invalid random samples', () => {
+    expect(() => generateInviteCode(() => 1)).toThrow(RangeError);
+  });
+
+  it('uses the server room name and capacity limits', () => {
+    expect(isValidRoomName('가'.repeat(ROOM_NAME_MAX_CHARACTERS))).toBe(true);
+    expect(isValidRoomName('가'.repeat(ROOM_NAME_MAX_CHARACTERS + 1))).toBe(false);
+    expect(isValidRoomCapacity(DEFAULT_MAX_ACTIVE_MEMBERS)).toBe(true);
+    expect(isValidRoomCapacity(DEFAULT_MAX_ACTIVE_MEMBERS + 1)).toBe(false);
+    expect(isValidRoomCapacity(-1)).toBe(false);
+    expect(isValidRoomCapacity(4.5)).toBe(false);
+    expect(isValidRoomCapacity(Number.NaN)).toBe(false);
   });
 });

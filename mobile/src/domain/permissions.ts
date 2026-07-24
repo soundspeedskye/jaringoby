@@ -2,6 +2,8 @@ import { toInstantMs } from './date-time';
 import { getPeriodPhase } from './period';
 import type { InstantInput, MemberStatus, PeriodTimeline } from './types';
 
+export const COMMENT_EDIT_WINDOW_MS = 5 * 60 * 1_000;
+
 export type ExpenseMutationAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'PHOTO_REUPLOAD';
 export type CommentMutationAction = 'CREATE' | 'EDIT' | 'DELETE';
 
@@ -23,6 +25,14 @@ export interface PolicyDecision<Reason extends string> {
   readonly reason: Reason;
 }
 
+export function isExpenseMutationPhase(phase: ReturnType<typeof getPeriodPhase>): boolean {
+  return phase === 'ACTIVE' || phase === 'ADJUSTMENT';
+}
+
+export function isCommentMutationPhase(phase: ReturnType<typeof getPeriodPhase>): boolean {
+  return phase !== 'WAITING' && phase !== 'ARCHIVED';
+}
+
 export function evaluateExpenseMutationPermission(input: {
   readonly action: ExpenseMutationAction;
   readonly now: InstantInput;
@@ -36,7 +46,7 @@ export function evaluateExpenseMutationPermission(input: {
   }
 
   const phase = getPeriodPhase(input.timeline, input.now);
-  if (phase !== 'ACTIVE' && phase !== 'ADJUSTMENT') {
+  if (!isExpenseMutationPhase(phase)) {
     return denied('EXPENSES_LOCKED_FOR_PHASE');
   }
 
@@ -64,7 +74,7 @@ export function evaluateCommentMutationPermission(input: {
   }
 
   const phase = getPeriodPhase(input.timeline, input.now);
-  if (phase === 'WAITING' || phase === 'ARCHIVED') {
+  if (!isCommentMutationPhase(phase)) {
     return denied('COMMENTS_LOCKED_FOR_PHASE');
   }
 
@@ -80,7 +90,7 @@ export function evaluateCommentMutationPermission(input: {
     }
     const now = toInstantMs(input.now);
     const createdAt = toInstantMs(input.commentCreatedAt);
-    if (now < createdAt || now > createdAt + 5 * 60 * 1_000) {
+    if (now < createdAt || now >= createdAt + COMMENT_EDIT_WINDOW_MS) {
       return denied('EDIT_WINDOW_EXPIRED');
     }
   }

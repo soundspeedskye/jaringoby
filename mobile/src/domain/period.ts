@@ -1,5 +1,8 @@
 import { addLocalDays, compareLocalDates, startOfSeoulDate, toInstantMs } from './date-time';
-import type { KoreanHolidaySnapshot } from './holidays';
+import {
+  createKoreanHolidaySnapshot,
+  type KoreanHolidaySnapshot,
+} from './holidays';
 import { calculateAppliedLimit } from './limits';
 import type { InstantInput, LocalDate, PeriodPhase, PeriodTimeline } from './types';
 import { getIsoWeekday } from './week';
@@ -75,6 +78,28 @@ export function createWeekdayCalendar(input: {
     isRestWeek: effectiveDates.length === 0,
     holidaySnapshot: input.holidaySnapshot,
   });
+}
+
+export function createWeekdayCalendarFromPeriod(period: {
+  readonly weekStart: LocalDate | string;
+  readonly holidayVersionId: string;
+  readonly createdAt: string;
+  readonly holidayDates: readonly LocalDate[];
+}): WeekdayCalendar {
+  return createWeekdayCalendar({
+    weekStart: period.weekStart,
+    holidaySnapshot: createKoreanHolidaySnapshot({
+      version: period.holidayVersionId || 'server',
+      capturedAt: period.createdAt,
+      dates: period.holidayDates,
+    }),
+  });
+}
+
+export function effectiveDatesOfPeriod(period: Parameters<
+  typeof createWeekdayCalendarFromPeriod
+>[0]): readonly LocalDate[] {
+  return createWeekdayCalendarFromPeriod(period).effectiveDates;
 }
 
 /**

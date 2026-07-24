@@ -7,6 +7,8 @@ import {
   createPeriodMemberPlan,
   createPeriodTimeline,
   createWeekdayCalendar,
+  createWeekdayCalendarFromPeriod,
+  effectiveDatesOfPeriod,
   getPeriodPhase,
   PERIOD_WEEKDAY_COUNT,
 } from '@/domain/period';
@@ -87,6 +89,31 @@ describe('createWeekdayCalendar', () => {
     expect(() =>
       createWeekdayCalendar({ weekStart: '2026-07-21', holidaySnapshot: snapshotOf([]) }),
     ).toThrow(RangeError);
+  });
+});
+
+describe('period-backed weekday calendar', () => {
+  const period = {
+    weekStart: WEEK_START,
+    holidayVersionId: 'period-fixture',
+    createdAt: '2026-07-01T00:00:00+09:00',
+    holidayDates: ['2026-07-22'],
+  } as const;
+
+  it('reconstructs the calendar from a period snapshot', () => {
+    const calendar = createWeekdayCalendarFromPeriod(period);
+
+    expect(calendar.holidaySnapshot.version).toBe('period-fixture');
+    expect(calendar.excludedHolidayDates).toEqual(['2026-07-22']);
+  });
+
+  it('exposes the same effective dates without duplicating calendar assembly', () => {
+    expect(effectiveDatesOfPeriod(period)).toEqual([
+      '2026-07-20',
+      '2026-07-21',
+      '2026-07-23',
+      '2026-07-24',
+    ]);
   });
 });
 
