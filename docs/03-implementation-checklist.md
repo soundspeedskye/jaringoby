@@ -54,64 +54,64 @@
 
 | 영역 | 기대 경로/명령 |
 |---|---|
-| 앱 라우트 | `mobile/src/app/**` |
-| 디자인 토큰·공통 UI | `mobile/src/constants/theme.ts`, `mobile/src/components/ui/**` |
-| 도메인 계산 | `mobile/src/domain/challenges/**`, `mobile/src/domain/expenses/**` |
-| Supabase 클라이언트/서비스 | `mobile/src/lib/supabase.ts`, `mobile/src/services/**` |
-| 로컬 큐·동기화 | `mobile/src/services/sync/**` |
-| 단위/통합 테스트 | `mobile/src/**/*.test.ts(x)` |
-| E2E | `mobile/e2e/**` 및 테스트 결과 `artifacts/e2e/**` |
+| 앱 라우트 | `src/app/**` |
+| 디자인 토큰·공통 UI | `src/constants/theme.ts`, `src/components/ui/**` |
+| 도메인 계산 | `src/domain/challenges/**`, `src/domain/expenses/**` |
+| Supabase 클라이언트/서비스 | `src/lib/supabase.ts`, `src/services/**` |
+| 로컬 큐·동기화 | `src/services/sync/**` |
+| 단위/통합 테스트 | `src/**/*.test.ts(x)` |
+| E2E | `e2e/**` 및 테스트 결과 `artifacts/e2e/**` |
 | DB 스키마 | `supabase/migrations/**.sql` |
 | DB/RLS/Storage 테스트 | `supabase/tests/**.sql` |
 | Edge Function/서버 작업 | `supabase/functions/**`, `supabase/seed.sql` |
 | 운영·개인정보 | `docs/operations/**`, `docs/legal/**` |
 | 에이전트 리뷰 | `docs/reviews/review-01.md`~`review-03.md`, `docs/04-review-summary.md` |
-| 정적 검사 | `cd mobile && npm run lint && npm run typecheck` |
-| 단위/통합 | `cd mobile && npm run test:unit -- --run && npm run test:coverage` |
-| DB 재현·검증 | `cd mobile && npm run db:reset && npm run test:db && npm run db:lint && npm run db:advisors` |
-| 플랫폼 빌드 | `cd mobile && npm run build:ios && npm run build:android` |
-| 플랫폼 E2E | `cd mobile && npm run test:e2e:ios && npm run test:e2e:android` |
-| 전체 게이트 | `cd mobile && npm run verify` |
+| 정적 검사 | `npm run lint && npm run typecheck` |
+| 단위/통합 | `npm run test:unit -- --run && npm run test:coverage` |
+| DB 재현·검증 | `npm run db:reset && npm run test:db && npm run db:lint && npm run db:advisors` |
+| 플랫폼 빌드 | `npm run build:ios && npm run build:android` |
+| 플랫폼 E2E | `npm run test:e2e:ios && npm run test:e2e:android` |
+| 전체 게이트 | `npm run verify` |
 
-위 스크립트는 `mobile/package.json`에 고정하고 락파일을 커밋한다. Supabase CLI 명령은 먼저 `cd mobile && npx supabase --help`로 현재 설치 버전의 형태를 확인한 뒤 스크립트에 고정한다.
+위 스크립트는 `package.json`에 고정하고 락파일을 커밋한다. Supabase CLI 명령은 먼저 `npx supabase --help`로 현재 설치 버전의 형태를 확인한 뒤 스크립트에 고정한다.
 
 ## 4. 플랫폼·디자인·공통 UI
 
 | ID | 요구사항 / 수용 기준 | 예상 구현·검증 증거 | 상태 |
 |---|---|---|---|
-| UI-001 | 하나의 Expo 코드베이스가 iOS와 Android에서 기동하고 주요 라우트가 크래시 없이 열린다. | `mobile/app.json`, `mobile/src/app/_layout.tsx`; `npm run build:ios`, `npm run build:android`; 양 플랫폼 smoke 영상 | PENDING |
-| UI-002 | 기본 화면 배경/주요 surface의 primary는 정확히 `#FDF6E3`이며 하드코딩이 아니라 토큰으로 공유한다. | `mobile/src/constants/theme.ts`; `theme.test.ts`; 양 플랫폼 스크린샷 픽셀/시각 회귀 | PENDING |
-| UI-003 | 챌린지 방 상단은 최종 시안처럼 챌린지명, D-day, 원형 진행률, 남은 금액, 개인 적용한도, 합류 설명을 한 카드에 표시한다. | `mobile/src/features/challenges/components/ChallengeHero.tsx`; component test; 시안 대비 iOS/Android 스크린샷 | PENDING |
+| UI-001 | 하나의 Expo 코드베이스가 iOS와 Android에서 기동하고 주요 라우트가 크래시 없이 열린다. | `app.json`, `src/app/_layout.tsx`; `npm run build:ios`, `npm run build:android`; 양 플랫폼 smoke 영상 | PENDING |
+| UI-002 | 기본 화면 배경/주요 surface의 primary는 정확히 `#FDF6E3`이며 하드코딩이 아니라 토큰으로 공유한다. | `src/constants/theme.ts`; `theme.test.ts`; 양 플랫폼 스크린샷 픽셀/시각 회귀 | PENDING |
+| UI-003 | 챌린지 방 상단은 최종 시안처럼 챌린지명, D-day, 원형 진행률, 남은 금액, 개인 적용한도, 합류 설명을 한 카드에 표시한다. | `src/features/challenges/components/ChallengeHero.tsx`; component test; 시안 대비 iOS/Android 스크린샷 | PENDING |
 | UI-004 | 진행률 링은 사용/남은 금액을 오해 없이 표현하며 0원 한도, 100% 초과, 음수 잔액에서도 레이아웃이 깨지지 않는다. | `ProgressRing.tsx`; `ProgressRing.test.tsx`의 0/50/100/150% cases; 스크린샷 | PENDING |
 | UI-005 | 하단에는 드래그 핸들, 계산 카드, 멤버 리스트가 포함된 최신 글래스 바텀시트가 있고 콘텐츠를 가리지 않도록 스냅/스크롤된다. | `ChallengeMemberSheet.tsx`; 제스처/스크롤 component test; iOS/Android 영상 | PENDING |
 | UI-006 | 지원 플랫폼에서는 네이티브 glass 효과, 미지원/저감 투명도 환경에서는 읽기 쉬운 blur/불투명 fallback을 사용한다. | `GlassSurface.tsx`에서 `expo-glass-effect`/`expo-blur` 분기; 플랫폼·접근성 테스트 | PENDING |
 | UI-007 | 멤버는 리스트 형식으로 프로필, 닉네임, 최근 지출 요약 또는 합류 상태, 사용/남은 금액을 일관되게 보여준다. | `MemberRow.tsx`; 긴 닉네임·10명·빈 상태 스냅샷 | PENDING |
 | UI-008 | 최대 남은 금액의 활성 멤버 닉네임 앞에 `👑`을 표시하고 공동 1위 모두 표시한다. 이모지는 닉네임 데이터 자체를 바꾸지 않는다. | `MemberRow.tsx`, view model test `crown-view-model.test.ts`; 동률 E2E | PENDING |
 | UI-009 | 중도 합류자는 `늦게 합류` 배지와 합류일/적용한도를 확인할 수 있다. | `LateJoinBadge.tsx`; join flow E2E | PENDING |
-| UI-010 | 글래스 하단 탭은 홈·내 지출·내 정보 3개이며 현재 탭, safe-area, Android gesture inset를 올바르게 처리한다. | `mobile/src/components/app-tabs*`; iPhone/Android gesture nav 스크린샷 | PENDING |
+| UI-010 | 글래스 하단 탭은 홈·내 지출·내 정보 3개이며 현재 탭, safe-area, Android gesture inset를 올바르게 처리한다. | `src/components/app-tabs*`; iPhone/Android gesture nav 스크린샷 | PENDING |
 | UI-011 | 진행·보정 상태에는 공통 `+ 지출` 진입점, 정산·완료에는 비활성 또는 제거된 진입점과 이유 안내가 있다. | route state tests; `challenge-state-ui.test.tsx`; E2E | PENDING |
 | UI-012 | 키보드, 작은 화면, 큰 화면, 노치/다이내믹 아일랜드, Android system bar에서 입력창·시트·탭이 겹치지 않는다. | iPhone SE/Pro Max 및 소형/대형 Android 캡처; keyboard E2E | PENDING |
 | UI-013 | 로딩, 빈 목록, 네트워크 오류, 재시도, 오프라인, 권한 거부, 삭제된 콘텐츠 상태가 모든 데이터 화면에 있다. | 공통 `AsyncState` 컴포넌트; route별 failure tests | PENDING |
-| UI-014 | 금액은 KRW 천 단위, 날짜/시각은 `Asia/Seoul`, 한국어 문구로 일관되게 표시한다. | `mobile/src/lib/format.ts`; locale/timezone unit tests | PENDING |
-| UI-015 | 앱의 splash/icon/scheme이 자린고비 브랜드로 교체되고 개발 템플릿 콘텐츠가 남지 않는다. | `mobile/app.json`, `mobile/assets/**`; `rg 'Welcome to Expo|expo-logo' mobile/src mobile/app.json` 결과 0 | PENDING |
+| UI-014 | 금액은 KRW 천 단위, 날짜/시각은 `Asia/Seoul`, 한국어 문구로 일관되게 표시한다. | `src/lib/format.ts`; locale/timezone unit tests | PENDING |
+| UI-015 | 앱의 splash/icon/scheme이 자린고비 브랜드로 교체되고 개발 템플릿 콘텐츠가 남지 않는다. | `app.json`, `assets/**`; `rg 'Welcome to Expo|expo-logo' src app.json` 결과 0 | PENDING |
 
 ## 5. 계정·프로필·전역 내비게이션
 
 | ID | 요구사항 / 수용 기준 | 예상 구현·검증 증거 | 상태 |
 |---|---|---|---|
-| ACC-001 | 기기 변경 후에도 복구 가능한 Supabase Auth 계정 흐름이 있고 선택한 인증 수단과 복구 정책이 문서화돼 있다. | `mobile/src/app/(auth)/**`, `auth-service.ts`, `docs/operations/auth.md`; auth E2E | PENDING |
+| ACC-001 | 기기 변경 후에도 복구 가능한 Supabase Auth 계정 흐름이 있고 선택한 인증 수단과 복구 정책이 문서화돼 있다. | `src/app/(auth)/**`, `auth-service.ts`, `docs/operations/auth.md`; auth E2E | PENDING |
 | ACC-002 | 로그인 세션 복원·만료·로그아웃·탈퇴가 안전하게 동작하며 탈퇴 전 세션을 종료/회수한다. | auth service tests; RLS session tests; 탈퇴 E2E | PENDING |
 | ACC-003 | 닉네임은 trim 후 2~20자, 공백만 거부하고 프로필 이미지를 등록/교체할 수 있다. | profile form/schema tests; DB constraint tests | PENDING |
-| ACC-004 | 홈은 예정·진행·보정·정산 상태와 지난 챌린지 진입, 만들기, 코드 참여, 알림함을 제공한다. | `mobile/src/app/(tabs)/index.tsx`; 상태별 seeded E2E | PENDING |
-| ACC-005 | 내 지출은 수입 전환 없이 일/기간별 지출 목록과 합계를 제공한다. | `mobile/src/app/(tabs)/expenses/**`; aggregate tests | PENDING |
-| ACC-006 | 내 정보는 프로필, 전체/방별 알림, 차단·신고, 정책, 탈퇴 진입을 제공한다. | `mobile/src/app/(tabs)/settings/**`; navigation E2E | PENDING |
+| ACC-004 | 홈은 예정·진행·보정·정산 상태와 지난 챌린지 진입, 만들기, 코드 참여, 알림함을 제공한다. | `src/app/(tabs)/index.tsx`; 상태별 seeded E2E | PENDING |
+| ACC-005 | 내 지출은 수입 전환 없이 일/기간별 지출 목록과 합계를 제공한다. | `src/app/(tabs)/expenses/**`; aggregate tests | PENDING |
+| ACC-006 | 내 정보는 프로필, 전체/방별 알림, 차단·신고, 정책, 탈퇴 진입을 제공한다. | `src/app/(tabs)/settings/**`; navigation E2E | PENDING |
 | ACC-007 | 알림함은 댓글·답글·합류·상태 전환을 정확한 대상 화면으로 deep-link한다. | `notifications/**`, linking config; notification deep-link tests | PENDING |
 
 ## 6. 챌린지 생성·초대·참여·멤버 관리
 
 | ID | 요구사항 / 수용 기준 | 예상 구현·검증 증거 | 상태 |
 |---|---|---|---|
-| CHL-001 | 방 만들기는 이름, 시작/종료일 또는 시작일/기간, 기준금액, 최초 정원을 입력한다. 기간은 양 끝 포함 1~31일이다. | `mobile/src/app/challenges/create.tsx`; form validation tests | PENDING |
+| CHL-001 | 방 만들기는 이름, 시작/종료일 또는 시작일/기간, 기준금액, 최초 정원을 입력한다. 기간은 양 끝 포함 1~31일이다. | `src/app/challenges/create.tsx`; form validation tests | PENDING |
 | CHL-002 | 오늘·다음 평일(월~금)·7일·직접 선택 프리셋이 정확한 선택일 집합 `A`를 만든다. | `date-presets.ts`; 월경계/연경계 unit tests | PENDING |
 | CHL-003 | 만들기 전 전체 선택일, 제외 공휴일, 유효일, 기준금액, 예상 적용한도와 계산식을 미리 보여준다. | `ChallengeCalculationPreview.tsx`; seeded holiday E2E | PENDING |
 | CHL-004 | 선택일 전부가 공휴일이면 생성할 수 없고 원인을 보여준다. | domain/DB validation; `all-holidays.test.ts`; E2E | PENDING |
@@ -162,7 +162,7 @@
 |---|---|---|---|
 | EXP-001 | 지출 필드는 양의 KRW 정수 금액, 발생 시각, 6개 고정 카테고리, 메모, 사진, 연결 방, 작성자, 생성/수정/동기화 상태다. | domain schema + DB constraints; validation tests | PENDING |
 | EXP-002 | 카테고리는 `점심`, `커피`, `간식`, `저녁`, `필수품`, `사치품`만 UI/API/DB에 저장된다. 기타·사용자 정의는 거부한다. | enum/check constraint; 6-value tests; invalid API test | PENDING |
-| EXP-003 | 수입 화면, 수입 타입, 수입 API, 수입 기반 잔액 계산이 존재하지 않는다. | schema/API audit; `rg -i 'income|수입' mobile/src supabase` 수동 판독 | PENDING |
+| EXP-003 | 수입 화면, 수입 타입, 수입 API, 수입 기반 잔액 계산이 존재하지 않는다. | schema/API audit; `rg -i 'income|수입' src supabase` 수동 판독 | PENDING |
 | EXP-004 | 방에서 등록하면 해당 방이 자동 선택되고 사진→금액→카테고리→메모→발생 일시 순으로 입력한다. | expense form UI; E2E | PENDING |
 | EXP-005 | 챌린지 지출은 정확히 사진 1장이 없으면 제출 불가하며 다중 사진도 거부한다. 개인 전용 지출의 사진 정책은 명시적으로 구현/문서화한다. | form + DB/storage relation cardinality tests | PENDING |
 | EXP-006 | 카메라와 앨범 선택, 권한 요청/거부 안내, 미리보기·교체가 양 플랫폼에서 동작한다. | app permissions, image picker component; device E2E | PENDING |
