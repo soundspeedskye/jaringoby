@@ -14,7 +14,8 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "챌린지 지출 사진을 촬영하기 위해 카메라를 사용합니다.",
-        "NSPhotoLibraryUsageDescription": "챌린지 지출 사진을 선택하기 위해 사진 보관함을 사용합니다."
+        "NSPhotoLibraryUsageDescription": "챌린지 지출 사진을 선택하기 위해 사진 보관함을 사용합니다.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +28,10 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -63,6 +67,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "524d6217-3e1b-4136-8537-1a9a47b17af3"
+      }
     }
   }
 }
