@@ -36,7 +36,9 @@ export function Screen({ children, scroll = true, contentStyle, testID }: Screen
     <SafeAreaView edges={['top']} style={styles.safeArea} testID={testID}>
       {scroll ? (
         <ScrollView
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           {content}
