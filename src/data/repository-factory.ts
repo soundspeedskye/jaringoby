@@ -24,22 +24,11 @@ export function getRepositoryRuntime(): RepositoryRuntime {
 
   const configured = hasSupabaseConfiguration();
   const requestedMode = process.env.EXPO_PUBLIC_DATA_MODE?.trim().toLowerCase();
-  const useSupabase = requestedMode !== 'demo' && configured;
-  if (useSupabase) {
-    const base = new SupabaseRepository(getSupabaseClient());
-    // Browser-picked photos are temporary blob URLs. Until the web runtime has
-    // an IndexedDB-backed binary resolver, enabling the durable queue there
-    // would promise persistence that a page reload cannot actually provide.
-    const offlineQueue = Platform.OS === 'web' ? null : new OfflineQueueRepository(base);
-    singleton = {
-      repository: offlineQueue ?? base,
-      dataMode: 'supabase',
-      isConfigured: true,
-      isSupabaseConfigured: true,
-      offlineQueue,
-      setActiveUserId: (userId) => offlineQueue?.setActiveUserId(userId),
-    };
-  } else {
+
+  // Demo is an explicit opt-in dev tool only (EXPO_PUBLIC_DATA_MODE=demo).
+  // Real mode NEVER silently falls back to demo: a missing Supabase config must
+  // fail loudly instead of shipping seed data as if it were real.
+  if (requestedMode === 'demo') {
     singleton = {
       repository: new LocalRepository(),
       dataMode: 'demo',
@@ -48,6 +37,29 @@ export function getRepositoryRuntime(): RepositoryRuntime {
       offlineQueue: null,
       setActiveUserId: () => undefined,
     };
+    return singleton;
   }
+
+  if (!configured) {
+    throw new Error(
+      'Supabase 설정이 없습니다. 실 데이터로 실행하려면 EXPO_PUBLIC_SUPABASE_URL과 ' +
+        'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY를 설정하고, 데모로 실행하려면 ' +
+        'EXPO_PUBLIC_DATA_MODE=demo를 지정하세요.',
+    );
+  }
+
+  const base = new SupabaseRepository(getSupabaseClient());
+  // Browser-picked photos are temporary blob URLs. Until the web runtime has
+  // an IndexedDB-backed binary resolver, enabling the durable queue there
+  // would promise persistence that a page reload cannot actually provide.
+  const offlineQueue = Platform.OS === 'web' ? null : new OfflineQueueRepository(base);
+  singleton = {
+    repository: offlineQueue ?? base,
+    dataMode: 'supabase',
+    isConfigured: true,
+    isSupabaseConfigured: true,
+    offlineQueue,
+    setActiveUserId: (userId) => offlineQueue?.setActiveUserId(userId),
+  };
   return singleton;
 }
