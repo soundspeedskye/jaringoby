@@ -13,7 +13,7 @@ import { FormSection } from "@/components/ui/form-section";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import type { Period, PeriodMember } from "@/data/types";
 import {
   createPeriodTimeline,
@@ -122,9 +122,10 @@ export default function NewExpenseScreen() {
 
   const submit = async () => {
     setFormError(null);
-    const amount = Number(amountText.replace(/[^0-9]/gu, ""));
-    if (!Number.isSafeInteger(amount) || amount < 1) {
-      setFormError("금액을 1원 이상의 정수로 입력해 주세요.");
+    const normalizedAmount = amountText.replace(/[^0-9]/gu, "");
+    const amount = Number(normalizedAmount);
+    if (!normalizedAmount || !Number.isSafeInteger(amount) || amount < 0) {
+      setFormError("금액을 0원 이상의 정수로 입력해 주세요.");
       return;
     }
     if (!photoUri) {
@@ -281,8 +282,8 @@ export default function NewExpenseScreen() {
       <Field
         keyboardType="number-pad"
         label="금액"
-        onChangeText={setAmountText}
-        placeholder="예: 12000"
+        onChangeText={(value) => setAmountText(formatKrwInput(value))}
+        placeholder="예: 12,000"
         value={amountText}
       />
 
@@ -344,6 +345,14 @@ export default function NewExpenseScreen() {
       <FormMessage message={formError} style={styles.formMessage} />
     </ModalFormScreen>
   );
+}
+
+function formatKrwInput(value: string): string {
+  const digits = value.replace(/[^0-9]/gu, "");
+  if (!digits) return "";
+
+  const normalized = digits.replace(/^0+(?=\d)/u, "");
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
 }
 
 function OccurrencePicker({
@@ -428,8 +437,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(47,113,93,0.10)",
   },
-  roomName: { flex: 1, color: palette.green, fontSize: 13, fontWeight: "700" },
-  phaseLabel: { color: palette.coralText, fontSize: 10, fontWeight: "700" },
+  roomName: { flex: 1, color: palette.green, fontFamily: fonts.handBold, fontSize: 13, fontWeight: "700" },
+  phaseLabel: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
   locked: { marginTop: spacing.md },
   photoSection: { marginVertical: spacing.xl },
   photoFrame: {
@@ -461,10 +470,11 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderColor: palette.greenSoft,
     borderRadius: radii.lg,
-    backgroundColor: "rgba(255,255,255,0.34)",
+    backgroundColor: palette.paper,
   },
   photoPlaceholderTitle: {
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 14,
     fontWeight: "700",
     marginTop: spacing.sm,
@@ -480,9 +490,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.green,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.46)",
+    backgroundColor: palette.paper,
   },
-  photoButtonText: { color: palette.green, fontSize: 12, fontWeight: "700" },
+  photoButtonText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "700" },
   categorySection: { marginVertical: spacing.xl },
   categories: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   category: {
@@ -491,7 +501,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
   },
   timeSection: { marginBottom: spacing.xl },
-  timeValue: { color: palette.ink, fontSize: 17, fontWeight: "700" },
+  timeValue: { color: palette.ink, fontFamily: fonts.number, fontSize: 17, fontWeight: "700", ...tabularNums },
   timeButtons: { flexDirection: "row", gap: spacing.sm },
   timeButton: {
     flexDirection: "row",
@@ -502,17 +512,19 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: palette.green,
-    backgroundColor: "rgba(255,255,255,0.4)",
+    backgroundColor: palette.paper,
   },
-  timeButtonText: { color: palette.green, fontSize: 11, fontWeight: "600" },
-  webPickerHint: { color: palette.muted, fontSize: 11 },
+  timeButtonText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "600" },
+  webPickerHint: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
   memoInput: { minHeight: 92, textAlignVertical: "top" },
   counter: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 10,
     textAlign: "right",
     marginTop: 4,
     marginBottom: 4,
+    ...tabularNums,
   },
   formMessage: { marginBottom: spacing.md },
 });

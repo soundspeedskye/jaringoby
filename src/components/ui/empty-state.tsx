@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { palette, spacing } from "@/constants/design";
+import { fonts, palette, spacing } from "@/constants/design";
 
 type EmptyStateVariant = "screen" | "preview" | "compact";
 
@@ -62,14 +62,16 @@ const styles = StyleSheet.create({
   compact: { paddingVertical: spacing.xxl },
   title: {
     color: palette.ink,
-    fontSize: 17,
+    fontFamily: fonts.handBold,
+    fontSize: 18,
     fontWeight: "700",
     textAlign: "center",
   },
-  compactTitle: { color: palette.muted, fontSize: 12, fontWeight: "500" },
+  compactTitle: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, fontWeight: "500" },
   description: {
     maxWidth: 360,
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 12,
     lineHeight: 19,
     textAlign: "center",

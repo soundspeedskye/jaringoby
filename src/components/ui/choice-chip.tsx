@@ -7,7 +7,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing } from "@/constants/design";
 
 type ChipBaseProps = {
   label: string;
@@ -66,10 +66,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.line,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.44)",
+    backgroundColor: palette.paper,
   },
   selected: { borderColor: palette.green, backgroundColor: palette.green },
-  label: { color: palette.green, fontSize: 12, fontWeight: "600" },
+  label: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "600" },
   selectedLabel: { color: palette.cream },
   pressed: { opacity: 0.7 },
 });

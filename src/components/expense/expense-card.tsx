@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { palette, radii, shadow, spacing } from '@/constants/design';
+import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/constants/design';
 import { formatWon } from '@/utils/format';
 
 type ExpenseCardProps = {
@@ -55,18 +55,18 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
 });
 
 const styles = StyleSheet.create({
-  card: { overflow: 'hidden', backgroundColor: palette.paper, borderRadius: radii.lg, ...shadow },
+  card: { overflow: 'hidden', backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: radii.lg, ...shadow },
   pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md },
   author: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   avatar: { fontSize: 24 },
-  name: { color: palette.ink, fontSize: 14, fontWeight: '600' },
+  name: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '600' },
   expenseDetails: { flex: 1, minWidth: 0 },
-  category: { color: palette.ink, fontSize: 14, fontWeight: '700' },
-  meta: { color: palette.muted, fontSize: 11, marginTop: 2 },
-  amount: { color: palette.coralText, fontSize: 16, fontWeight: '700' },
+  category: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '700' },
+  meta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, marginTop: 2 },
+  amount: { color: palette.coralText, fontFamily: fonts.number, fontSize: 16, fontWeight: '700', ...tabularNums },
   photo: { width: '100%', aspectRatio: 16 / 10, backgroundColor: palette.line },
   footer: { padding: spacing.md, gap: spacing.sm },
-  memo: { color: palette.ink, fontSize: 14, lineHeight: 20 },
-  comments: { color: palette.muted, fontSize: 12 },
+  memo: { color: palette.ink, fontFamily: fonts.hand, fontSize: 14, lineHeight: 20 },
+  comments: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
 });

@@ -16,7 +16,7 @@ import { GlassSurface } from "@/components/ui/glass-surface";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing } from "@/constants/design";
 import type { OfflineMutationSummary } from "@/data/offline-queue-repository";
 import { useAppActions } from "@/providers/app-actions-provider";
 import {
@@ -547,6 +547,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 30,
     fontWeight: "700",
     marginTop: 4,
@@ -564,6 +565,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 20,
     fontWeight: "700",
   },
@@ -580,9 +582,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: palette.line,
   },
-  rowLabel: { flex: 1, color: palette.ink, fontSize: 14 },
-  rowValue: { color: palette.muted, fontSize: 13 },
+  rowLabel: { flex: 1, color: palette.ink, fontFamily: fonts.hand, fontSize: 14 },
+  rowValue: { color: palette.muted, fontFamily: fonts.hand, fontSize: 13 },
   syncText: { flex: 1, gap: 3 },
-  syncStatus: { color: palette.muted, fontSize: 12 },
+  syncStatus: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
   resetSection: { marginTop: spacing.xxl },
 });

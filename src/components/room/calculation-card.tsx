@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { palette, spacing } from '@/constants/design';
+import { fonts, palette, radii, spacing, tabularNums } from '@/constants/design';
 import { formatWon } from '@/utils/format';
 
 type CalculationCardProps = {
@@ -37,9 +37,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderLeftWidth: 4,
     borderLeftColor: palette.coral,
-    backgroundColor: 'rgba(255,255,255,0.34)',
+    borderTopRightRadius: radii.sm,
+    borderBottomRightRadius: radii.sm,
+    backgroundColor: palette.paper,
   },
-  title: { color: palette.ink, fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  meta: { color: palette.ink, fontSize: 12, marginBottom: 2 },
-  formula: { color: palette.ink, fontSize: 12 },
+  title: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  meta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, marginBottom: 2 },
+  formula: { color: palette.ink, fontFamily: fonts.number, fontSize: 12, ...tabularNums },
 });

@@ -10,7 +10,7 @@ import { GlassSurface } from "@/components/ui/glass-surface";
 import { KeyValueRow } from "@/components/ui/key-value-row";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import {
   createKoreanHolidaySnapshot,
   createPeriodMemberPlan,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   preview: {
     padding: spacing.xl,
     marginVertical: spacing.xl,
-    backgroundColor: "rgba(255,253,247,0.62)",
+    backgroundColor: palette.paper,
   },
   previewHeader: {
     flexDirection: "row",
@@ -263,17 +263,19 @@ const styles = StyleSheet.create({
   },
   previewKicker: {
     color: palette.coralText,
+    fontFamily: fonts.handBold,
     fontSize: 9,
     fontWeight: "700",
-    letterSpacing: 1.2,
+    letterSpacing: 0.4,
   },
   previewTitle: {
     color: palette.ink,
-    fontSize: 18,
+    fontFamily: fonts.handBold,
+    fontSize: 19,
     fontWeight: "700",
     marginTop: 3,
   },
-  previewValue: { color: palette.green, fontSize: 25, fontWeight: "800" },
+  previewValue: { color: palette.green, fontFamily: fonts.number, fontSize: 25, fontWeight: "800", ...tabularNums },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: palette.line,
@@ -281,6 +283,7 @@ const styles = StyleSheet.create({
   },
   previewFootnote: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 11,
     lineHeight: 17,
     marginTop: spacing.md,
@@ -308,6 +311,7 @@ const styles = StyleSheet.create({
   confirmationText: {
     flex: 1,
     color: palette.ink,
+    fontFamily: fonts.hand,
     fontSize: 12,
     lineHeight: 19,
   },

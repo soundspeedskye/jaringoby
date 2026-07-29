@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { palette, spacing } from '@/constants/design';
+import { fonts, palette, spacing, tabularNums } from '@/constants/design';
 import { formatWon } from '@/utils/format';
 
 export type MemberListItem = {
@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  heading: { color: palette.ink, fontSize: 18, fontWeight: '700', letterSpacing: -0.2 },
-  count: { color: palette.muted, fontSize: 13 },
+  heading: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 19, fontWeight: '700', letterSpacing: -0.2 },
+  count: { color: palette.muted, fontFamily: fonts.hand, fontSize: 13 },
   row: {
     minHeight: 80,
     flexDirection: 'row',
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 22 },
   copy: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { color: palette.ink, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  name: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 15, fontWeight: '700', flexShrink: 1 },
   badge: {
     paddingHorizontal: 7,
     paddingVertical: 4,
@@ -117,9 +117,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(233,135,98,0.10)',
   },
   badgeText: { color: palette.danger, fontSize: 10, fontWeight: '700' },
-  detail: { color: palette.ink, fontSize: 12, fontWeight: '500', marginTop: 5 },
+  detail: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, marginTop: 5 },
   amount: { minWidth: 72, alignItems: 'flex-end' },
-  amountValue: { color: palette.green, fontFamily: 'Georgia', fontSize: 19, fontWeight: '600' },
+  amountValue: { color: palette.green, fontFamily: fonts.number, fontSize: 19, fontWeight: '600', ...tabularNums },
   amountValueOver: { color: palette.danger },
-  amountLabel: { color: palette.ink, fontSize: 10, fontWeight: '600', marginTop: 2 },
+  amountLabel: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 2 },
 });

@@ -33,7 +33,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen, ScreenFrame } from "@/components/ui/screen";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import type {
   AddCommentInput,
   AddExpenseInput,
@@ -328,7 +328,9 @@ function ExpenseEditor({
     patch: Partial<AddExpenseInput>,
   ) => Promise<Expense>;
 }) {
-  const [draftAmount, setDraftAmount] = useState(String(expense.amount));
+  const [draftAmount, setDraftAmount] = useState(() =>
+    formatKrwInput(String(expense.amount)),
+  );
   const [draftCategory, setDraftCategory] = useState<ExpenseCategory>(
     expense.category,
   );
@@ -354,9 +356,10 @@ function ExpenseEditor({
   };
 
   const save = async () => {
-    const amount = Number(draftAmount.replace(/[^0-9]/gu, ""));
-    if (!Number.isSafeInteger(amount) || amount < 1) {
-      setError("금액을 1원 이상의 정수로 입력해 주세요.");
+    const amountText = draftAmount.replace(/[^0-9]/gu, "");
+    const amount = Number(amountText);
+    if (!amountText || !Number.isSafeInteger(amount) || amount < 0) {
+      setError("금액을 0원 이상의 정수로 입력해 주세요.");
       return;
     }
     if (!draftPhoto) {
@@ -398,7 +401,7 @@ function ExpenseEditor({
       <Field
         keyboardType="number-pad"
         label="금액"
-        onChangeText={setDraftAmount}
+        onChangeText={(value) => setDraftAmount(formatKrwInput(value))}
         value={draftAmount}
       />
       <View
@@ -457,6 +460,14 @@ function ExpenseEditor({
       />
     </GlassSurface>
   );
+}
+
+function formatKrwInput(value: string): string {
+  const digits = value.replace(/[^0-9]/gu, "");
+  if (!digits) return "";
+
+  const normalized = digits.replace(/^0+(?=\d)/u, "");
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
 }
 
 type CommentActionProps = {
@@ -1113,18 +1124,18 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 21 },
   authorCopy: { flex: 1 },
-  authorName: { color: palette.ink, fontSize: 14, fontWeight: "700" },
-  expenseMeta: { color: palette.muted, fontSize: 10, marginTop: 3 },
-  expenseAmount: { color: palette.coralText, fontSize: 17, fontWeight: "800" },
+  authorName: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
+  expenseMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 3, ...tabularNums },
+  expenseAmount: { color: palette.coralText, fontFamily: fonts.number, fontSize: 17, fontWeight: "800", ...tabularNums },
   expensePhoto: {
     width: "100%",
     aspectRatio: 16 / 10,
     backgroundColor: palette.line,
   },
   expenseCopy: { padding: spacing.md, gap: 5 },
-  expenseMemo: { color: palette.ink, fontSize: 14, lineHeight: 21 },
-  periodLabel: { color: palette.green, fontSize: 11, fontWeight: "600" },
-  sync: { color: palette.coralText, fontSize: 10 },
+  expenseMemo: { color: palette.ink, fontFamily: fonts.hand, fontSize: 14, lineHeight: 21 },
+  periodLabel: { color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "600" },
+  sync: { color: palette.coralText, fontFamily: fonts.hand, fontSize: 10 },
   expenseActions: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -1139,20 +1150,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.danger,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.46)",
+    backgroundColor: palette.paper,
   },
   editorCard: {
     gap: spacing.md,
     padding: spacing.lg,
     marginTop: spacing.lg,
-    backgroundColor: "rgba(255,253,247,0.68)",
+    backgroundColor: palette.paper,
   },
   editorHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  editorTitle: { color: palette.ink, fontSize: 17, fontWeight: "700" },
+  editorTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 17, fontWeight: "700" },
   editCategories: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   editMemo: { minHeight: 76, textAlignVertical: "top" },
   editPhoto: {
@@ -1161,7 +1172,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: palette.line,
   },
-  editDate: { color: palette.ink, fontSize: 13, fontWeight: "600" },
+  editDate: { color: palette.ink, fontFamily: fonts.number, fontSize: 13, fontWeight: "600", ...tabularNums },
   pickerRow: { flexDirection: "row", gap: spacing.sm },
   pickerButton: {
     paddingHorizontal: spacing.md,
@@ -1170,8 +1181,8 @@ const styles = StyleSheet.create({
     borderColor: palette.green,
     borderRadius: radii.pill,
   },
-  pickerButtonText: { color: palette.green, fontSize: 11, fontWeight: "600" },
-  webPicker: { color: palette.muted, fontSize: 10 },
+  pickerButtonText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "600" },
+  webPicker: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10 },
   threadHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -1179,8 +1190,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxxl,
     marginBottom: spacing.lg,
   },
-  threadTitle: { color: palette.ink, fontSize: 20, fontWeight: "800" },
-  threadRule: { color: palette.muted, fontSize: 10, marginTop: 4 },
+  threadTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 20, fontWeight: "800" },
+  threadRule: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 4 },
   commentSeparator: { height: spacing.md },
   messageRow: {
     flexDirection: "row",
@@ -1198,6 +1209,7 @@ const styles = StyleSheet.create({
   messageGroupMine: { alignItems: "flex-end" },
   messageAuthor: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 10,
     marginLeft: 4,
     marginBottom: 4,
@@ -1224,19 +1236,21 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: palette.coral,
   },
-  quoteAuthor: { color: palette.coralText, fontSize: 9, fontWeight: "700" },
+  quoteAuthor: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 9, fontWeight: "700" },
   quoteBody: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 10,
     lineHeight: 14,
     marginTop: 2,
   },
-  messageBody: { color: palette.ink, fontSize: 13, lineHeight: 19 },
+  messageBody: { color: palette.ink, fontFamily: fonts.hand, fontSize: 13, lineHeight: 19 },
   messageBodyMine: { color: palette.cream },
   deletedBody: { fontStyle: "italic" },
   editCommentInput: {
     minWidth: 160,
     color: palette.cream,
+    fontFamily: fonts.hand,
     fontSize: 13,
     lineHeight: 19,
     padding: 0,
@@ -1247,8 +1261,8 @@ const styles = StyleSheet.create({
     marginLeft: 0,
     marginRight: 4,
   },
-  messageTime: { color: palette.muted, fontSize: 9 },
-  pending: { color: palette.coralText, fontSize: 9 },
+  messageTime: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, ...tabularNums },
+  pending: { color: palette.coralText, fontFamily: fonts.hand, fontSize: 9 },
   commentActions: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -1260,28 +1274,31 @@ const styles = StyleSheet.create({
     marginLeft: 0,
     marginRight: 4,
   },
-  commentAction: { color: palette.muted, fontSize: 10 },
+  commentAction: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10 },
   commentActionStrong: {
     color: palette.green,
+    fontFamily: fonts.handBold,
     fontSize: 10,
     fontWeight: "700",
   },
-  commentActionDanger: { color: palette.danger, fontSize: 10 },
+  commentActionDanger: { color: palette.danger, fontFamily: fonts.hand, fontSize: 10 },
   feedback: {
     color: palette.success,
+    fontFamily: fonts.hand,
     fontSize: 11,
     textAlign: "center",
     marginTop: spacing.md,
   },
   threadError: {
     color: palette.danger,
+    fontFamily: fonts.hand,
     fontSize: 11,
     textAlign: "center",
     marginTop: spacing.md,
   },
   composer: {
     padding: spacing.md,
-    backgroundColor: "rgba(255,253,247,0.72)",
+    backgroundColor: palette.paper,
   },
   replyChip: {
     flexDirection: "row",
@@ -1293,8 +1310,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,135,98,0.10)",
   },
   replyCopy: { flex: 1 },
-  replyAuthor: { color: palette.coralText, fontSize: 10, fontWeight: "700" },
-  replyPreview: { color: palette.muted, fontSize: 10, marginTop: 2 },
+  replyAuthor: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
+  replyPreview: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 2 },
   composerRow: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -1307,11 +1324,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     color: palette.ink,
+    fontFamily: fonts.hand,
     fontSize: 13,
     borderWidth: 1,
     borderColor: palette.line,
     borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.58)",
+    backgroundColor: palette.paper,
   },
   sendButton: {
     width: 44,
@@ -1331,5 +1349,5 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(52,49,40,0.06)",
   },
-  closedComposerText: { color: palette.muted, fontSize: 11 },
+  closedComposerText: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
 });

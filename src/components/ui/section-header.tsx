@@ -7,7 +7,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { palette, spacing } from "@/constants/design";
+import { fonts, palette, spacing } from "@/constants/design";
 
 type SectionHeaderProps = {
   title: string;
@@ -55,10 +55,11 @@ const styles = StyleSheet.create({
   title: {
     flexShrink: 1,
     color: palette.ink,
-    fontSize: 19,
+    fontFamily: fonts.handBold,
+    fontSize: 20,
     fontWeight: "800",
   },
-  formTitle: { fontSize: 15, fontWeight: "700" },
+  formTitle: { fontFamily: fonts.hand, fontSize: 16, fontWeight: "700" },
   required: { color: palette.coralText, fontSize: 11 },
   trailing: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   meta: { color: palette.muted, fontSize: 11 },

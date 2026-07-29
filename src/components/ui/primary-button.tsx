@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 
-import { palette, radii, spacing } from '@/constants/design';
+import { fonts, palette, radii, spacing } from '@/constants/design';
 
 type PrimaryButtonProps = ComponentProps<typeof Pressable> & {
   label: string;
@@ -48,13 +48,14 @@ const styles = StyleSheet.create({
   },
   primary: { backgroundColor: palette.green },
   secondary: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: palette.paper,
     borderWidth: 1,
     borderColor: palette.green,
   },
   danger: { backgroundColor: palette.danger },
   label: {
     color: palette.cream,
+    fontFamily: fonts.handBold,
     fontSize: 16,
     fontWeight: '600',
   },

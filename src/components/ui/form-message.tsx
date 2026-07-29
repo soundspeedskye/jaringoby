@@ -1,6 +1,6 @@
 import { StyleSheet, Text, type StyleProp, type TextStyle } from "react-native";
 
-import { palette } from "@/constants/design";
+import { fonts, palette } from "@/constants/design";
 
 type FormMessageProps = {
   message?: string | null;
@@ -30,7 +30,7 @@ export function FormMessage({
 }
 
 const styles = StyleSheet.create({
-  message: { fontSize: 12, lineHeight: 18 },
+  message: { fontFamily: fonts.hand, fontSize: 12, lineHeight: 18 },
   error: { color: palette.danger },
   success: { color: palette.success },
 });

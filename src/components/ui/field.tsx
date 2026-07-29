@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { palette, radii, spacing } from '@/constants/design';
+import { fonts, palette, radii, spacing } from '@/constants/design';
 
 type FieldProps = ComponentProps<typeof TextInput> & {
   label: string;
@@ -28,19 +28,20 @@ export function Field({ label, error, hint, style, ...props }: FieldProps) {
 
 const styles = StyleSheet.create({
   wrapper: { gap: spacing.sm },
-  label: { color: palette.ink, fontSize: 14, fontWeight: '600' },
+  label: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '600' },
   input: {
     minHeight: 52,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     color: palette.ink,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    fontFamily: fonts.hand,
+    backgroundColor: palette.paper,
     borderWidth: 1,
     borderColor: palette.line,
     borderRadius: radii.md,
     fontSize: 16,
   },
   inputError: { borderColor: palette.danger },
-  error: { color: palette.danger, fontSize: 12 },
-  hint: { color: palette.muted, fontSize: 12 },
+  error: { color: palette.danger, fontFamily: fonts.hand, fontSize: 12 },
+  hint: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
 });

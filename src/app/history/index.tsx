@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlassSurface } from "@/components/ui/glass-surface";
 import { PageHeader } from "@/components/ui/page-header";
 import { ScreenFrame } from "@/components/ui/screen";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import type { Period, PeriodResult, Room } from "@/data/types";
 import {
   useActiveRoom,
@@ -258,7 +258,7 @@ export default function HistoryScreen() {
           </>
         }
         renderItem={renderRecord}
-        renderSectionFooter={HistorySectionFooter}
+        renderSectionFooter={() => <View style={styles.monthFooter} />}
         renderSectionHeader={({ section }) => (
           <View style={styles.monthHeader}>
             <Text style={styles.monthTitle}>{formatMonth(section.month)}</Text>
@@ -275,10 +275,6 @@ export default function HistoryScreen() {
 
 function HistoryCardSeparator() {
   return <View style={styles.cardSeparator} />;
-}
-
-function HistorySectionFooter() {
-  return <View style={styles.monthFooter} />;
 }
 
 const HistoryCard = memo(function HistoryCard({
@@ -413,9 +409,9 @@ const styles = StyleSheet.create({
   statsCard: {
     padding: spacing.lg,
     marginBottom: spacing.lg,
-    backgroundColor: "rgba(255,253,247,0.68)",
+    backgroundColor: palette.paper,
   },
-  statsTitle: { color: palette.ink, fontSize: 13, fontWeight: "700" },
+  statsTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
   statsRow: {
     flexDirection: "row",
     alignItems: "stretch",
@@ -425,13 +421,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(47,113,93,0.08)",
   },
   statBlock: { flex: 1, alignItems: "center", minWidth: 0 },
-  statLabel: { color: palette.muted, fontSize: 9 },
+  statLabel: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9 },
   statValue: {
     color: palette.ink,
+    fontFamily: fonts.number,
     fontSize: 14,
     fontWeight: "700",
     marginTop: 4,
     maxWidth: "92%",
+    ...tabularNums,
   },
   statValueHighlight: { color: palette.green },
   statsLine: {
@@ -447,11 +445,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.line,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.52)",
+    backgroundColor: palette.paper,
   },
   searchInput: {
     flex: 1,
     color: palette.ink,
+    fontFamily: fonts.hand,
     fontSize: 14,
     paddingVertical: 0,
   },
@@ -466,11 +465,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: spacing.md,
   },
-  monthTitle: { color: palette.ink, fontSize: 18, fontWeight: "800" },
-  monthCount: { color: palette.muted, fontSize: 11 },
+  monthTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 18, fontWeight: "800" },
+  monthCount: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, ...tabularNums },
   cardSeparator: { height: spacing.md },
   monthFooter: { height: spacing.xxl },
-  card: { padding: spacing.lg, backgroundColor: "rgba(255,253,247,0.68)" },
+  card: { padding: spacing.lg, backgroundColor: palette.paper },
   cardTop: { flexDirection: "row", alignItems: "center" },
   cardTitleGroup: { flex: 1 },
   resultBadge: {
@@ -484,15 +483,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(57,123,88,0.10)",
   },
   resultBadgeOver: { backgroundColor: "rgba(182,83,72,0.10)" },
-  resultText: { color: palette.success, fontSize: 9, fontWeight: "700" },
+  resultText: { color: palette.success, fontFamily: fonts.handBold, fontSize: 9, fontWeight: "700" },
   resultTextOver: { color: palette.danger },
   cardTitle: {
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 17,
     fontWeight: "800",
     marginTop: 7,
   },
-  cardPeriod: { color: palette.muted, fontSize: 10, marginTop: 3 },
+  cardPeriod: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 3, ...tabularNums },
   cardNumbers: {
     flexDirection: "row",
     alignItems: "stretch",
@@ -502,13 +502,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(47,113,93,0.08)",
   },
   numberBlock: { flex: 1, alignItems: "center", minWidth: 0 },
-  numberLabel: { color: palette.muted, fontSize: 9 },
+  numberLabel: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9 },
   numberValue: {
     color: palette.ink,
+    fontFamily: fonts.number,
     fontSize: 13,
     fontWeight: "700",
     marginTop: 4,
     maxWidth: "92%",
+    ...tabularNums,
   },
   verticalLine: {
     width: StyleSheet.hairlineWidth,
@@ -520,7 +522,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: spacing.md,
   },
-  cardMeta: { color: palette.muted, fontSize: 10 },
+  cardMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, ...tabularNums },
   readOnlyBadge: { flexDirection: "row", alignItems: "center", gap: 3 },
-  readOnlyText: { color: palette.muted, fontSize: 9 },
+  readOnlyText: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9 },
 });

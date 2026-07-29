@@ -31,7 +31,7 @@ import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen, ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
-import { palette, radii, shadow, spacing } from "@/constants/design";
+import { fonts, palette, radii, shadow, spacing, tabularNums } from "@/constants/design";
 import {
   expenseOfficialAmount,
   expensePendingDelta,
@@ -204,7 +204,7 @@ export default function RoomHomeScreen() {
       <Screen>
         {errorBanner}
         <View style={styles.emptyHeader}>
-          <Text style={styles.kicker}>JARINGOBY</Text>
+          <Text style={styles.kicker}>자린고비</Text>
           <Text style={styles.emptyTitle}>
             {error
               ? "기록을 불러오지 못했어요."
@@ -648,13 +648,15 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: palette.green,
-    fontSize: 11,
+    fontFamily: fonts.handBold,
+    fontSize: 13,
     fontWeight: "700",
-    letterSpacing: 1.6,
+    letterSpacing: 0.2,
   },
   greeting: {
     color: palette.ink,
-    fontSize: 17,
+    fontFamily: fonts.hand,
+    fontSize: 19,
     fontWeight: "600",
     marginTop: 3,
   },
@@ -665,7 +667,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 21,
-    backgroundColor: "rgba(255,255,255,0.52)",
+    backgroundColor: palette.paper,
     borderWidth: 1,
     borderColor: palette.line,
   },
@@ -678,7 +680,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(182,83,72,0.10)",
   },
-  errorText: { color: palette.danger, flex: 1, fontSize: 13 },
+  errorText: { color: palette.danger, flex: 1, fontFamily: fonts.hand, fontSize: 13 },
   memberSection: {
     marginTop: spacing.xl,
     paddingHorizontal: spacing.xs,
@@ -693,8 +695,8 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(52,49,40,0.12)",
   },
   inviteCopy: { flex: 1, minWidth: 0 },
-  codeLabel: { color: palette.ink, fontSize: 12, fontWeight: "700" },
-  codeHint: { color: palette.ink, fontSize: 10, marginTop: 3 },
+  codeLabel: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "700" },
+  codeHint: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 3 },
   codePill: {
     minHeight: 38,
     flexDirection: "row",
@@ -704,20 +706,22 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.34)",
+    backgroundColor: palette.paper,
   },
   code: {
     color: palette.green,
+    fontFamily: fonts.number,
     fontSize: 13,
     fontWeight: "800",
     letterSpacing: 1.2,
+    ...tabularNums,
   },
   codeDivider: {
     width: StyleSheet.hairlineWidth,
     height: 16,
     backgroundColor: "rgba(52,49,40,0.18)",
   },
-  capacity: { color: palette.ink, fontSize: 10, fontWeight: "600" },
+  capacity: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, fontWeight: "600", ...tabularNums },
   phaseBanner: {
     marginTop: spacing.lg,
   },
@@ -735,17 +739,19 @@ const styles = StyleSheet.create({
     backgroundColor: palette.green,
     ...shadow,
   },
-  addButtonText: { color: palette.cream, fontSize: 13, fontWeight: "700" },
+  addButtonText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 13, fontWeight: "700" },
   emptyHeader: { paddingTop: 90, paddingBottom: spacing.xxl },
   emptyTitle: {
     color: palette.ink,
+    fontFamily: fonts.hand,
     fontSize: 30,
-    lineHeight: 40,
+    lineHeight: 42,
     fontWeight: "700",
     marginTop: spacing.md,
   },
   emptyBody: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 15,
     lineHeight: 23,
     marginTop: spacing.md,

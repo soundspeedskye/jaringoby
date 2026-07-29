@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ExpenseCard } from "@/components/expense/expense-card";
 import type { MemberListItem } from "@/components/room/member-list";
 import { EmptyState } from "@/components/ui/empty-state";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import {
   expenseOfficialAmount,
   expensePendingDelta,
@@ -195,15 +195,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(52,49,40,0.10)",
+    borderColor: palette.line,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,253,247,0.56)",
+    backgroundColor: palette.paper,
   },
   headerExpanded: {
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     borderColor: "rgba(47,113,93,0.24)",
-    backgroundColor: "rgba(255,253,247,0.82)",
+    backgroundColor: palette.paper,
   },
   headerPressed: { backgroundColor: "rgba(47,113,93,0.06)" },
   avatar: {
@@ -213,8 +213,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.92)",
-    backgroundColor: "rgba(255,255,255,0.68)",
+    borderColor: palette.line,
+    backgroundColor: palette.cream,
   },
   avatarText: { fontSize: 21 },
   memberCopy: { flex: 1, minWidth: 0 },
@@ -222,6 +222,7 @@ const styles = StyleSheet.create({
   name: {
     flexShrink: 1,
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 15,
     fontWeight: "700",
   },
@@ -231,8 +232,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     backgroundColor: "rgba(233,135,98,0.11)",
   },
-  badgeText: { color: palette.danger, fontSize: 9, fontWeight: "700" },
-  summary: { color: palette.muted, fontSize: 12, marginTop: 5 },
+  badgeText: { color: palette.danger, fontFamily: fonts.hand, fontSize: 9, fontWeight: "700" },
+  summary: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, marginTop: 5, ...tabularNums },
   chevron: {
     width: 34,
     height: 34,
@@ -244,12 +245,12 @@ const styles = StyleSheet.create({
   chevronExpanded: { backgroundColor: palette.green },
   expenseBody: {
     paddingHorizontal: spacing.md,
-    backgroundColor: "rgba(255,253,247,0.82)",
+    backgroundColor: palette.paper,
   },
   expenseRow: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    backgroundColor: "rgba(255,253,247,0.82)",
+    backgroundColor: palette.paper,
   },
   expenseBodyEnd: {
     height: spacing.md,
@@ -260,7 +261,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderBottomLeftRadius: radii.md,
     borderBottomRightRadius: radii.md,
-    backgroundColor: "rgba(255,253,247,0.82)",
+    backgroundColor: palette.paper,
   },
   sectionGap: { height: spacing.md },
 });

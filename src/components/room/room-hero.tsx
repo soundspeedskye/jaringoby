@@ -1,7 +1,7 @@
 import Svg, { Circle } from 'react-native-svg';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { palette, radii, shadow, spacing } from '@/constants/design';
+import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/constants/design';
 import { formatWon } from '@/utils/format';
 
 type RoomHeroProps = {
@@ -41,7 +41,7 @@ export function RoomHero({
       accessibilityLabel={`${title}, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}, 적용한도 ${formatWon(appliedLimit)}${hasPending ? `, ${pendingDelta === 0 ? '금액 외 변경' : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ''}`}
       style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>WEEKDAY QUEST</Text>
+        <Text style={styles.eyebrow}>평일 챌린지</Text>
         <Text style={styles.eyebrow}>{daysRemaining <= 0 ? '오늘 종료' : `D-${daysRemaining}`}</Text>
       </View>
       <Text style={styles.title}>{title}</Text>
@@ -110,17 +110,17 @@ const styles = StyleSheet.create({
     ...shadow,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
-  eyebrow: { color: palette.cream, fontSize: 13, letterSpacing: 0.6, fontWeight: '500' },
-  title: { color: palette.cream, fontSize: 28, fontWeight: '600', marginTop: 12, marginBottom: 22 },
+  eyebrow: { color: palette.cream, fontFamily: fonts.hand, fontSize: 13, letterSpacing: 0.2, fontWeight: '500' },
+  title: { color: palette.cream, fontFamily: fonts.hand, fontSize: 26, fontWeight: '600', marginTop: 12, marginBottom: 22 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl },
   ringWrap: { width: ringSize, height: ringSize, alignItems: 'center', justifyContent: 'center' },
   ringLabel: { position: 'absolute', alignItems: 'center', justifyContent: 'center', inset: 0 },
-  remainingValue: { color: palette.cream, fontSize: 16, fontWeight: '600', maxWidth: 86 },
-  remainingLabel: { color: palette.cream, fontSize: 13, marginTop: 2 },
+  remainingValue: { color: palette.cream, fontFamily: fonts.number, fontSize: 16, fontWeight: '600', maxWidth: 86, ...tabularNums },
+  remainingLabel: { color: palette.cream, fontFamily: fonts.hand, fontSize: 13, marginTop: 2 },
   limitCopy: { flex: 1, minWidth: 0 },
-  joinLabel: { color: palette.cream, fontSize: 13, fontWeight: '600', marginBottom: spacing.sm },
-  limitValue: { color: palette.cream, fontSize: 28, fontWeight: '600' },
-  limitLabel: { color: 'rgba(253,246,227,0.82)', fontSize: 13, marginTop: spacing.xs },
+  joinLabel: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 13, fontWeight: '600', marginBottom: spacing.sm },
+  limitValue: { color: palette.cream, fontFamily: fonts.number, fontSize: 28, fontWeight: '700', ...tabularNums },
+  limitLabel: { color: 'rgba(253,246,227,0.82)', fontFamily: fonts.hand, fontSize: 13, marginTop: spacing.xs },
   basePill: {
     alignSelf: 'flex-start',
     marginTop: spacing.md,
@@ -131,6 +131,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
   },
-  basePillText: { color: palette.cream, fontSize: 11 },
-  pendingText: { color: palette.cream, fontSize: 11, marginTop: spacing.sm },
+  basePillText: { color: palette.cream, fontFamily: fonts.hand, fontSize: 11, ...tabularNums },
+  pendingText: { color: palette.cream, fontFamily: fonts.hand, fontSize: 11, marginTop: spacing.sm, ...tabularNums },
 });

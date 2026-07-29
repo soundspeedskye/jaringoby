@@ -9,7 +9,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { palette, spacing } from "@/constants/design";
+import { fonts, palette, spacing } from "@/constants/design";
 
 type HeaderSpacing = "md" | "lg" | "xl";
 
@@ -87,11 +87,11 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.48)",
+    backgroundColor: palette.paper,
   },
   copy: { flex: 1, minWidth: 0 },
-  title: { color: palette.ink, fontSize: 28, fontWeight: "700", marginTop: 3 },
-  subtitle: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  title: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 26, fontWeight: "700", marginTop: 3 },
+  subtitle: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, marginTop: 3 },
 });
 
 const bottomSpacingStyles: Record<HeaderSpacing, ViewStyle> = {

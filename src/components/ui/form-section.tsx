@@ -8,7 +8,7 @@ import {
 } from "react-native";
 
 import { SectionHeader } from "@/components/ui/section-header";
-import { palette, spacing } from "@/constants/design";
+import { fonts, palette, spacing } from "@/constants/design";
 
 type FormSectionProps = PropsWithChildren<{
   title: string;
@@ -35,5 +35,5 @@ export function FormSection({
 
 const styles = StyleSheet.create({
   section: { gap: spacing.md },
-  hint: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  hint: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, lineHeight: 17 },
 });

@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing } from "@/constants/design";
 
 type NoticeTone = "info" | "success" | "warning" | "danger";
 
@@ -78,5 +78,5 @@ const styles = StyleSheet.create({
   success: { backgroundColor: "rgba(57,123,88,0.10)" },
   warning: { backgroundColor: "rgba(233,135,98,0.10)" },
   danger: { backgroundColor: "rgba(182,83,72,0.10)" },
-  text: { flex: 1, fontSize: 11, lineHeight: 18 },
+  text: { flex: 1, fontFamily: fonts.hand, fontSize: 11, lineHeight: 18 },
 });

@@ -6,7 +6,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { palette, spacing } from "@/constants/design";
+import { fonts, palette, spacing, tabularNums } from "@/constants/design";
 
 type KeyValueRowProps = {
   label: string;
@@ -48,13 +48,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing.md,
   },
-  label: { color: palette.muted, fontSize: 12 },
+  label: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
   value: {
     flex: 1,
     color: palette.ink,
+    fontFamily: fonts.number,
     fontSize: 12,
     fontWeight: "600",
     textAlign: "right",
+    ...tabularNums,
   },
   emphasized: { color: palette.green, fontWeight: "800" },
 });

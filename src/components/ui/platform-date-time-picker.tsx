@@ -6,7 +6,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useState, type ReactNode } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { palette, radii, shadow, spacing } from "@/constants/design";
+import { fonts, palette, radii, shadow, spacing } from "@/constants/design";
 
 type PlatformDateTimePickerProps = {
   iosModalTitle?: string;
@@ -146,6 +146,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 15,
     fontWeight: "700",
   },

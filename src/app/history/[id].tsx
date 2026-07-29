@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen, ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import type { Expense } from "@/data/types";
 import { createPeriodTimeline } from "@/domain";
 import {
@@ -426,11 +426,12 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: palette.cream,
+    fontFamily: fonts.hand,
     fontSize: 25,
     fontWeight: "800",
     marginTop: 5,
   },
-  heroPeriod: { color: "rgba(253,246,227,0.72)", fontSize: 11, marginTop: 5 },
+  heroPeriod: { color: "rgba(253,246,227,0.72)", fontFamily: fonts.hand, fontSize: 11, marginTop: 5, ...tabularNums },
   heroResult: {
     flexDirection: "row",
     alignItems: "center",
@@ -450,9 +451,10 @@ const styles = StyleSheet.create({
   },
   resultIconOver: { backgroundColor: palette.cream },
   heroResultCopy: { flex: 1 },
-  heroResultLabel: { color: "rgba(253,246,227,0.70)", fontSize: 10 },
+  heroResultLabel: { color: "rgba(253,246,227,0.70)", fontFamily: fonts.hand, fontSize: 10 },
   heroResultValue: {
     color: palette.cream,
+    fontFamily: fonts.handBold,
     fontSize: 18,
     fontWeight: "800",
     marginTop: 3,
@@ -469,19 +471,21 @@ const styles = StyleSheet.create({
     backgroundColor: palette.paper,
   },
   stat: { flex: 1, alignItems: "center", minWidth: 0 },
-  statLabel: { color: palette.muted, fontSize: 9 },
+  statLabel: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9 },
   statValue: {
     color: palette.ink,
+    fontFamily: fonts.number,
     fontSize: 14,
     fontWeight: "700",
     marginTop: 4,
     maxWidth: "92%",
+    ...tabularNums,
   },
   statLine: { width: StyleSheet.hairlineWidth, backgroundColor: palette.line },
   rules: {
     padding: spacing.xl,
     marginTop: spacing.xxl,
-    backgroundColor: "rgba(255,253,247,0.68)",
+    backgroundColor: palette.paper,
   },
   sectionHeading: { marginBottom: spacing.md },
   holidayBox: {
@@ -490,17 +494,19 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(240,185,46,0.12)",
   },
-  holidayTitle: { color: palette.ink, fontSize: 10, fontWeight: "700" },
+  holidayTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
   holidayDates: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 10,
     lineHeight: 16,
     marginTop: 3,
+    ...tabularNums,
   },
   memberSection: { marginTop: spacing.xxxl },
   memberList: {
     paddingHorizontal: spacing.lg,
-    backgroundColor: "rgba(255,253,247,0.62)",
+    backgroundColor: palette.paper,
   },
   memberRow: {
     minHeight: 92,
@@ -524,6 +530,7 @@ const styles = StyleSheet.create({
   memberNameRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   memberName: {
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 14,
     fontWeight: "700",
     flexShrink: 1,
@@ -534,13 +541,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     backgroundColor: "rgba(233,135,98,0.12)",
   },
-  lateText: { color: palette.coralText, fontSize: 8, fontWeight: "700" },
-  memberCalculation: { color: palette.muted, fontSize: 9, marginTop: 5 },
-  memberJoin: { color: palette.muted, fontSize: 9, marginTop: 3 },
+  lateText: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 8, fontWeight: "700" },
+  memberCalculation: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 5, ...tabularNums },
+  memberJoin: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 3, ...tabularNums },
   memberAmount: { alignItems: "flex-end" },
-  memberRemaining: { color: palette.success, fontSize: 17, fontWeight: "700" },
+  memberRemaining: { color: palette.success, fontFamily: fonts.number, fontSize: 17, fontWeight: "700", ...tabularNums },
   memberRemainingOver: { color: palette.danger },
-  memberAmountLabel: { color: palette.muted, fontSize: 9, marginTop: 2 },
+  memberAmountLabel: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 2 },
   expenseSection: { marginTop: spacing.xxxl },
   expenseSeparator: { height: spacing.xl },
   expenseRecord: { gap: 0 },
@@ -549,22 +556,23 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.sm,
     borderBottomLeftRadius: radii.md,
     borderBottomRightRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.42)",
+    backgroundColor: palette.paper,
   },
   previewComment: { flexDirection: "row", gap: spacing.sm, paddingVertical: 4 },
   previewAuthor: {
     color: palette.green,
+    fontFamily: fonts.handBold,
     width: 58,
     fontSize: 10,
     fontWeight: "700",
   },
-  previewBody: { color: palette.ink, flex: 1, fontSize: 10 },
-  moreComments: { color: palette.muted, fontSize: 9, marginTop: 4 },
+  previewBody: { color: palette.ink, fontFamily: fonts.hand, flex: 1, fontSize: 10 },
+  moreComments: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 4 },
   openThread: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
     marginTop: spacing.sm,
   },
-  openThreadText: { color: palette.green, fontSize: 10, fontWeight: "700" },
+  openThreadText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
 });

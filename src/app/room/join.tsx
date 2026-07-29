@@ -17,7 +17,7 @@ import { GlassSurface } from "@/components/ui/glass-surface";
 import { KeyValueRow } from "@/components/ui/key-value-row";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import type { InvitePreview } from "@/data/types";
 import {
   createPeriodTimeline,
@@ -59,7 +59,7 @@ export default function JoinRoomScreen() {
     // so a typo should not spend one of the user's lookup attempts.
     if (!isValidInviteCodeFormat(normalizedCode)) {
       setPreview(null);
-      setMessage("참여 코드는 6자리이고 0·1·I·L·O는 쓰지 않아요.");
+      setMessage("참여 코드는 영문·숫자 6자리예요.");
       return;
     }
     setPreviewing(true);
@@ -287,6 +287,7 @@ function phaseLabel(phase: string, participatesThisWeek: boolean): string {
 const styles = StyleSheet.create({
   intro: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 14,
     lineHeight: 21,
     marginBottom: spacing.xl,
@@ -303,12 +304,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: palette.green,
   },
-  lookupText: { color: palette.cream, fontSize: 14, fontWeight: "700" },
+  lookupText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
   message: { marginTop: spacing.sm },
   preview: {
     padding: spacing.xl,
     marginTop: spacing.xl,
-    backgroundColor: "rgba(255,253,247,0.66)",
+    backgroundColor: palette.paper,
   },
   previewHero: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   previewIcon: {
@@ -320,42 +321,47 @@ const styles = StyleSheet.create({
     backgroundColor: palette.green,
   },
   previewCopy: { flex: 1 },
-  phase: { color: palette.coralText, fontSize: 11, fontWeight: "700" },
+  phase: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "700" },
   roomName: {
     color: palette.ink,
+    fontFamily: fonts.handBold,
     fontSize: 21,
     fontWeight: "800",
     marginTop: 2,
   },
-  period: { color: palette.muted, fontSize: 12, marginTop: 4 },
+  period: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, marginTop: 4, ...tabularNums },
   ruleBox: {
     marginTop: spacing.xl,
     padding: spacing.md,
     gap: spacing.sm,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.42)",
+    backgroundColor: palette.paper,
   },
   limitBox: { alignItems: "center", paddingVertical: spacing.xl },
-  limitLabel: { color: palette.muted, fontSize: 12 },
+  limitLabel: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
   limitValue: {
     color: palette.green,
+    fontFamily: fonts.number,
     fontSize: 32,
     fontWeight: "800",
     marginTop: 4,
+    ...tabularNums,
   },
-  formula: { color: palette.ink, fontSize: 12, marginTop: 5 },
+  formula: { color: palette.ink, fontFamily: fonts.number, fontSize: 12, marginTop: 5, ...tabularNums },
   holidays: {
     padding: spacing.md,
     borderRadius: radii.md,
     backgroundColor: "rgba(240,185,46,0.12)",
     marginBottom: spacing.md,
   },
-  holidayTitle: { color: palette.ink, fontSize: 11, fontWeight: "700" },
+  holidayTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "700" },
   holidayDates: {
     color: palette.muted,
+    fontFamily: fonts.hand,
     fontSize: 11,
     lineHeight: 17,
     marginTop: 3,
+    ...tabularNums,
   },
   visibilityNotice: { marginBottom: spacing.md },
   notice: { marginBottom: spacing.sm },

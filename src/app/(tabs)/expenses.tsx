@@ -16,7 +16,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenFrame } from "@/components/ui/screen";
-import { palette, radii, spacing } from "@/constants/design";
+import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import {
   expenseOfficialAmount,
   expenseOfficialCategory,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: "rgba(255,255,255,0.5)",
+    backgroundColor: palette.paper,
   },
   totalCard: {
     padding: spacing.xl,
@@ -202,15 +202,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  totalLabel: { color: palette.cream, fontSize: 13 },
+  totalLabel: { color: palette.cream, fontFamily: fonts.hand, fontSize: 13 },
   totalValue: {
     color: palette.cream,
+    fontFamily: fonts.number,
     fontSize: 30,
     fontWeight: "700",
     marginTop: 5,
+    ...tabularNums,
   },
-  totalMeta: { color: "rgba(253,246,227,0.76)", fontSize: 11 },
-  pendingMeta: { color: "rgba(253,246,227,0.82)", fontSize: 11, marginTop: 5 },
+  totalMeta: { color: "rgba(253,246,227,0.76)", fontFamily: fonts.hand, fontSize: 11, ...tabularNums },
+  pendingMeta: { color: "rgba(253,246,227,0.82)", fontFamily: fonts.hand, fontSize: 11, marginTop: 5, ...tabularNums },
   filters: {
     flexDirection: "row",
     flexWrap: "wrap",

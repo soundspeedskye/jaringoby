@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassSurface } from '@/components/ui/glass-surface';
-import { palette, radii, spacing } from '@/constants/design';
+import { fonts, palette, radii, spacing } from '@/constants/design';
 
 const labels: Record<string, string> = {
   index: '챌린지',
@@ -55,8 +55,8 @@ const styles = StyleSheet.create({
   glass: { borderRadius: radii.lg },
   row: { flexDirection: 'row', padding: spacing.sm },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 54, borderRadius: radii.md },
-  itemFocused: { backgroundColor: 'rgba(253,246,227,0.58)' },
+  itemFocused: { backgroundColor: 'rgba(47,113,93,0.10)' },
   pressed: { opacity: 0.7 },
-  label: { color: palette.muted, fontSize: 11 },
-  labelFocused: { color: palette.green, fontWeight: '600' },
+  label: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
+  labelFocused: { color: palette.green, fontFamily: fonts.handBold, fontWeight: '600' },
 });
