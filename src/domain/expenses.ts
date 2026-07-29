@@ -78,7 +78,7 @@ export function evaluateExpenseEligibility(input: {
     reasons.push('HOLIDAY_OR_UNSELECTED_DATE');
   }
   try {
-    assertKrwAmount(expense.amount);
+    assertKrwAmount(expense.amount, 'amount', true);
   } catch {
     reasons.push('INVALID_KRW_AMOUNT');
   }
