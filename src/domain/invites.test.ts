@@ -32,20 +32,20 @@ describe('isValidInviteCodeFormat', () => {
     expect(isValidInviteCodeFormat('SAVE555')).toBe(false);
   });
 
-  // Regression: the join screen once suggested "SAVE50" as its placeholder, a
-  // code the alphabet can never produce.
-  it('rejects a code containing a digit the alphabet excludes', () => {
-    expect(isValidInviteCodeFormat('SAVE50')).toBe(false);
-  });
-
-  // The join screen tells users that 0/1/I/L/O are unusable; keep that copy honest.
+  // The alphabet now spans all of 0-9 A-Z; the characters that used to be
+  // excluded (0/1/I/L/O) are accepted so server-issued codes never get blocked.
   it.each(['0', '1', 'I', 'L', 'O'])(
-    'rejects the visually ambiguous character %s',
+    'accepts the once-excluded character %s',
     (character) => {
-      expect(INVITE_CODE_ALPHABET).not.toContain(character);
-      expect(isValidInviteCodeFormat(`${character}AVE50`)).toBe(false);
+      expect(INVITE_CODE_ALPHABET).toContain(character);
+      expect(isValidInviteCodeFormat(`${character}AVE50`)).toBe(true);
     },
   );
+
+  it('rejects characters outside 0-9 A-Z', () => {
+    expect(isValidInviteCodeFormat('SAVE5-')).toBe(false);
+    expect(isValidInviteCodeFormat('세이브55')).toBe(false);
+  });
 
   it('has an alphabet and length consistent with the codes it accepts', () => {
     expect(INVITE_CODE_LENGTH).toBe(6);

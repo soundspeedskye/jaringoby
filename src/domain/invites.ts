@@ -1,7 +1,7 @@
 export const DEFAULT_MAX_ACTIVE_MEMBERS = 10;
 export const ROOM_NAME_MAX_CHARACTERS = 40;
 export const INVITE_CODE_LENGTH = 6;
-export const INVITE_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ' as const;
+export const INVITE_CODE_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ' as const;
 const INVITE_CODE_PATTERN = new RegExp(`^[${INVITE_CODE_ALPHABET}]{${INVITE_CODE_LENGTH}}$`, 'u');
 
 export function normalizeInviteCode(code: string): string {
