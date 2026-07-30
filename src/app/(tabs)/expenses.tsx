@@ -26,7 +26,7 @@ import {
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/domain";
 import {
   useCommentCounts,
-  useCurrentUser,
+  useCurrentRoom,
   useUserExpenses,
 } from "@/providers/app-data-hooks";
 import type { Expense } from "@/data/types";
@@ -34,10 +34,15 @@ import { formatDateLabel, formatWon } from "@/utils/format";
 
 type Filter = "전체" | ExpenseCategory;
 
+const EMPTY_EXPENSES: Expense[] = [];
+
 export default function ExpensesScreen() {
   const router = useRouter();
-  const currentUser = useCurrentUser();
-  const ownExpenses = useUserExpenses(currentUser?.id);
+  // 현재 챌린지(진행 중 period)의 지출만 노출한다. 지난 챌린지 지출은
+  // 내 정보 · 지난 주차에서 확인하므로 여기서는 중복 노출하지 않는다.
+  const { currentPeriod, currentUser } = useCurrentRoom();
+  const periodExpenses = useUserExpenses(currentUser?.id, currentPeriod?.id);
+  const ownExpenses = currentPeriod ? periodExpenses : EMPTY_EXPENSES;
   const commentCounts = useCommentCounts(ownExpenses);
   const [filter, setFilter] = useState<Filter>("전체");
   const visibleExpenses = useMemo(
@@ -66,7 +71,7 @@ export default function ExpensesScreen() {
     ({ item: expense }: ListRenderItemInfo<Expense>) => (
       <ExpenseCard
         amount={expense.amount}
-        avatar={currentUser?.avatar ?? "🙂"}
+        avatar={currentUser?.avatar ?? ""}
         category={expense.category}
         commentCount={commentCounts.get(expense.id) ?? 0}
         edited={expense.createdAt !== expense.updatedAt}
