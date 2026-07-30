@@ -1,18 +1,35 @@
-import Svg, { Circle } from 'react-native-svg';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
-import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/constants/design';
-import { formatWon } from '@/utils/format';
+import {
+  fonts,
+  palette,
+  radii,
+  shadow,
+  spacing,
+  tabularNums,
+} from "@/constants/design";
+import { formatWon } from "@/utils/format";
+
+// 그 주 평일 한 칸. participating = 참여 기간(합류일~주말) 안이면서 공휴일이 아닌 날.
+export type WeekDay = {
+  day: number;
+  participating: boolean;
+  isHoliday: boolean;
+  isToday: boolean;
+};
 
 type RoomHeroProps = {
   title: string;
+  weekIndex: number;
   daysRemaining: number;
-  baseLimit: number;
   appliedLimit: number;
   spent: number;
   pendingDelta?: number;
   pendingCount?: number;
-  joinLabel: string;
+  weekMonthLabel: string;
+  weekDays: WeekDay[];
+  weekRangeLabel: string;
 };
 
 const ringSize = 132;
@@ -22,13 +39,15 @@ const circumference = 2 * Math.PI * radius;
 
 export function RoomHero({
   title,
+  weekIndex,
   daysRemaining,
-  baseLimit,
   appliedLimit,
   spent,
   pendingDelta = 0,
   pendingCount = 0,
-  joinLabel,
+  weekMonthLabel,
+  weekDays,
+  weekRangeLabel,
 }: RoomHeroProps) {
   const safeLimit = Math.max(appliedLimit, 1);
   const hasPending = pendingDelta !== 0 || pendingCount > 0;
@@ -38,16 +57,23 @@ export function RoomHero({
   return (
     <View
       accessible
-      accessibilityLabel={`${title}, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}, 적용한도 ${formatWon(appliedLimit)}${hasPending ? `, ${pendingDelta === 0 ? '금액 외 변경' : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ''}`}
-      style={styles.container}>
+      accessibilityLabel={`${title} ${weekIndex}주차, ${weekRangeLabel}, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}, 적용한도 ${formatWon(appliedLimit)}${hasPending ? `, ${pendingDelta === 0 ? "금액 외 변경" : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ""}`}
+      style={styles.container}
+    >
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>평일 챌린지</Text>
-        <Text style={styles.eyebrow}>{daysRemaining <= 0 ? '오늘 종료' : `D-${daysRemaining}`}</Text>
+        <Text style={styles.eyebrow}>평일 챌린지 · {weekIndex}주차</Text>
+        <Text style={styles.eyebrow}>
+          {daysRemaining <= 0 ? "오늘 종료" : `D-${daysRemaining}`} | {weekMonthLabel}
+        </Text>
       </View>
       <Text style={styles.title}>{title}</Text>
       <View style={styles.summary}>
         <View style={styles.ringWrap}>
-          <Svg accessibilityLabel={`예산 사용률 ${Math.round(progress * 100)}퍼센트`} height={ringSize} width={ringSize}>
+          <Svg
+            accessibilityLabel={`예산 사용률 ${Math.round(progress * 100)}퍼센트`}
+            height={ringSize}
+            width={ringSize}
+          >
             <Circle
               cx={ringSize / 2}
               cy={ringSize / 2}
@@ -73,21 +99,49 @@ export function RoomHero({
             <Text numberOfLines={1} style={styles.remainingValue}>
               {formatWon(Math.abs(remaining), false)}
             </Text>
-            <Text style={styles.remainingLabel}>{remaining < 0 ? '초과' : '남음'}</Text>
+            <Text style={styles.remainingLabel}>
+              {remaining < 0 ? "초과" : "남음"}
+            </Text>
           </View>
         </View>
         <View style={styles.limitCopy}>
-          <Text style={styles.joinLabel}>{joinLabel}</Text>
-          <Text adjustsFontSizeToFit numberOfLines={1} style={styles.limitValue}>
+          <View accessibilityLabel={weekRangeLabel} style={styles.weekStrip}>
+            {weekDays.map((weekDay) => (
+              <View
+                key={weekDay.day}
+                style={[
+                  styles.weekCell,
+                  weekDay.participating && styles.weekCellIn,
+                  weekDay.isToday && styles.weekCellToday,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.weekDayText,
+                    weekDay.participating && styles.weekDayIn,
+                    weekDay.isToday && styles.weekDayToday,
+                    weekDay.isHoliday && styles.weekDayHoliday,
+                  ]}
+                >
+                  {weekDay.day}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.limitDivider} />
+          <Text
+            adjustsFontSizeToFit
+            numberOfLines={1}
+            style={styles.limitValue}
+          >
             {formatWon(appliedLimit)}
           </Text>
-          <Text style={styles.limitLabel}>내 적용한도</Text>
-          <View style={styles.basePill}>
-            <Text style={styles.basePillText}>기준금액 {formatWon(baseLimit)}</Text>
-          </View>
           {hasPending ? (
             <Text style={styles.pendingText}>
-              임시 합계 {formatWon(spent + pendingDelta)} · {pendingDelta === 0 ? '금액 외 변경 대기' : `대기 반영 ${formatSignedWon(pendingDelta)}`}
+              임시 합계 {formatWon(spent + pendingDelta)} ·{" "}
+              {pendingDelta === 0
+                ? "금액 외 변경 대기"
+                : `대기 반영 ${formatSignedWon(pendingDelta)}`}
             </Text>
           ) : null}
         </View>
@@ -97,7 +151,7 @@ export function RoomHero({
 }
 
 function formatSignedWon(value: number): string {
-  return `${value > 0 ? '+' : '-'}${formatWon(Math.abs(value))}`;
+  return `${value > 0 ? "+" : "-"}${formatWon(Math.abs(value))}`;
 }
 
 const styles = StyleSheet.create({
@@ -109,28 +163,90 @@ const styles = StyleSheet.create({
     backgroundColor: palette.green,
     ...shadow,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
-  eyebrow: { color: palette.cream, fontFamily: fonts.hand, fontSize: 13, letterSpacing: 0.2, fontWeight: '500' },
-  title: { color: palette.cream, fontFamily: fonts.hand, fontSize: 26, fontWeight: '600', marginTop: 12, marginBottom: 22 },
-  summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl },
-  ringWrap: { width: ringSize, height: ringSize, alignItems: 'center', justifyContent: 'center' },
-  ringLabel: { position: 'absolute', alignItems: 'center', justifyContent: 'center', inset: 0 },
-  remainingValue: { color: palette.cream, fontFamily: fonts.number, fontSize: 16, fontWeight: '600', maxWidth: 86, ...tabularNums },
-  remainingLabel: { color: palette.cream, fontFamily: fonts.hand, fontSize: 13, marginTop: 2 },
-  limitCopy: { flex: 1, minWidth: 0 },
-  joinLabel: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 13, fontWeight: '600', marginBottom: spacing.sm },
-  limitValue: { color: palette.cream, fontFamily: fonts.number, fontSize: 28, fontWeight: '700', ...tabularNums },
-  limitLabel: { color: 'rgba(253,246,227,0.82)', fontFamily: fonts.hand, fontSize: 13, marginTop: spacing.xs },
-  basePill: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
-    borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: spacing.md,
   },
-  basePillText: { color: palette.cream, fontFamily: fonts.hand, fontSize: 11, ...tabularNums },
-  pendingText: { color: palette.cream, fontFamily: fonts.hand, fontSize: 11, marginTop: spacing.sm, ...tabularNums },
+  eyebrow: {
+    color: palette.cream,
+    fontFamily: fonts.hand,
+    fontSize: 13,
+    letterSpacing: 0.2,
+    fontWeight: "500",
+  },
+  title: {
+    color: palette.cream,
+    fontFamily: fonts.hand,
+    fontSize: 26,
+    fontWeight: "600",
+    marginTop: 12,
+    marginBottom: 22,
+  },
+  summary: { flexDirection: "row", alignItems: "center", gap: spacing.xl },
+  ringWrap: {
+    width: ringSize,
+    height: ringSize,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringLabel: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    inset: 0,
+  },
+  remainingValue: {
+    color: palette.cream,
+    fontFamily: fonts.number,
+    fontSize: 16,
+    fontWeight: "600",
+    maxWidth: 86,
+    ...tabularNums,
+  },
+  remainingLabel: {
+    color: palette.cream,
+    fontFamily: fonts.hand,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  limitCopy: { flex: 1, minWidth: 0 },
+  weekStrip: { flexDirection: "row", gap: 4, marginBottom: spacing.sm },
+  limitDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    marginBottom: spacing.md,
+  },
+  weekCell: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 6,
+    borderRadius: radii.md,
+  },
+  weekCellIn: { backgroundColor: "rgba(255,255,255,0.13)" },
+  weekCellToday: { backgroundColor: "rgba(255,255,255,0.22)" },
+  weekDayText: {
+    color: "rgba(253,246,227,0.42)",
+    fontFamily: fonts.number,
+    fontSize: 13,
+    ...tabularNums,
+  },
+  weekDayIn: { color: palette.cream },
+  weekDayToday: { color: palette.white, fontWeight: "700", fontSize: 16 },
+  weekDayHoliday: { color: palette.coral },
+  limitValue: {
+    color: palette.cream,
+    fontFamily: fonts.number,
+    fontSize: 28,
+    fontWeight: "700",
+    textAlign: "right",
+    ...tabularNums,
+  },
+  pendingText: {
+    color: palette.cream,
+    fontFamily: fonts.hand,
+    fontSize: 11,
+    marginTop: spacing.sm,
+    ...tabularNums,
+  },
 });
