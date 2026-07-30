@@ -1,14 +1,9 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { memo, useCallback, useMemo } from "react";
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import { ExpenseCard } from "@/components/expense/expense-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GlassSurface } from "@/components/ui/glass-surface";
@@ -18,7 +13,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen, ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
+import {
+  fonts,
+  palette,
+  radii,
+  spacing,
+  tabularNums,
+} from "@/constants/design";
 import type { Expense } from "@/data/types";
 import { createPeriodTimeline } from "@/domain";
 import {
@@ -52,46 +53,46 @@ export default function HistoryDetailScreen() {
   );
   const profilesById = useProfiles(profileUserIds);
   const expenses = useMemo(
-    () => [...periodExpenses].sort(
-      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
-    ),
+    () =>
+      [...periodExpenses].sort(
+        (left, right) =>
+          Date.parse(right.createdAt) - Date.parse(left.createdAt),
+      ),
     [periodExpenses],
   );
   const timeline = useMemo(
-    () => period ? createPeriodTimeline(period.weekStart) : null,
+    () => (period ? createPeriodTimeline(period.weekStart) : null),
     [period],
   );
-  const {
-    crownIdSet,
-    everyoneAchieved,
-    memberResults,
-    myResult,
-  } = useMemo(() => {
-    const membersByUserId = new Map(
-      periodMembers.map((member) => [member.userId, member]),
-    );
-    const nextMemberResults = results.map((result) => ({
-      result,
-      member: membersByUserId.get(result.userId),
-      profile: profilesById.get(result.userId),
-    }));
-    const nextCrownIdSet = new Set(
-      results.filter((result) => result.isCrown).map((result) => result.userId),
-    );
-    const settledResults = nextMemberResults.filter(
-      (row) => !row.member || row.member.status === "ACTIVE",
-    );
-    return {
-      crownIdSet: nextCrownIdSet,
-      everyoneAchieved:
-        settledResults.length > 0
-        && settledResults.every((row) => row.result.achieved),
-      memberResults: nextMemberResults,
-      myResult: nextMemberResults.find(
-        (row) => row.result.userId === currentUser?.id,
-      ),
-    };
-  }, [currentUser?.id, periodMembers, profilesById, results]);
+  const { crownIdSet, everyoneAchieved, memberResults, myResult } =
+    useMemo(() => {
+      const membersByUserId = new Map(
+        periodMembers.map((member) => [member.userId, member]),
+      );
+      const nextMemberResults = results.map((result) => ({
+        result,
+        member: membersByUserId.get(result.userId),
+        profile: profilesById.get(result.userId),
+      }));
+      const nextCrownIdSet = new Set(
+        results
+          .filter((result) => result.isCrown)
+          .map((result) => result.userId),
+      );
+      const settledResults = nextMemberResults.filter(
+        (row) => !row.member || row.member.status === "ACTIVE",
+      );
+      return {
+        crownIdSet: nextCrownIdSet,
+        everyoneAchieved:
+          settledResults.length > 0 &&
+          settledResults.every((row) => row.result.achieved),
+        memberResults: nextMemberResults,
+        myResult: nextMemberResults.find(
+          (row) => row.result.userId === currentUser?.id,
+        ),
+      };
+    }, [currentUser?.id, periodMembers, profilesById, results]);
   const openExpense = useCallback(
     (expenseId: string) => router.push(`/expense/${expenseId}`),
     [router],
@@ -150,163 +151,178 @@ export default function HistoryDetailScreen() {
             </NoticeBanner>
 
             <View style={styles.hero}>
-        <Text style={styles.heroTitle}>
-          {room?.name ?? "방"} · {period.weekIndex}주차
-        </Text>
-        <Text style={styles.heroPeriod}>
-          {period.weekStart} ~ {period.weekEnd}
-        </Text>
-        <View style={styles.heroResult}>
-          <View
-            style={[
-              styles.resultIcon,
-              !myResult?.result.achieved && styles.resultIconOver,
-            ]}
-          >
-            <MaterialCommunityIcons
-              color={myResult?.result.achieved ? palette.green : palette.danger}
-              name={
-                myResult?.result.achieved
-                  ? "trophy-outline"
-                  : "chart-line-variant"
-              }
-              size={27}
-            />
-          </View>
-          <View style={styles.heroResultCopy}>
-            <Text style={styles.heroResultLabel}>나의 주차 결과</Text>
-            <Text style={styles.heroResultValue}>
-              {myResult
-                ? myResult.result.achieved
-                  ? `${formatWon(myResult.result.remainingAmount)} 남김`
-                  : `${formatWon(Math.abs(myResult.result.remainingAmount))} 초과`
-                : "참여 결과 없음"}
-            </Text>
-          </View>
-          {myResult && crownIdSet.has(myResult.result.userId) ? (
-            <Text style={styles.crown}>👑</Text>
-          ) : null}
-        </View>
-      </View>
-
-      <View style={styles.finalStats}>
-        <Stat
-          label="내 적용한도"
-          value={formatWon(myResult?.result.appliedLimit ?? 0)}
-        />
-        <View style={styles.statLine} />
-        <Stat label="내 지출" value={formatWon(myResult?.result.spentAmount ?? 0)} />
-        <View style={styles.statLine} />
-        <Stat label="전체 완주" value={everyoneAchieved ? "성공" : "미달성"} />
-      </View>
-
-      <GlassSurface style={styles.rules} testID="archived-rule-snapshot">
-        <SectionHeader style={styles.sectionHeading} title="고정 조건과 정산 기준" />
-        <KeyValueRow
-          label="주당 기준금액"
-          value={formatWon(room?.baseAmount ?? 0)}
-        />
-        <KeyValueRow
-          label="유효 평일"
-          value={`${period.validDayCount}일 / ${period.selectedDayCount}일`}
-        />
-        <KeyValueRow
-          label="제외 공휴일"
-          value={`${period.holidayDates.length}일`}
-        />
-        <KeyValueRow label="공휴일 데이터" value={period.holidayVersionId} />
-        <KeyValueRow
-          label="보정 마감"
-          value={formatDateLabel(new Date(timeline.C))}
-        />
-        <KeyValueRow
-          label="최종 확정"
-          value={formatDateLabel(new Date(timeline.F))}
-        />
-        {period.holidayDates.length ? (
-          <View style={styles.holidayBox}>
-            <Text style={styles.holidayTitle}>제외된 날짜</Text>
-            <Text style={styles.holidayDates}>
-              {period.holidayDates.join(" · ")}
-            </Text>
-          </View>
-        ) : null}
-      </GlassSurface>
-
-      <View style={styles.memberSection}>
-        <SectionHeader
-          meta={`${memberResults.length}명`}
-          style={styles.sectionHeading}
-          title="참여자 정산 결과"
-        />
-        <GlassSurface style={styles.memberList}>
-          {memberResults.map((row, index) => (
-            <View
-              key={row.result.userId}
-              style={[
-                styles.memberRow,
-                index === memberResults.length - 1 && styles.memberRowLast,
-              ]}
-            >
-              <View style={styles.memberAvatar}>
-                <Text style={styles.memberAvatarText}>
-                  {row.profile?.avatar ?? "🙂"}
-                </Text>
-              </View>
-              <View style={styles.memberCopy}>
-                <View style={styles.memberNameRow}>
-                  <Text numberOfLines={1} style={styles.memberName}>
-                    {crownIdSet.has(row.result.userId) ? "👑 " : ""}
-                    {row.result.userId === currentUser?.id
-                      ? "나"
-                      : (row.profile?.nickname ?? row.result.nickname)}
-                  </Text>
-                  {row.member?.isLateJoiner ? (
-                    <View style={styles.lateBadge}>
-                      <Text style={styles.lateText}>중도 합류</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text style={styles.memberCalculation}>
-                  {formatWon(room?.baseAmount ?? 0, false)} ×{" "}
-                  {row.member?.eligibleDayCount ?? period.validDayCount}일 ÷{" "}
-                  {period.selectedDayCount}일 ={" "}
-                  {formatWon(row.result.appliedLimit)}
-                </Text>
-                <Text style={styles.memberJoin}>
-                  {row.member ? `${row.member.joinedDate} 합류 · ` : ""}
-                  {!row.member || row.member.status === "ACTIVE"
-                    ? "최종 참여"
-                    : "참여 종료"}
-                </Text>
-              </View>
-              <View style={styles.memberAmount}>
-                <Text
+              <Text style={styles.heroTitle}>
+                {room?.name ?? "방"} · {period.weekIndex}주차
+              </Text>
+              <Text style={styles.heroPeriod}>
+                {period.weekStart} ~ {period.weekEnd}
+              </Text>
+              <View style={styles.heroResult}>
+                <View
                   style={[
-                    styles.memberRemaining,
-                    !row.result.achieved && styles.memberRemainingOver,
+                    styles.resultIcon,
+                    !myResult?.result.achieved && styles.resultIconOver,
                   ]}
                 >
-                  {formatWon(Math.abs(row.result.remainingAmount), false)}
-                </Text>
-                <Text style={styles.memberAmountLabel}>
-                  {row.result.remainingAmount >= 0 ? "남음" : "초과"}
-                </Text>
+                  <MaterialCommunityIcons
+                    color={
+                      myResult?.result.achieved ? palette.green : palette.danger
+                    }
+                    name={
+                      myResult?.result.achieved
+                        ? "trophy-outline"
+                        : "chart-line-variant"
+                    }
+                    size={27}
+                  />
+                </View>
+                <View style={styles.heroResultCopy}>
+                  <Text style={styles.heroResultLabel}>나의 주차 결과</Text>
+                  <Text style={styles.heroResultValue}>
+                    {myResult
+                      ? myResult.result.achieved
+                        ? `${formatWon(myResult.result.remainingAmount)} 남김`
+                        : `${formatWon(Math.abs(myResult.result.remainingAmount))} 초과`
+                      : "참여 결과 없음"}
+                  </Text>
+                </View>
+                {myResult && crownIdSet.has(myResult.result.userId) ? (
+                  <Text style={styles.crown}>👑</Text>
+                ) : null}
               </View>
             </View>
-          ))}
-          {!memberResults.length ? (
-            <EmptyState
-              title={
-                period.isRestWeek
-                  ? "공휴일만 있는 쉬는 주였어요."
-                  : "정산 결과가 없어요."
-              }
-              variant="compact"
-            />
-          ) : null}
-        </GlassSurface>
-      </View>
+
+            <View style={styles.finalStats}>
+              <Stat
+                label="내 적용한도"
+                value={formatWon(myResult?.result.appliedLimit ?? 0)}
+              />
+              <View style={styles.statLine} />
+              <Stat
+                label="내 지출"
+                value={formatWon(myResult?.result.spentAmount ?? 0)}
+              />
+              <View style={styles.statLine} />
+              <Stat
+                label="전체 완주"
+                value={everyoneAchieved ? "성공" : "미달성"}
+              />
+            </View>
+
+            <GlassSurface style={styles.rules} testID="archived-rule-snapshot">
+              <SectionHeader
+                style={styles.sectionHeading}
+                title="고정 조건과 정산 기준"
+              />
+              <KeyValueRow
+                label="주당 기준금액"
+                value={formatWon(room?.baseAmount ?? 0)}
+              />
+              <KeyValueRow
+                label="유효 평일"
+                value={`${period.validDayCount}일 / ${period.selectedDayCount}일`}
+              />
+              <KeyValueRow
+                label="제외 공휴일"
+                value={`${period.holidayDates.length}일`}
+              />
+              <KeyValueRow
+                label="공휴일 데이터"
+                value={period.holidayVersionId}
+              />
+              <KeyValueRow
+                label="보정 마감"
+                value={formatDateLabel(new Date(timeline.C))}
+              />
+              <KeyValueRow
+                label="최종 확정"
+                value={formatDateLabel(new Date(timeline.F))}
+              />
+              {period.holidayDates.length ? (
+                <View style={styles.holidayBox}>
+                  <Text style={styles.holidayTitle}>제외된 날짜</Text>
+                  <Text style={styles.holidayDates}>
+                    {period.holidayDates.join(" · ")}
+                  </Text>
+                </View>
+              ) : null}
+            </GlassSurface>
+
+            <View style={styles.memberSection}>
+              <SectionHeader
+                meta={`${memberResults.length}명`}
+                style={styles.sectionHeading}
+                title="참여자 정산 결과"
+              />
+              <GlassSurface style={styles.memberList}>
+                {memberResults.map((row, index) => (
+                  <View
+                    key={row.result.userId}
+                    style={[
+                      styles.memberRow,
+                      index === memberResults.length - 1 &&
+                        styles.memberRowLast,
+                    ]}
+                  >
+                    <AnimalAvatar
+                      value={row.profile?.avatar}
+                      size={42}
+                      style={styles.memberAvatar}
+                    />
+                    <View style={styles.memberCopy}>
+                      <View style={styles.memberNameRow}>
+                        <Text numberOfLines={1} style={styles.memberName}>
+                          {crownIdSet.has(row.result.userId) ? "👑 " : ""}
+                          {row.result.userId === currentUser?.id
+                            ? "나"
+                            : (row.profile?.nickname ?? row.result.nickname)}
+                        </Text>
+                        {row.member?.isLateJoiner ? (
+                          <View style={styles.lateBadge}>
+                            <Text style={styles.lateText}>중도 합류</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.memberCalculation}>
+                        {formatWon(room?.baseAmount ?? 0, false)} ×{" "}
+                        {row.member?.eligibleDayCount ?? period.validDayCount}일
+                        ÷ {period.selectedDayCount}일 ={" "}
+                        {formatWon(row.result.appliedLimit)}
+                      </Text>
+                      <Text style={styles.memberJoin}>
+                        {row.member ? `${row.member.joinedDate} 합류 · ` : ""}
+                        {!row.member || row.member.status === "ACTIVE"
+                          ? "최종 참여"
+                          : "참여 종료"}
+                      </Text>
+                    </View>
+                    <View style={styles.memberAmount}>
+                      <Text
+                        style={[
+                          styles.memberRemaining,
+                          !row.result.achieved && styles.memberRemainingOver,
+                        ]}
+                      >
+                        {formatWon(Math.abs(row.result.remainingAmount), false)}
+                      </Text>
+                      <Text style={styles.memberAmountLabel}>
+                        {row.result.remainingAmount >= 0 ? "남음" : "초과"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                {!memberResults.length ? (
+                  <EmptyState
+                    title={
+                      period.isRestWeek
+                        ? "공휴일만 있는 쉬는 주였어요."
+                        : "정산 결과가 없어요."
+                    }
+                    variant="compact"
+                  />
+                ) : null}
+              </GlassSurface>
+            </View>
 
             <View style={styles.expenseSection}>
               <SectionHeader
@@ -335,10 +351,7 @@ const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
 }) {
   const comments = useExpenseComments(expense.id);
   const profileUserIds = useMemo(
-    () => [
-      expense.userId,
-      ...comments.map((comment) => comment.userId),
-    ],
+    () => [expense.userId, ...comments.map((comment) => comment.userId)],
     [comments, expense.userId],
   );
   const profilesById = useProfiles(profileUserIds);
@@ -348,11 +361,9 @@ const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
     <View style={styles.expenseRecord}>
       <ExpenseCard
         amount={expense.amount}
-        avatar={profile?.avatar ?? "🙂"}
+        avatar={profile?.avatar ?? ""}
         category={expense.category}
-        commentCount={
-          comments.filter((comment) => !comment.deletedAt).length
-        }
+        commentCount={comments.filter((comment) => !comment.deletedAt).length}
         edited={expense.createdAt !== expense.updatedAt}
         id={expense.id}
         memo={expense.memo}
@@ -382,9 +393,7 @@ const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
             onPress={() => onOpen(expense.id)}
             style={styles.openThread}
           >
-            <Text style={styles.openThreadText}>
-              읽기 전용 대화 전체 보기
-            </Text>
+            <Text style={styles.openThreadText}>읽기 전용 대화 전체 보기</Text>
             <MaterialCommunityIcons
               color={palette.green}
               name="chevron-right"
@@ -431,7 +440,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 5,
   },
-  heroPeriod: { color: "rgba(253,246,227,0.72)", fontFamily: fonts.hand, fontSize: 11, marginTop: 5, ...tabularNums },
+  heroPeriod: {
+    color: "rgba(253,246,227,0.72)",
+    fontFamily: fonts.hand,
+    fontSize: 11,
+    marginTop: 5,
+    ...tabularNums,
+  },
   heroResult: {
     flexDirection: "row",
     alignItems: "center",
@@ -451,7 +466,11 @@ const styles = StyleSheet.create({
   },
   resultIconOver: { backgroundColor: palette.cream },
   heroResultCopy: { flex: 1 },
-  heroResultLabel: { color: "rgba(253,246,227,0.70)", fontFamily: fonts.hand, fontSize: 10 },
+  heroResultLabel: {
+    color: "rgba(253,246,227,0.70)",
+    fontFamily: fonts.hand,
+    fontSize: 10,
+  },
   heroResultValue: {
     color: palette.cream,
     fontFamily: fonts.handBold,
@@ -494,7 +513,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(240,185,46,0.12)",
   },
-  holidayTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
+  holidayTitle: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 10,
+    fontWeight: "700",
+  },
   holidayDates: {
     color: palette.muted,
     fontFamily: fonts.hand,
@@ -517,15 +541,7 @@ const styles = StyleSheet.create({
     borderBottomColor: palette.line,
   },
   memberRowLast: { borderBottomWidth: 0 },
-  memberAvatar: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-    backgroundColor: palette.cream,
-  },
-  memberAvatarText: { fontSize: 21 },
+  memberAvatar: {},
   memberCopy: { flex: 1, minWidth: 0 },
   memberNameRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   memberName: {
@@ -541,13 +557,41 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     backgroundColor: "rgba(233,135,98,0.12)",
   },
-  lateText: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 8, fontWeight: "700" },
-  memberCalculation: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 5, ...tabularNums },
-  memberJoin: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 3, ...tabularNums },
+  lateText: {
+    color: palette.coralText,
+    fontFamily: fonts.handBold,
+    fontSize: 8,
+    fontWeight: "700",
+  },
+  memberCalculation: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 9,
+    marginTop: 5,
+    ...tabularNums,
+  },
+  memberJoin: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 9,
+    marginTop: 3,
+    ...tabularNums,
+  },
   memberAmount: { alignItems: "flex-end" },
-  memberRemaining: { color: palette.success, fontFamily: fonts.number, fontSize: 17, fontWeight: "700", ...tabularNums },
+  memberRemaining: {
+    color: palette.success,
+    fontFamily: fonts.number,
+    fontSize: 17,
+    fontWeight: "700",
+    ...tabularNums,
+  },
   memberRemainingOver: { color: palette.danger },
-  memberAmountLabel: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 2 },
+  memberAmountLabel: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 9,
+    marginTop: 2,
+  },
   expenseSection: { marginTop: spacing.xxxl },
   expenseSeparator: { height: spacing.xl },
   expenseRecord: { gap: 0 },
@@ -566,13 +610,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
-  previewBody: { color: palette.ink, fontFamily: fonts.hand, flex: 1, fontSize: 10 },
-  moreComments: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, marginTop: 4 },
+  previewBody: {
+    color: palette.ink,
+    fontFamily: fonts.hand,
+    flex: 1,
+    fontSize: 10,
+  },
+  moreComments: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 9,
+    marginTop: 4,
+  },
   openThread: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
     marginTop: spacing.sm,
   },
-  openThreadText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
+  openThreadText: {
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 10,
+    fontWeight: "700",
+  },
 });
