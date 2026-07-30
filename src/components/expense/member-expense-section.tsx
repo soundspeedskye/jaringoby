@@ -2,6 +2,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import { ExpenseCard } from "@/components/expense/expense-card";
 import type { MemberListItem } from "@/components/room/member-list";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -56,9 +57,7 @@ export const MemberExpenseSectionHeader = memo(
           pressed && styles.headerPressed,
         ]}
       >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{member.avatar}</Text>
-        </View>
+        <AnimalAvatar value={member.avatar} size={44} style={styles.avatar} />
 
         <View style={styles.memberCopy}>
           <View style={styles.nameRow}>
@@ -66,11 +65,6 @@ export const MemberExpenseSectionHeader = memo(
               {member.isCrowned ? "👑 " : ""}
               {displayName}
             </Text>
-            {member.isLateJoiner ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>중도 합류</Text>
-              </View>
-            ) : null}
           </View>
           <Text style={styles.summary}>
             {expenses.length
@@ -180,7 +174,6 @@ function areHeaderPropsEqual(
     previousMember.detail === nextMember.detail &&
     previousMember.remaining === nextMember.remaining &&
     previousMember.isCrowned === nextMember.isCrowned &&
-    previousMember.isLateJoiner === nextMember.isLateJoiner &&
     previousMember.isCurrentUser === nextMember.isCurrentUser
   );
 }
@@ -207,16 +200,9 @@ const styles = StyleSheet.create({
   },
   headerPressed: { backgroundColor: "rgba(47,113,93,0.06)" },
   avatar: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 22,
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: palette.cream,
   },
-  avatarText: { fontSize: 21 },
   memberCopy: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   name: {
@@ -226,13 +212,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-  badge: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(233,135,98,0.11)",
-  },
-  badgeText: { color: palette.danger, fontFamily: fonts.hand, fontSize: 9, fontWeight: "700" },
   summary: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, marginTop: 5, ...tabularNums },
   chevron: {
     width: 34,
