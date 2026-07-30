@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AnimalAvatar } from '@/components/avatar/animal-avatar';
 import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/constants/design';
 import { formatWon } from '@/utils/format';
 
@@ -36,7 +37,7 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
           </View>
         ) : (
           <View style={styles.author}>
-            <Text style={styles.avatar}>{props.avatar}</Text>
+            <AnimalAvatar value={props.avatar} size={32} />
             <View>
               <Text style={styles.name}>{props.nickname}</Text>
               <Text style={styles.meta}>{props.category} · {props.occurredAtLabel}{props.edited ? ' · 수정됨' : ''}</Text>
@@ -59,7 +60,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md },
   author: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
-  avatar: { fontSize: 24 },
   name: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '600' },
   expenseDetails: { flex: 1, minWidth: 0 },
   category: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '700' },

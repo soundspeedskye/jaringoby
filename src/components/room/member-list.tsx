@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AnimalAvatar } from '@/components/avatar/animal-avatar';
 import { fonts, palette, spacing, tabularNums } from '@/constants/design';
 import { formatWon } from '@/utils/format';
 
@@ -36,9 +37,7 @@ export function MemberList({ members }: { members: MemberListItem[] }) {
               member.isCurrentUser && styles.currentUserRow,
               index === members.length - 1 && styles.lastRow,
             ]}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{member.avatar}</Text>
-            </View>
+            <AnimalAvatar value={member.avatar} size={46} style={styles.avatar} />
             <View style={styles.copy}>
               <View style={styles.nameRow}>
                 <Text numberOfLines={1} style={styles.name}>
@@ -95,16 +94,9 @@ const styles = StyleSheet.create({
   },
   lastRow: { borderBottomWidth: 0 },
   avatar: {
-    width: 46,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 23,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.88)',
-    backgroundColor: 'rgba(255,255,255,0.58)',
   },
-  avatarText: { fontSize: 22 },
   copy: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 15, fontWeight: '700', flexShrink: 1 },

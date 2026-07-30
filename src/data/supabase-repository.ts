@@ -1,6 +1,7 @@
 import { File as ExpoFile } from 'expo-file-system';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
+import { ANIMAL_AVATARS } from '@/constants/animals';
 import type { AppRepository, Unsubscribe, UpdateExpenseOptions } from '@/data/repository';
 import { createSupabaseClientForAccessToken } from '@/data/supabase-client';
 import type {
@@ -1408,8 +1409,8 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
 }
 
 function defaultAvatar(id: string): string {
-  const avatars = ['🙂', '🌿', '🐿️', '🌱', '🍀', '🐣'];
-  return avatars[hash32(id) % avatars.length];
+  // 사용자 UUID 해시로 동물 아이콘 10종 중 하나를 결정론적(≈랜덤)으로 배정한다.
+  return ANIMAL_AVATARS[hash32(id) % ANIMAL_AVATARS.length];
 }
 
 function clone<T>(value: T): T {

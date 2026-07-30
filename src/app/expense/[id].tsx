@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
@@ -276,9 +277,7 @@ const ExpenseSummary = memo(function ExpenseSummary({
     <View style={styles.expenseCard}>
       <View style={styles.expenseHeader}>
         <View style={styles.authorRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{author?.avatar ?? "🙂"}</Text>
-          </View>
+          <AnimalAvatar value={author?.avatar} size={40} style={styles.avatar} />
           <View style={styles.authorCopy}>
             <Text style={styles.authorName}>
               {author?.nickname ?? "알 수 없음"}
@@ -851,7 +850,7 @@ const CommentItem = memo(function CommentItem({
   return (
     <View style={[styles.messageRow, mine && styles.messageRowMine]}>
       {!mine ? (
-        <Text style={styles.messageAvatar}>{profile?.avatar ?? "🙂"}</Text>
+        <AnimalAvatar value={profile?.avatar} size={30} style={styles.messageAvatar} />
       ) : null}
       <View style={[styles.messageGroup, mine && styles.messageGroupMine]}>
         {!mine ? (
@@ -1114,15 +1113,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
-    backgroundColor: palette.cream,
-  },
-  avatarText: { fontSize: 21 },
+  avatar: {},
   authorCopy: { flex: 1 },
   authorName: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
   expenseMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 3, ...tabularNums },
@@ -1204,7 +1195,7 @@ const styles = StyleSheet.create({
     paddingRight: 0,
     paddingLeft: 54,
   },
-  messageAvatar: { fontSize: 22, marginTop: 18 },
+  messageAvatar: { marginTop: 18 },
   messageGroup: { alignItems: "flex-start", maxWidth: "88%" },
   messageGroupMine: { alignItems: "flex-end" },
   messageAuthor: {

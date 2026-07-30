@@ -12,6 +12,7 @@ import {
   type SectionListRenderItemInfo,
 } from "react-native";
 
+import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import { GlassSurface } from "@/components/ui/glass-surface";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenFrame } from "@/components/ui/screen";
@@ -414,7 +415,7 @@ export default function ProfileScreen() {
           <>
             <Text style={styles.title}>내 정보</Text>
             <GlassSurface style={styles.profileCard}>
-              <Text style={styles.avatar}>{currentUser?.avatar ?? "🙂"}</Text>
+              <AnimalAvatar value={currentUser?.avatar} size={72} style={styles.avatar} />
               <Text style={styles.name}>
                 {currentUser?.nickname ?? "사용자"}
               </Text>
@@ -560,7 +561,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     borderRadius: radii.lg,
   },
-  avatar: { fontSize: 42 },
+  avatar: { marginBottom: spacing.sm },
   name: {
     flex: 1,
     minWidth: 0,

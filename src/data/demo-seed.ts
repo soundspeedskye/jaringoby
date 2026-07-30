@@ -88,9 +88,9 @@ export function createDemoSnapshot(): AppSnapshot {
   return {
     currentUserId: 'user-me',
     profiles: [
-      { id: 'user-me', nickname: '나', avatar: '🙂' },
-      { id: 'user-minji', nickname: '민지', avatar: '🌿' },
-      { id: 'user-jungwoo', nickname: '정우', avatar: '🐿️' },
+      { id: 'user-me', nickname: '나', avatar: 'fox' },
+      { id: 'user-minji', nickname: '민지', avatar: 'rabbit' },
+      { id: 'user-jungwoo', nickname: '정우', avatar: 'panda' },
     ],
     rooms: [
       {

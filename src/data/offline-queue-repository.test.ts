@@ -634,7 +634,7 @@ class FakeRepository implements AppRepository {
 function snapshotFixture(userId: string, period: Period): AppSnapshot {
   return {
     currentUserId: userId,
-    profiles: [{ id: userId, nickname: userId, avatar: '🙂' }],
+    profiles: [{ id: userId, nickname: userId, avatar: 'fox' }],
     rooms: [{
       id: period.roomId,
       ownerId: 'user-a',
