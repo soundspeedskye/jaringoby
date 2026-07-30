@@ -3,6 +3,12 @@ export function formatWon(amount: number, includeUnit = true): string {
   return includeUnit ? `${formatted}원` : formatted;
 }
 
+/** "2026-07-28" → "7/28". Parses the LocalDate string directly, no timezone math. */
+export function formatMonthDay(date: string): string {
+  const [, month, day] = date.split('-');
+  return `${Number(month)}/${Number(day)}`;
+}
+
 export function formatDateLabel(value: string | Date): string {
   const date = typeof value === 'string' ? new Date(value) : value;
   return new Intl.DateTimeFormat('ko-KR', {
