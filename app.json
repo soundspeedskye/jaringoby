@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "jaringoby",
-    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "icon": "./assets/images/icon.png",
@@ -20,18 +19,12 @@
     },
     "android": {
       "package": "com.jaringoby.app",
-      "blockedPermissions": [
-        "android.permission.RECORD_AUDIO"
-      ],
       "adaptiveIcon": {
         "backgroundColor": "#FDF6E3",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
