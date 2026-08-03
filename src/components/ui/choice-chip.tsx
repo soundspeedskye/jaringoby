@@ -69,7 +69,12 @@ const styles = StyleSheet.create({
     backgroundColor: palette.paper,
   },
   selected: { borderColor: palette.green, backgroundColor: palette.green },
-  label: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "600" },
+  label: {
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
+    fontWeight: "600",
+  },
   selectedLabel: { color: palette.cream },
   pressed: { opacity: 0.7 },
 });

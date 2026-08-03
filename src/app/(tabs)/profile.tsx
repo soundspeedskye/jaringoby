@@ -3,6 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { memo, useCallback, useMemo } from "react";
 import {
+  Platform,
   Pressable,
   SectionList,
   StyleSheet,
@@ -77,10 +78,8 @@ export default function ProfileScreen() {
   } = useSyncQueue();
   const { showDialog } = useAppDialog();
   const { requiresAuth, signOut } = useSession();
-  const {
-    preferences: notifications,
-    updatePreference,
-  } = useNotificationPreferences();
+  const { preferences: notifications, updatePreference } =
+    useNotificationPreferences();
 
   const updateNotifications = useCallback(
     async (key: keyof NotificationPreferences, value: boolean) => {
@@ -108,10 +107,7 @@ export default function ProfileScreen() {
       const message = await getCopyableSyncError(operationId);
       if (!message) return;
       await Clipboard.setStringAsync(message);
-      showDialog(
-        "오류 내용을 복사했어요",
-        "고객지원 문의에 붙여 넣어 주세요.",
-      );
+      showDialog("오류 내용을 복사했어요", "고객지원 문의에 붙여 넣어 주세요.");
     },
     [getCopyableSyncError, showDialog],
   );
@@ -158,190 +154,203 @@ export default function ProfileScreen() {
     );
   }, [showDialog, signOut, syncOperations.length]);
 
-  const manageSyncOperation = useCallback((operation: OfflineMutationSummary) => {
-    const failureMessage = operation.failure?.message ?? "연결이 복구되면 자동으로 다시 시도합니다.";
-    if (operation.status === "PENDING") {
-      showDialog("동기화 대기 중", failureMessage);
-      return;
-    }
-    const retryAllowed = operation.failure?.code !== "CUTOFF_EXPIRED";
-    const discardAction = {
-      text: operation.failure?.code === "VERSION_CONFLICT" ? "서버 값 유지" : "작업 삭제",
-      style: "destructive" as const,
-      onPress: () => void runSyncAction(
-        () => discardSyncOperation(operation.operationId),
-        "작업을 삭제하지 못했어요",
-      ),
-    };
-    if (!retryAllowed) {
+  const manageSyncOperation = useCallback(
+    (operation: OfflineMutationSummary) => {
+      const failureMessage =
+        operation.failure?.message ??
+        "연결이 복구되면 자동으로 다시 시도합니다.";
+      if (operation.status === "PENDING") {
+        showDialog("동기화 대기 중", failureMessage);
+        return;
+      }
+      const retryAllowed = operation.failure?.code !== "CUTOFF_EXPIRED";
+      const discardAction = {
+        text:
+          operation.failure?.code === "VERSION_CONFLICT"
+            ? "서버 값 유지"
+            : "작업 삭제",
+        style: "destructive" as const,
+        onPress: () =>
+          void runSyncAction(
+            () => discardSyncOperation(operation.operationId),
+            "작업을 삭제하지 못했어요",
+          ),
+      };
+      if (!retryAllowed) {
+        showDialog(syncOperationLabel(operation.kind), failureMessage, [
+          { text: "취소", style: "cancel" },
+          {
+            text: "오류 복사",
+            onPress: () =>
+              void runSyncAction(
+                () => copySyncError(operation.operationId),
+                "오류를 복사하지 못했어요",
+              ),
+          },
+          discardAction,
+        ]);
+        return;
+      }
       showDialog(syncOperationLabel(operation.kind), failureMessage, [
         { text: "취소", style: "cancel" },
         {
           text: "오류 복사",
-          onPress: () => void runSyncAction(
-            () => copySyncError(operation.operationId),
-            "오류를 복사하지 못했어요",
-          ),
-        },
-        discardAction,
-      ]);
-      return;
-    }
-    showDialog(
-      syncOperationLabel(operation.kind),
-      failureMessage,
-      [
-        { text: "취소", style: "cancel" },
-        {
-          text: "오류 복사",
-          onPress: () => void runSyncAction(
-            () => copySyncError(operation.operationId),
-            "오류를 복사하지 못했어요",
-          ),
+          onPress: () =>
+            void runSyncAction(
+              () => copySyncError(operation.operationId),
+              "오류를 복사하지 못했어요",
+            ),
         },
         {
           text: "해결 방법",
-          onPress: () => showDialog(
-            "동기화 실패 해결",
-            operation.failure?.code === "VERSION_CONFLICT"
-              ? "서버의 최신 값을 유지하거나 내 변경을 그 위에 다시 적용할 수 있어요."
-              : "작업을 삭제하거나 같은 요청 ID로 다시 시도할 수 있어요.",
-            [
-              { text: "취소", style: "cancel" },
-              discardAction,
-              {
-                text: operation.failure?.code === "VERSION_CONFLICT" ? "내 변경 재적용" : "다시 시도",
-                onPress: () => void runSyncAction(
-                  () => retrySyncOperation(operation.operationId),
-                  "다시 시도하지 못했어요",
-                ),
-              },
-            ],
-          ),
-        },
-      ],
-    );
-  }, [
-    copySyncError,
-    discardSyncOperation,
-    retrySyncOperation,
-    runSyncAction,
-    showDialog,
-  ]);
-  const sections = useMemo<ProfileSection[]>(() => [
-    {
-      key: "history",
-      title: "기록",
-      data: [
-        {
-          key: "history",
-          type: "setting",
-          icon: "archive-outline",
-          label: "지난 주차",
-          value: `${pastPeriods.length}개`,
-          onPress: () => router.push("/history"),
-        },
-      ],
-    },
-    ...(syncOperations.length
-      ? [
-          {
-            key: "sync",
-            title: "동기화",
-            data: syncOperations.map(
-              (operation): ProfileListItem => ({
-                key: operation.operationId,
-                type: "sync",
-                operation,
-              }),
-            ),
-          },
-        ]
-      : []),
-    {
-      key: "notifications",
-      title: "알림",
-      data: [
-        {
-          key: "social-events",
-          type: "toggle",
-          icon: "message-reply-text-outline",
-          label: "댓글·답글",
-          value: notifications.socialEvents,
-          onChange: (value) =>
-            void updateNotifications("socialEvents", value),
-        },
-        {
-          key: "period-events",
-          type: "toggle",
-          icon: "bell-outline",
-          label: "시작·보정·정산",
-          value: notifications.periodEvents,
-          onChange: (value) =>
-            void updateNotifications("periodEvents", value),
-        },
-      ],
-    },
-    {
-      key: "safety",
-      title: "안전과 데이터",
-      data: [
-        {
-          key: "block-report",
-          type: "setting",
-          icon: "shield-check-outline",
-          label: "차단·신고 관리",
           onPress: () =>
             showDialog(
-              "준비된 정책",
-              "차단한 멤버의 금액은 유지하고 사진·댓글만 흐림 처리합니다.",
+              "동기화 실패 해결",
+              operation.failure?.code === "VERSION_CONFLICT"
+                ? "서버의 최신 값을 유지하거나 내 변경을 그 위에 다시 적용할 수 있어요."
+                : "작업을 삭제하거나 같은 요청 ID로 다시 시도할 수 있어요.",
+              [
+                { text: "취소", style: "cancel" },
+                discardAction,
+                {
+                  text:
+                    operation.failure?.code === "VERSION_CONFLICT"
+                      ? "내 변경 재적용"
+                      : "다시 시도",
+                  onPress: () =>
+                    void runSyncAction(
+                      () => retrySyncOperation(operation.operationId),
+                      "다시 시도하지 못했어요",
+                    ),
+                },
+              ],
             ),
         },
-        {
-          key: "privacy",
-          type: "setting",
-          icon: "file-document-outline",
-          label: "개인정보 및 보관 정책",
-          onPress: () =>
-            showDialog(
-              "보관 정책",
-              "완료 기록은 읽기 전용으로 보관하며 삭제 요청 시 콘텐츠를 비식별화합니다.",
-            ),
-        },
-      ],
+      ]);
     },
-    ...(requiresAuth
-      ? [
+    [
+      copySyncError,
+      discardSyncOperation,
+      retrySyncOperation,
+      runSyncAction,
+      showDialog,
+    ],
+  );
+  const sections = useMemo<ProfileSection[]>(
+    () => [
+      {
+        key: "history",
+        title: "기록",
+        data: [
           {
-            key: "account",
-            title: "계정",
-            data: [
-              {
-                key: "sign-out",
-                type: "setting" as const,
-                icon: "logout" as const,
-                label: "로그아웃",
-                onPress: confirmSignOut,
-              },
-            ],
+            key: "history",
+            type: "setting",
+            icon: "archive-outline",
+            label: "지난 주차",
+            value: `${pastPeriods.length}개`,
+            onPress: () => router.push("/history"),
           },
-        ]
-      : []),
-  ], [
-    confirmSignOut,
-    notifications.periodEvents,
-    notifications.socialEvents,
-    pastPeriods.length,
-    requiresAuth,
-    router,
-    showDialog,
-    syncOperations,
-    updateNotifications,
-  ]);
+        ],
+      },
+      ...(syncOperations.length
+        ? [
+            {
+              key: "sync",
+              title: "동기화",
+              data: syncOperations.map(
+                (operation): ProfileListItem => ({
+                  key: operation.operationId,
+                  type: "sync",
+                  operation,
+                }),
+              ),
+            },
+          ]
+        : []),
+      {
+        key: "notifications",
+        title: "알림",
+        data: [
+          {
+            key: "social-events",
+            type: "toggle",
+            icon: "message-reply-text-outline",
+            label: "댓글·답글",
+            value: notifications.socialEvents,
+            onChange: (value) =>
+              void updateNotifications("socialEvents", value),
+          },
+          {
+            key: "period-events",
+            type: "toggle",
+            icon: "bell-outline",
+            label: "시작·보정·정산",
+            value: notifications.periodEvents,
+            onChange: (value) =>
+              void updateNotifications("periodEvents", value),
+          },
+        ],
+      },
+      {
+        key: "safety",
+        title: "안전과 데이터",
+        data: [
+          {
+            key: "block-report",
+            type: "setting",
+            icon: "shield-check-outline",
+            label: "차단·신고 관리",
+            onPress: () =>
+              showDialog(
+                "준비된 정책",
+                "차단한 멤버의 금액은 유지하고 사진·댓글만 흐림 처리합니다.",
+              ),
+          },
+          {
+            key: "privacy",
+            type: "setting",
+            icon: "file-document-outline",
+            label: "개인정보 및 보관 정책",
+            onPress: () =>
+              showDialog(
+                "보관 정책",
+                "완료 기록은 읽기 전용으로 보관하며 삭제 요청 시 콘텐츠를 비식별화합니다.",
+              ),
+          },
+        ],
+      },
+      ...(requiresAuth
+        ? [
+            {
+              key: "account",
+              title: "계정",
+              data: [
+                {
+                  key: "sign-out",
+                  type: "setting" as const,
+                  icon: "logout" as const,
+                  label: "로그아웃",
+                  onPress: confirmSignOut,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+    [
+      confirmSignOut,
+      notifications.periodEvents,
+      notifications.socialEvents,
+      pastPeriods.length,
+      requiresAuth,
+      router,
+      showDialog,
+      syncOperations,
+      updateNotifications,
+    ],
+  );
   const renderProfileItem = useCallback(
-    ({
-      item,
-    }: SectionListRenderItemInfo<ProfileListItem, ProfileSection>) => {
+    ({ item }: SectionListRenderItemInfo<ProfileListItem, ProfileSection>) => {
       if (item.type === "sync") {
         return (
           <SyncOperationRow
@@ -415,7 +424,11 @@ export default function ProfileScreen() {
           <>
             <Text style={styles.title}>내 정보</Text>
             <GlassSurface style={styles.profileCard}>
-              <AnimalAvatar value={currentUser?.avatar} size={72} style={styles.avatar} />
+              <AnimalAvatar
+                value={currentUser?.avatar}
+                size={72}
+                style={styles.avatar}
+              />
               <Text style={styles.name}>
                 {currentUser?.nickname ?? "사용자"}
               </Text>
@@ -448,9 +461,7 @@ const SyncOperationRow = memo(function SyncOperationRow({
       testID={`sync-operation-${operation.operationId}`}
     >
       <MaterialCommunityIcons
-        color={
-          operation.status === "FAILED" ? palette.danger : palette.green
-        }
+        color={operation.status === "FAILED" ? palette.danger : palette.green}
         name={
           operation.status === "FAILED"
             ? "cloud-alert-outline"
@@ -532,6 +543,7 @@ const ToggleRow = memo(function ToggleRow({
       <Switch
         accessibilityLabel={label}
         onValueChange={onChange}
+        style={styles.toggleSwitch}
         thumbColor={palette.cream}
         trackColor={{ false: palette.line, true: palette.green }}
         value={value}
@@ -583,8 +595,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: palette.line,
   },
-  rowLabel: { flex: 1, color: palette.ink, fontFamily: fonts.hand, fontSize: 14 },
+  rowLabel: {
+    flex: 1,
+    color: palette.ink,
+    fontFamily: fonts.hand,
+    fontSize: 14,
+  },
   rowValue: { color: palette.muted, fontFamily: fonts.hand, fontSize: 13 },
+  toggleSwitch: Platform.select({
+    ios: { transform: [{ translateY: 2 }] },
+    default: {},
+  }),
   syncText: { flex: 1, gap: 3 },
   syncStatus: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
   resetSection: { marginTop: spacing.xxl },
