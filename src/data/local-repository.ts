@@ -477,9 +477,14 @@ export class LocalRepository implements AppRepository {
     action: 'CREATE' | 'UPDATE' = 'CREATE',
   ): void {
     try {
-      assertKrwAmount(input.amount);
+      assertKrwAmount(input.amount, 'amount', true);
     } catch {
-      throw new Error('지출 금액은 1원 이상의 원 단위 정수로 입력해 주세요.');
+      throw new Error('결제 금액은 0원 이상의 원 단위 정수로 입력해 주세요.');
+    }
+    try {
+      assertKrwAmount(input.pointAmount, 'pointAmount', true);
+    } catch {
+      throw new Error('포인트 사용 금액은 0원 이상의 원 단위 정수로 입력해 주세요.');
     }
     if (!isExpenseCategory(input.category)) throw new Error('지출 카테고리를 확인해 주세요.');
     if (input.memo.trim().length > 200) throw new Error('메모는 200자 이내로 입력해 주세요.');

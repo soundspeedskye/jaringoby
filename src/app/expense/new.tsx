@@ -13,7 +13,13 @@ import { FormSection } from "@/components/ui/form-section";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
+import {
+  fonts,
+  palette,
+  radii,
+  spacing,
+  tabularNums,
+} from "@/constants/design";
 import type { Period, PeriodMember } from "@/data/types";
 import {
   createPeriodTimeline,
@@ -25,9 +31,9 @@ import {
   type ExpenseCategory,
   type LocalDate,
 } from "@/domain";
+import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { useAppActions } from "@/providers/app-actions-provider";
 import { useCurrentRoom, usePeriodMembers } from "@/providers/app-data-hooks";
-import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import {
   pickSanitizedExpensePhoto,
   type ExpensePhotoSource,
@@ -53,12 +59,11 @@ export default function NewExpenseScreen() {
   const members = usePeriodMembers(currentPeriod?.id);
   const currentMember =
     currentPeriod && currentUser
-      ? members.find(
-          (member) => member.userId === currentUser.id,
-        )
+      ? members.find((member) => member.userId === currentUser.id)
       : undefined;
   const timeline = useMemo(
-    () => (currentPeriod ? createPeriodTimeline(currentPeriod.weekStart) : null),
+    () =>
+      currentPeriod ? createPeriodTimeline(currentPeriod.weekStart) : null,
     [currentPeriod],
   );
   const now = useDeadlineNow(
@@ -66,6 +71,8 @@ export default function NewExpenseScreen() {
     Boolean(timeline),
   );
   const [amountText, setAmountText] = useState("");
+  const [usesPoints, setUsesPoints] = useState(false);
+  const [pointAmountText, setPointAmountText] = useState("");
   const [category, setCategory] = useState<ExpenseCategory>("점심");
   const [memo, setMemo] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -128,6 +135,17 @@ export default function NewExpenseScreen() {
       setFormError("금액을 0원 이상의 정수로 입력해 주세요.");
       return;
     }
+    const normalizedPointAmount = pointAmountText.replace(/[^0-9]/gu, "");
+    const pointAmount = usesPoints ? Number(normalizedPointAmount) : 0;
+    if (
+      usesPoints &&
+      (!normalizedPointAmount ||
+        !Number.isSafeInteger(pointAmount) ||
+        pointAmount < 1)
+    ) {
+      setFormError("포인트 사용 금액을 1원 이상의 정수로 입력해 주세요.");
+      return;
+    }
     if (!photoUri) {
       setFormError("챌린지 지출에는 사진이 정확히 1장 필요해요.");
       return;
@@ -159,6 +177,7 @@ export default function NewExpenseScreen() {
       const expense = await addExpense({
         periodId: currentPeriod.id,
         amount,
+        pointAmount,
         category,
         memo: memo.trim(),
         photoUri,
@@ -185,7 +204,7 @@ export default function NewExpenseScreen() {
       footer={
         <PrimaryButton
           disabled={!canMutate}
-          label="사진과 함께 지출 저장"
+          label="저장"
           loading={submitting}
           onPress={() => void submit()}
         />
@@ -281,11 +300,46 @@ export default function NewExpenseScreen() {
 
       <Field
         keyboardType="number-pad"
-        label="금액"
+        label="결제 금액"
         onChangeText={(value) => setAmountText(formatKrwInput(value))}
         placeholder="예: 12,000"
         value={amountText}
       />
+
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: usesPoints }}
+        onPress={() => {
+          setUsesPoints((value) => !value);
+          if (usesPoints) setPointAmountText("");
+        }}
+        style={styles.pointsToggle}
+      >
+        <View style={[styles.checkbox, usesPoints && styles.checkboxChecked]}>
+          {usesPoints ? (
+            <MaterialCommunityIcons
+              color={palette.cream}
+              name="check"
+              size={15}
+            />
+          ) : null}
+        </View>
+        <View style={styles.pointsToggleCopy}>
+          <Text style={styles.pointsToggleLabel}>포인트 결제</Text>
+        </View>
+      </Pressable>
+
+      {usesPoints ? (
+        <View style={styles.pointAmountField}>
+          <Field
+            keyboardType="number-pad"
+            label="포인트 사용 금액"
+            onChangeText={(value) => setPointAmountText(formatKrwInput(value))}
+            placeholder="예: 3,000"
+            value={pointAmountText}
+          />
+        </View>
+      ) : null}
 
       <FormSection style={styles.categorySection} title="카테고리">
         <View
@@ -307,28 +361,16 @@ export default function NewExpenseScreen() {
       </FormSection>
 
       <FormSection style={styles.timeSection} title="발생 일시">
-        <Text style={styles.timeValue}>{formatSeoulDateTime(occurredAt)}</Text>
-        <View style={styles.timeButtons}>
-          <OccurrencePicker
-            label="날짜 변경"
-            // D1: 주차는 월~금이라 범위 제한만으로 주말이 비활성화된다.
-            maximumDate={dateAtSeoulNoon(currentPeriod.weekEnd)}
-            minimumDate={dateAtSeoulNoon(
-              currentMember.joinedDate > currentPeriod.weekStart
-                ? currentMember.joinedDate
-                : currentPeriod.weekStart,
-            )}
-            mode="date"
-            onChange={setOccurredAt}
-            value={occurredAt}
-          />
-          <OccurrencePicker
-            label="시간 변경"
-            mode="time"
-            onChange={setOccurredAt}
-            value={occurredAt}
-          />
-        </View>
+        <OccurrenceDateTimePicker
+          maximumDate={dateAtSeoulNoon(currentPeriod.weekEnd)}
+          minimumDate={dateAtSeoulNoon(
+            currentMember.joinedDate > currentPeriod.weekStart
+              ? currentMember.joinedDate
+              : currentPeriod.weekStart,
+          )}
+          onChange={setOccurredAt}
+          value={occurredAt}
+        />
       </FormSection>
 
       <Field
@@ -355,44 +397,41 @@ function formatKrwInput(value: string): string {
   return normalized.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
 }
 
-function OccurrencePicker({
-  label,
+function OccurrenceDateTimePicker({
   maximumDate,
   minimumDate,
-  mode,
   value,
   onChange,
 }: {
-  label: string;
   maximumDate?: Date;
   minimumDate?: Date;
-  mode: "date" | "time";
   value: Date;
   onChange: (value: Date) => void;
 }) {
   return (
     <PlatformDateTimePicker
+      iosModalTitle="발생 일시 변경"
+      iosPresentation="modal"
       maximumDate={maximumDate}
       minimumDate={minimumDate}
-      mode={mode}
+      mode="datetime"
       onChange={onChange}
       renderTrigger={(open) => (
-        <View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={open}
-            style={styles.timeButton}
-          >
-            <MaterialCommunityIcons
-              color={palette.green}
-              name={mode === "date" ? "calendar-outline" : "clock-outline"}
-              size={17}
-            />
-            <Text style={styles.timeButtonText}>{label}</Text>
-          </Pressable>
+        <Pressable
+          accessibilityLabel={`발생 일시 ${formatSeoulDateTime(value)}, 변경`}
+          accessibilityRole="button"
+          onPress={open}
+          style={({ pressed }) => [styles.timeCard, pressed && styles.timeCardPressed]}
+        >
+          <Text style={styles.timeValue}>{formatSeoulDateTime(value)}</Text>
+          <MaterialCommunityIcons color={palette.green} name="chevron-right" size={22} />
+        </Pressable>
+      )}
+      renderWeb={() => (
+        <View style={styles.timeCard}>
+          <Text style={styles.timeValue}>{formatSeoulDateTime(value)}</Text>
         </View>
       )}
-      renderWeb={() => <Text style={styles.webPickerHint}>모바일 앱에서 {label}</Text>}
       value={value}
     />
   );
@@ -419,12 +458,20 @@ function dateAtSeoulNoon(date: LocalDate): Date {
 }
 
 function formatSeoulDateTime(value: Date): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: false,
+  const date = new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
     timeZone: "Asia/Seoul",
   }).format(value);
+  const time = new Intl.DateTimeFormat("ko-KR", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Seoul",
+  }).format(value);
+  return `${date} ${time}`;
 }
 
 const styles = StyleSheet.create({
@@ -437,8 +484,19 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(47,113,93,0.10)",
   },
-  roomName: { flex: 1, color: palette.green, fontFamily: fonts.handBold, fontSize: 13, fontWeight: "700" },
-  phaseLabel: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
+  roomName: {
+    flex: 1,
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  phaseLabel: {
+    color: palette.coralText,
+    fontFamily: fonts.handBold,
+    fontSize: 10,
+    fontWeight: "700",
+  },
   locked: { marginTop: spacing.md },
   photoSection: { marginVertical: spacing.xl },
   photoFrame: {
@@ -492,7 +550,37 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: palette.paper,
   },
-  photoButtonText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "700" },
+  photoButtonText: {
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  pointsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  pointAmountField: { marginTop: spacing.md },
+  checkbox: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.green,
+    borderRadius: 6,
+    backgroundColor: palette.paper,
+  },
+  checkboxChecked: { backgroundColor: palette.green },
+  pointsToggleCopy: { flex: 1 },
+  pointsToggleLabel: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   categorySection: { marginVertical: spacing.xl },
   categories: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   category: {
@@ -501,21 +589,26 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
   },
   timeSection: { marginBottom: spacing.xl },
-  timeValue: { color: palette.ink, fontFamily: fonts.number, fontSize: 17, fontWeight: "700", ...tabularNums },
-  timeButtons: { flexDirection: "row", gap: spacing.sm },
-  timeButton: {
+  timeCard: {
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderWidth: 1,
-    borderColor: palette.green,
+    borderColor: palette.line,
+    borderRadius: radii.md,
     backgroundColor: palette.paper,
   },
-  timeButtonText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "600" },
-  webPickerHint: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
+  timeCardPressed: { opacity: 0.8 },
+  timeValue: {
+    color: palette.ink,
+    fontFamily: fonts.number,
+    fontSize: 17,
+    fontWeight: "700",
+    ...tabularNums,
+  },
   memoInput: { minHeight: 92, textAlignVertical: "top" },
   counter: {
     color: palette.muted,

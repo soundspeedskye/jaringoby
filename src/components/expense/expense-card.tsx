@@ -12,6 +12,7 @@ type ExpenseCardProps = {
   avatar: string;
   category: string;
   amount: number;
+  pointAmount: number;
   memo?: string;
   photoUri: string;
   occurredAtLabel: string;
@@ -44,7 +45,12 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
             </View>
           </View>
         )}
-        <Text style={styles.amount}>{formatWon(props.amount)}</Text>
+        <View style={styles.amounts}>
+          <Text style={styles.amount}>{formatWon(props.amount)}</Text>
+          {props.pointAmount > 0 ? (
+            <Text style={styles.pointAmount}>포인트 {formatWon(props.pointAmount)}</Text>
+          ) : null}
+        </View>
       </View>
       <Image accessibilityLabel={`${props.category} 지출 사진`} contentFit="cover" source={{ uri: props.photoUri }} style={styles.photo} />
       <View style={styles.footer}>
@@ -65,6 +71,8 @@ const styles = StyleSheet.create({
   category: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '700' },
   meta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, marginTop: 2 },
   amount: { color: palette.coralText, fontFamily: fonts.number, fontSize: 16, fontWeight: '700', ...tabularNums },
+  amounts: { alignItems: 'flex-end', marginLeft: spacing.sm },
+  pointAmount: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 2, ...tabularNums },
   photo: { width: '100%', aspectRatio: 16 / 10, backgroundColor: palette.line },
   footer: { padding: spacing.md, gap: spacing.sm },
   memo: { color: palette.ink, fontFamily: fonts.hand, fontSize: 14, lineHeight: 20 },

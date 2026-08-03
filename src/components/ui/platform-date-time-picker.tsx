@@ -13,7 +13,7 @@ type PlatformDateTimePickerProps = {
   iosPresentation?: "inline" | "modal";
   maximumDate?: Date;
   minimumDate?: Date;
-  mode: "date" | "time";
+  mode: "date" | "time" | "datetime";
   onChange: (value: Date) => void;
   renderTrigger: (open: () => void) => ReactNode;
   renderWeb: () => ReactNode;
@@ -34,14 +34,57 @@ export function PlatformDateTimePicker({
   value,
 }: PlatformDateTimePickerProps) {
   const [visible, setVisible] = useState(false);
+  const [draftValue, setDraftValue] = useState(value);
 
   const changed = (event: DateTimePickerEvent, date?: Date) => {
+    if (
+      mode === "datetime" &&
+      Platform.OS === "ios" &&
+      iosPresentation === "modal" &&
+      event.type === "set" &&
+      date
+    ) {
+      setDraftValue(date);
+      return;
+    }
     setVisible(false);
     if (event.type === "set" && date) onChange(date);
   };
 
+  const openAndroidTime = (selectedDate: Date) => {
+    DateTimePickerAndroid.open({
+      display: "default",
+      is24Hour: true,
+      mode: "time",
+      onChange: (event, selectedTime) => {
+        if (event.type === "set" && selectedTime) {
+          onChange(mergeTime(selectedDate, selectedTime));
+        }
+      },
+      timeZoneName: TIME_ZONE,
+      value: selectedDate,
+    });
+  };
+
   const open = () => {
     if (Platform.OS === "android") {
+      if (mode === "datetime") {
+        DateTimePickerAndroid.open({
+          display: "default",
+          is24Hour: true,
+          maximumDate,
+          minimumDate,
+          mode: "date",
+          onChange: (event, selectedDate) => {
+            if (event.type === "set" && selectedDate) {
+              openAndroidTime(mergeDate(value, selectedDate));
+            }
+          },
+          timeZoneName: TIME_ZONE,
+          value,
+        });
+        return;
+      }
       DateTimePickerAndroid.open({
         display: "default",
         is24Hour: true,
@@ -54,6 +97,7 @@ export function PlatformDateTimePicker({
       });
       return;
     }
+    setDraftValue(value);
     setVisible(true);
   };
 
@@ -71,7 +115,7 @@ export function PlatformDateTimePicker({
       style={iosPresentation === "modal" ? styles.inlinePicker : undefined}
       themeVariant={iosPresentation === "modal" ? "light" : undefined}
       timeZoneName={TIME_ZONE}
-      value={value}
+      value={mode === "datetime" && iosPresentation === "modal" ? draftValue : value}
     />
   );
 
@@ -104,6 +148,18 @@ export function PlatformDateTimePicker({
                 </Pressable>
               </View>
               {picker}
+              {mode === "datetime" ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    onChange(draftValue);
+                    setVisible(false);
+                  }}
+                  style={styles.doneButton}
+                >
+                  <Text style={styles.doneButtonText}>완료</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </Modal>
@@ -112,6 +168,27 @@ export function PlatformDateTimePicker({
       ) : null}
     </>
   );
+}
+
+function mergeDate(value: Date, selectedDate: Date): Date {
+  const next = new Date(value);
+  next.setFullYear(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+    selectedDate.getDate(),
+  );
+  return next;
+}
+
+function mergeTime(value: Date, selectedTime: Date): Date {
+  const next = new Date(value);
+  next.setHours(
+    selectedTime.getHours(),
+    selectedTime.getMinutes(),
+    selectedTime.getSeconds(),
+    selectedTime.getMilliseconds(),
+  );
+  return next;
 }
 
 const styles = StyleSheet.create({
@@ -157,6 +234,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 18,
   },
+  doneButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    marginTop: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: palette.green,
+  },
+  doneButtonText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
   inlinePicker: {
     width: "100%",
     height: 340,

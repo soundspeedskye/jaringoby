@@ -34,7 +34,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { Screen, ScreenFrame } from "@/components/ui/screen";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
+import {
+  fonts,
+  palette,
+  radii,
+  spacing,
+  tabularNums,
+} from "@/constants/design";
 import type {
   AddCommentInput,
   AddExpenseInput,
@@ -55,10 +61,11 @@ import {
   isExpenseMutationPhase,
   prepareReplyDraft,
   validateCommentBody,
-  type PeriodPhase,
   type ExpenseCategory,
+  type PeriodPhase,
   type ReplyDraft,
 } from "@/domain";
+import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { useAppActions } from "@/providers/app-actions-provider";
 import {
   useCurrentUser,
@@ -69,7 +76,6 @@ import {
   useRoom,
 } from "@/providers/app-data-hooks";
 import { useAppDialog } from "@/providers/app-dialog-provider";
-import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { pickSanitizedExpensePhoto } from "@/services/expense-photo-picker";
 import { formatDateLabel, formatWon } from "@/utils/format";
 import { createUuid } from "@/utils/uuid";
@@ -77,7 +83,10 @@ import { createUuid } from "@/utils/uuid";
 export default function ExpenseDetailScreen() {
   const router = useRouter();
   const { showDialog } = useAppDialog();
-  const params = useLocalSearchParams<{ id?: string | string[]; rid?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    id?: string | string[];
+    rid?: string | string[];
+  }>();
   const expenseId = Array.isArray(params.id) ? params.id[0] : params.id;
   const requestId = Array.isArray(params.rid) ? params.rid[0] : params.rid;
   const {
@@ -120,14 +129,13 @@ export default function ExpenseDetailScreen() {
   );
   const profilesById = useProfiles(profileUserIds);
   const author = expense ? profilesById.get(expense.userId) : undefined;
-  const phase = timeline
-    ? getPeriodPhase(timeline, renderedAt)
-    : null;
+  const phase = timeline ? getPeriodPhase(timeline, renderedAt) : null;
   const canMutateExpense = Boolean(
     expense &&
     currentUser &&
     expense.userId === currentUser.id &&
-    phase && isExpenseMutationPhase(phase),
+    phase &&
+    isExpenseMutationPhase(phase),
   );
   const canMutateComments = phase ? isCommentMutationPhase(phase) : false;
   const [editingExpense, setEditingExpense] = useState(false);
@@ -248,10 +256,7 @@ export default function ExpenseDetailScreen() {
               />
             ) : null}
 
-            <FormMessage
-              message={expenseError}
-              style={styles.threadError}
-            />
+            <FormMessage message={expenseError} style={styles.threadError} />
           </>
         }
         phase={phase}
@@ -277,7 +282,11 @@ const ExpenseSummary = memo(function ExpenseSummary({
     <View style={styles.expenseCard}>
       <View style={styles.expenseHeader}>
         <View style={styles.authorRow}>
-          <AnimalAvatar value={author?.avatar} size={40} style={styles.avatar} />
+          <AnimalAvatar
+            value={author?.avatar}
+            size={40}
+            style={styles.avatar}
+          />
           <View style={styles.authorCopy}>
             <Text style={styles.authorName}>
               {author?.nickname ?? "알 수 없음"}
@@ -288,7 +297,14 @@ const ExpenseSummary = memo(function ExpenseSummary({
             </Text>
           </View>
         </View>
-        <Text style={styles.expenseAmount}>{formatWon(expense.amount)}</Text>
+        <View style={styles.expenseAmounts}>
+          <Text style={styles.expenseAmount}>{formatWon(expense.amount)}</Text>
+          {expense.pointAmount > 0 ? (
+            <Text style={styles.expensePointAmount}>
+              포인트 {formatWon(expense.pointAmount)}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <Image
         accessibilityLabel={`${expense.category} 지출 사진`}
@@ -300,7 +316,8 @@ const ExpenseSummary = memo(function ExpenseSummary({
         <Text style={styles.expenseMemo}>{expense.memo || "메모 없음"}</Text>
         {period ? (
           <Text style={styles.periodLabel}>
-            {room ? `${room.name} · ` : ""}{period.weekIndex}주차
+            {room ? `${room.name} · ` : ""}
+            {period.weekIndex}주차
           </Text>
         ) : null}
         {expense.syncStatus !== "SYNCED" ? (
@@ -329,6 +346,10 @@ function ExpenseEditor({
 }) {
   const [draftAmount, setDraftAmount] = useState(() =>
     formatKrwInput(String(expense.amount)),
+  );
+  const [usesPoints, setUsesPoints] = useState(expense.pointAmount > 0);
+  const [draftPointAmount, setDraftPointAmount] = useState(() =>
+    expense.pointAmount ? formatKrwInput(String(expense.pointAmount)) : "",
   );
   const [draftCategory, setDraftCategory] = useState<ExpenseCategory>(
     expense.category,
@@ -361,6 +382,15 @@ function ExpenseEditor({
       setError("금액을 0원 이상의 정수로 입력해 주세요.");
       return;
     }
+    const pointAmountText = draftPointAmount.replace(/[^0-9]/gu, "");
+    const pointAmount = usesPoints ? Number(pointAmountText) : 0;
+    if (
+      usesPoints &&
+      (!pointAmountText || !Number.isSafeInteger(pointAmount) || pointAmount < 1)
+    ) {
+      setError("포인트 사용 금액을 1원 이상의 정수로 입력해 주세요.");
+      return;
+    }
     if (!draftPhoto) {
       setError("챌린지 지출에는 사진이 정확히 1장 필요해요.");
       return;
@@ -370,6 +400,7 @@ function ExpenseEditor({
     try {
       await updateExpense(expense.id, {
         amount,
+        pointAmount,
         category: draftCategory,
         memo: draftMemo.trim(),
         photoUri: draftPhoto,
@@ -399,10 +430,38 @@ function ExpenseEditor({
       </View>
       <Field
         keyboardType="number-pad"
-        label="금액"
+        label="결제 금액"
         onChangeText={(value) => setDraftAmount(formatKrwInput(value))}
         value={draftAmount}
       />
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: usesPoints }}
+        onPress={() => {
+          setUsesPoints((value) => !value);
+          if (usesPoints) setDraftPointAmount("");
+        }}
+        style={styles.pointsToggle}
+      >
+        <View style={[styles.checkbox, usesPoints && styles.checkboxChecked]}>
+          {usesPoints ? (
+            <MaterialCommunityIcons color={palette.cream} name="check" size={15} />
+          ) : null}
+        </View>
+        <View style={styles.pointsToggleCopy}>
+          <Text style={styles.pointsToggleLabel}>포인트 결제</Text>
+        </View>
+      </Pressable>
+      {usesPoints ? (
+        <View style={styles.pointAmountField}>
+          <Field
+            keyboardType="number-pad"
+            label="포인트 사용 금액"
+            onChangeText={(value) => setDraftPointAmount(formatKrwInput(value))}
+            value={draftPointAmount}
+          />
+        </View>
+      ) : null}
       <View
         accessibilityLabel="지출 카테고리 선택"
         accessibilityRole="radiogroup"
@@ -508,10 +567,11 @@ function CommentSection({
     () =>
       comments
         .filter(
-          (comment) =>
-            comment.userId === currentUserId && !comment.deletedAt,
+          (comment) => comment.userId === currentUserId && !comment.deletedAt,
         )
-        .map((comment) => Date.parse(comment.createdAt) + COMMENT_EDIT_WINDOW_MS),
+        .map(
+          (comment) => Date.parse(comment.createdAt) + COMMENT_EDIT_WINDOW_MS,
+        ),
     [comments, currentUserId],
   );
   const renderedAt = useDeadlineNow(editDeadlines, canMutate);
@@ -611,10 +671,6 @@ function CommentSection({
             <View style={styles.threadHeader}>
               <View>
                 <Text style={styles.threadTitle}>댓글 {commentCount}</Text>
-                <Text style={styles.threadRule}>
-                  메시지를 길게 눌러 답글·복사 · 본인 댓글은 작성 후 5분 내
-                  수정
-                </Text>
               </View>
               <MaterialCommunityIcons
                 color={palette.greenSoft}
@@ -850,7 +906,11 @@ const CommentItem = memo(function CommentItem({
   return (
     <View style={[styles.messageRow, mine && styles.messageRowMine]}>
       {!mine ? (
-        <AnimalAvatar value={profile?.avatar} size={30} style={styles.messageAvatar} />
+        <AnimalAvatar
+          value={profile?.avatar}
+          size={30}
+          style={styles.messageAvatar}
+        />
       ) : null}
       <View style={[styles.messageGroup, mine && styles.messageGroupMine]}>
         {!mine ? (
@@ -967,11 +1027,7 @@ const CommentComposer = memo(function CommentComposer({
   const bodyValid = validateCommentBody(body).valid;
 
   return (
-    <GlassSurface
-      interactive
-      style={styles.composer}
-      testID="comment-composer"
-    >
+    <GlassSurface interactive style={styles.composer} testID="comment-composer">
       {replyDraft ? (
         <View style={styles.replyChip}>
           <MaterialCommunityIcons
@@ -1115,17 +1171,46 @@ const styles = StyleSheet.create({
   },
   avatar: {},
   authorCopy: { flex: 1 },
-  authorName: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
-  expenseMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 3, ...tabularNums },
-  expenseAmount: { color: palette.coralText, fontFamily: fonts.number, fontSize: 17, fontWeight: "800", ...tabularNums },
+  authorName: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  expenseMeta: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+    marginTop: 3,
+    ...tabularNums,
+  },
+  expenseAmount: {
+    color: palette.coralText,
+    fontFamily: fonts.number,
+    fontSize: 17,
+    fontWeight: "800",
+    ...tabularNums,
+  },
+  expenseAmounts: { alignItems: "flex-end", marginLeft: spacing.sm },
+  expensePointAmount: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 2, ...tabularNums },
   expensePhoto: {
     width: "100%",
     aspectRatio: 16 / 10,
     backgroundColor: palette.line,
   },
   expenseCopy: { padding: spacing.md, gap: 5 },
-  expenseMemo: { color: palette.ink, fontFamily: fonts.hand, fontSize: 14, lineHeight: 21 },
-  periodLabel: { color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "600" },
+  expenseMemo: {
+    color: palette.ink,
+    fontFamily: fonts.hand,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  periodLabel: {
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 11,
+    fontWeight: "600",
+  },
   sync: { color: palette.coralText, fontFamily: fonts.hand, fontSize: 10 },
   expenseActions: {
     flexDirection: "row",
@@ -1154,7 +1239,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  editorTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 17, fontWeight: "700" },
+  editorTitle: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  pointsToggle: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
+  pointAmountField: { marginTop: spacing.md },
+  checkbox: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.green,
+    borderRadius: 6,
+    backgroundColor: palette.paper,
+  },
+  checkboxChecked: { backgroundColor: palette.green },
+  pointsToggleCopy: { flex: 1 },
+  pointsToggleLabel: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
   editCategories: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   editMemo: { minHeight: 76, textAlignVertical: "top" },
   editPhoto: {
@@ -1163,7 +1268,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: palette.line,
   },
-  editDate: { color: palette.ink, fontFamily: fonts.number, fontSize: 13, fontWeight: "600", ...tabularNums },
+  editDate: {
+    color: palette.ink,
+    fontFamily: fonts.number,
+    fontSize: 13,
+    fontWeight: "600",
+    ...tabularNums,
+  },
   pickerRow: { flexDirection: "row", gap: spacing.sm },
   pickerButton: {
     paddingHorizontal: spacing.md,
@@ -1172,7 +1283,12 @@ const styles = StyleSheet.create({
     borderColor: palette.green,
     borderRadius: radii.pill,
   },
-  pickerButtonText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "600" },
+  pickerButtonText: {
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 11,
+    fontWeight: "600",
+  },
   webPicker: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10 },
   threadHeader: {
     flexDirection: "row",
@@ -1181,8 +1297,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxxl,
     marginBottom: spacing.lg,
   },
-  threadTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 20, fontWeight: "800" },
-  threadRule: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 4 },
+  threadTitle: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  threadRule: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+    marginTop: 4,
+  },
   commentSeparator: { height: spacing.md },
   messageRow: {
     flexDirection: "row",
@@ -1227,7 +1353,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: palette.coral,
   },
-  quoteAuthor: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 9, fontWeight: "700" },
+  quoteAuthor: {
+    color: palette.coralText,
+    fontFamily: fonts.handBold,
+    fontSize: 9,
+    fontWeight: "700",
+  },
   quoteBody: {
     color: palette.muted,
     fontFamily: fonts.hand,
@@ -1235,7 +1366,12 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     marginTop: 2,
   },
-  messageBody: { color: palette.ink, fontFamily: fonts.hand, fontSize: 13, lineHeight: 19 },
+  messageBody: {
+    color: palette.ink,
+    fontFamily: fonts.hand,
+    fontSize: 13,
+    lineHeight: 19,
+  },
   messageBodyMine: { color: palette.cream },
   deletedBody: { fontStyle: "italic" },
   editCommentInput: {
@@ -1252,7 +1388,12 @@ const styles = StyleSheet.create({
     marginLeft: 0,
     marginRight: 4,
   },
-  messageTime: { color: palette.muted, fontFamily: fonts.hand, fontSize: 9, ...tabularNums },
+  messageTime: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 9,
+    ...tabularNums,
+  },
   pending: { color: palette.coralText, fontFamily: fonts.hand, fontSize: 9 },
   commentActions: {
     flexDirection: "row",
@@ -1272,7 +1413,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
-  commentActionDanger: { color: palette.danger, fontFamily: fonts.hand, fontSize: 10 },
+  commentActionDanger: {
+    color: palette.danger,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+  },
   feedback: {
     color: palette.success,
     fontFamily: fonts.hand,
@@ -1301,8 +1446,18 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,135,98,0.10)",
   },
   replyCopy: { flex: 1 },
-  replyAuthor: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 10, fontWeight: "700" },
-  replyPreview: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 2 },
+  replyAuthor: {
+    color: palette.coralText,
+    fontFamily: fonts.handBold,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  replyPreview: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+    marginTop: 2,
+  },
   composerRow: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -1340,5 +1495,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(52,49,40,0.06)",
   },
-  closedComposerText: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
+  closedComposerText: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 11,
+  },
 });

@@ -258,11 +258,11 @@ export class OfflineQueueRepository implements AppRepository {
       return this.composeLocked();
     });
     void this.startFlush(false).catch(() => undefined);
-    return snapshot;
+    return clone(snapshot);
   }
 
   async resetDemo(): Promise<AppSnapshot> {
-    return this.withLock(async () => {
+    const snapshot = await this.withLock(async () => {
       await this.ready;
       const snapshot = normalizeSnapshot(await this.base.resetDemo());
       const userId = snapshot.currentUserId;
@@ -274,6 +274,7 @@ export class OfflineQueueRepository implements AppRepository {
       this.emitLocked();
       return this.composeLocked();
     });
+    return clone(snapshot);
   }
 
   async createRoom(input: CreateRoomInput): Promise<Room> {
@@ -329,7 +330,7 @@ export class OfflineQueueRepository implements AppRepository {
       return requireExpenseById(this.composeLocked(), operation.optimisticId);
     });
     void this.startFlush(false).catch(() => undefined);
-    return result;
+    return clone(result);
   }
 
   async updateExpense(expenseId: string, patch: Partial<AddExpenseInput>): Promise<Expense> {
@@ -386,7 +387,7 @@ export class OfflineQueueRepository implements AppRepository {
       return requireExpenseById(this.composeLocked(), expenseId);
     });
     void this.startFlush(false).catch(() => undefined);
-    return result;
+    return clone(result);
   }
 
   async deleteExpense(expenseId: string): Promise<void> {
@@ -458,7 +459,7 @@ export class OfflineQueueRepository implements AppRepository {
       return requireCommentById(this.composeLocked(), operation.optimisticId);
     });
     void this.startFlush(false).catch(() => undefined);
-    return result;
+    return clone(result);
   }
 
   async updateComment(commentId: string, body: string): Promise<Comment> {
@@ -502,7 +503,7 @@ export class OfflineQueueRepository implements AppRepository {
       return requireCommentById(this.composeLocked(), commentId);
     });
     void this.startFlush(false).catch(() => undefined);
-    return result;
+    return clone(result);
   }
 
   async deleteComment(commentId: string): Promise<void> {
@@ -541,7 +542,7 @@ export class OfflineQueueRepository implements AppRepository {
     this.listeners.add(listener);
     this.ensureBaseSubscription();
     if (this.baseSnapshot && this.isCurrentSessionSnapshot(this.baseSnapshot)) {
-      listener(this.composeLocked());
+      listener(clone(this.composeLocked()));
     }
     return () => {
       this.listeners.delete(listener);
@@ -936,14 +937,23 @@ export class OfflineQueueRepository implements AppRepository {
   }
 
   private composeLocked(): AppSnapshot {
-    if (!this.baseSnapshot) {
+    const baseSnapshot = this.baseSnapshot;
+    if (!baseSnapshot) {
       throw new OfflineQueueRepositoryError('SNAPSHOT_REQUIRED', '앱 데이터를 먼저 불러와 주세요.');
     }
-    this.assertCurrentSessionSnapshot(this.baseSnapshot);
-    const snapshot = normalizeSnapshot(this.baseSnapshot);
+    this.assertCurrentSessionSnapshot(baseSnapshot);
     const operations = this.queue.operations
-      .filter((operation) => operation.userId === snapshot.currentUserId)
+      .filter((operation) => operation.userId === baseSnapshot.currentUserId)
       .sort(compareOperations);
+    if (operations.every((operation) => operation.serverApplied)) return baseSnapshot;
+    // Projection only mutates expense/comment collections. Keep every other
+    // collection shared with the immutable server snapshot, then clone once at
+    // the subscriber boundary below.
+    const snapshot: AppSnapshot = {
+      ...baseSnapshot,
+      expenses: [...baseSnapshot.expenses],
+      comments: [...baseSnapshot.comments],
+    };
 
     for (const operation of operations) {
       if (operation.serverApplied) continue;
@@ -956,6 +966,7 @@ export class OfflineQueueRepository implements AppRepository {
           periodId: operation.input.periodId,
           userId: operation.userId,
           amount: operation.input.amount,
+          pointAmount: operation.input.pointAmount,
           category: operation.input.category,
           memo: operation.input.memo,
           photoUri: operation.input.photoUri,
@@ -1387,9 +1398,12 @@ export class OfflineQueueRepository implements AppRepository {
 
   private async persistLocked(): Promise<void> {
     this.queue.operations.sort(compareOperations);
-    const nextPersistedQueue = clone(this.queue);
+    // Serialize once for both durable storage and the rollback checkpoint.
+    // The previous implementation serialized the full queue twice per change.
+    const serializedQueue = JSON.stringify(this.queue);
+    const nextPersistedQueue = JSON.parse(serializedQueue) as QueueEnvelope;
     try {
-      await this.storage.setItem(this.storageKey, JSON.stringify(nextPersistedQueue));
+      await this.storage.setItem(this.storageKey, serializedQueue);
     } catch (error) {
       this.queue = clone(this.persistedQueue);
       const rollbackRemovals = [...this.photoRemovalsAfterRollback];

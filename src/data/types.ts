@@ -104,7 +104,10 @@ export type Expense = {
   /** 지출이 귀속되는 주차. 비우면 개인 지출. */
   periodId?: string;
   userId: string;
+  /** 실제 예산에서 차감되는 결제 금액. */
   amount: number;
+  /** 포인트 사용액. 표시용이며 챌린지 예산 합계에는 포함하지 않는다. */
+  pointAmount: number;
   category: ExpenseCategory;
   memo: string;
   photoUri?: string;
@@ -190,7 +193,7 @@ export type CreateRoomInput = {
 
 export type AddExpenseInput = Pick<
   Expense,
-  "periodId" | "amount" | "category" | "memo" | "photoUri" | "occurredAt"
+  "periodId" | "amount" | "pointAmount" | "category" | "memo" | "photoUri" | "occurredAt"
 > & {
   clientRequestId: string;
 };

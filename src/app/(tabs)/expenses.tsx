@@ -71,6 +71,7 @@ export default function ExpensesScreen() {
     ({ item: expense }: ListRenderItemInfo<Expense>) => (
       <ExpenseCard
         amount={expense.amount}
+        pointAmount={expense.pointAmount}
         avatar={currentUser?.avatar ?? ""}
         category={expense.category}
         commentCount={commentCounts.get(expense.id) ?? 0}

@@ -361,6 +361,7 @@ const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
     <View style={styles.expenseRecord}>
       <ExpenseCard
         amount={expense.amount}
+        pointAmount={expense.pointAmount}
         avatar={profile?.avatar ?? ""}
         category={expense.category}
         commentCount={comments.filter((comment) => !comment.deletedAt).length}

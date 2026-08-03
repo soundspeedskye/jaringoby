@@ -26,7 +26,7 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
 const MAX_EXPENSE_PHOTO_BYTES = 10 * 1024 * 1024;
 const EXPENSE_COLUMNS =
-  'id,client_request_id,period_id,user_id,amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version';
+  'id,client_request_id,period_id,user_id,amount,point_amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version';
 const COMMENT_COLUMNS =
   'id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version';
 const REALTIME_TABLES = [
@@ -151,6 +151,7 @@ type ExpenseRow = {
   period_id: string | null;
   user_id: string;
   amount: number | string;
+  point_amount: number | string;
   category: DatabaseExpenseCategory;
   memo: string | null;
   photo_path: string | null;
@@ -376,6 +377,7 @@ export class SupabaseRepository implements AppRepository {
     const { data, error } = await this.client.rpc('add_expense', {
       p_period_id: input.periodId ?? null,
       p_amount: input.amount,
+      p_point_amount: input.pointAmount,
       p_category: CATEGORY_TO_DATABASE[input.category],
       p_occurred_at: input.occurredAt,
       p_memo: input.memo || null,
@@ -427,6 +429,7 @@ export class SupabaseRepository implements AppRepository {
     const { error } = await this.client.rpc('update_expense', {
       p_expense_id: expenseId,
       p_amount: next.amount,
+      p_point_amount: next.pointAmount,
       p_category: CATEGORY_TO_DATABASE[next.category],
       p_occurred_at: next.occurredAt,
       p_memo: next.memo || null,
@@ -1071,6 +1074,7 @@ function mapExpense(row: ExpenseRow, signedUrls: Map<string, string>): Expense {
     periodId: row.period_id ?? undefined,
     userId: row.user_id,
     amount: safeNumber(row.amount, '지출 금액'),
+    pointAmount: safeNumber(row.point_amount, '포인트 사용 금액'),
     category: CATEGORY_FROM_DATABASE[row.category],
     memo: row.memo ?? '',
     photoPath,

@@ -105,6 +105,7 @@ export const MemberExpenseRow = memo(function MemberExpenseRow({
     <View style={styles.expenseRow}>
       <ExpenseCard
         amount={expense.amount}
+        pointAmount={expense.pointAmount}
         avatar={avatar}
         category={expense.category}
         commentCount={commentCount}

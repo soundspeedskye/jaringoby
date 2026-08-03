@@ -82,6 +82,22 @@ describe('OfflineQueueRepository', () => {
     ]));
   });
 
+  it('does not expose its internal base snapshot through public results', async () => {
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
+    const queue = repository(base, new MemoryStorage(), new FakeNetwork(false), new MemoryPhotoStore());
+
+    const exposed = await queue.load();
+    exposed.profiles[0]!.nickname = '외부 변경';
+    exposed.rooms[0]!.name = '외부 변경 방';
+    exposed.processedRequestIds.push('external-request');
+
+    await queue.addExpense(expenseInput('snapshot-isolation'));
+    const current = await queue.load();
+    expect(current.profiles[0]?.nickname).not.toBe('외부 변경');
+    expect(current.rooms[0]?.name).not.toBe('외부 변경 방');
+    expect(current.processedRequestIds).not.toContain('external-request');
+  });
+
   it('never exposes a cached account snapshot when authentication is invalid', async () => {
     const storage = new MemoryStorage();
     const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
@@ -693,6 +709,7 @@ function expenseInput(requestId: string, periodId = FUTURE_PERIOD.id): AddExpens
   return {
     periodId,
     amount: 10_000,
+    pointAmount: 0,
     category: '점심',
     memo: '테스트',
     photoUri: 'file:///picker/photo.jpg',
@@ -708,6 +725,7 @@ function expenseFixture(overrides: Partial<Expense> = {}): Expense {
     periodId: FUTURE_PERIOD.id,
     userId: 'user-a',
     amount: 10_000,
+    pointAmount: 0,
     category: '점심',
     memo: '테스트',
     photoUri: 'https://example.test/photo.jpg',
