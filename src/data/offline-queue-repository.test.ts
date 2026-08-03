@@ -616,6 +616,27 @@ class FakeRepository implements AppRepository {
     if (current) current.deletedAt = '2099-01-03T00:00:00.000Z';
   }
 
+  async deleteArchivedPeriod(periodId: string): Promise<void> {
+    const expenseIds = new Set(
+      this.snapshot.expenses
+        .filter((expense) => expense.periodId === periodId)
+        .map((expense) => expense.id),
+    );
+    this.snapshot.comments = this.snapshot.comments.filter(
+      (comment) => !expenseIds.has(comment.expenseId),
+    );
+    this.snapshot.expenses = this.snapshot.expenses.filter(
+      (expense) => expense.periodId !== periodId,
+    );
+    this.snapshot.periodMembers = this.snapshot.periodMembers.filter(
+      (member) => member.periodId !== periodId,
+    );
+    this.snapshot.periodResults = this.snapshot.periodResults.filter(
+      (result) => result.periodId !== periodId,
+    );
+    this.snapshot.periods = this.snapshot.periods.filter((period) => period.id !== periodId);
+  }
+
   async addComment(input: AddCommentInput): Promise<Comment> {
     const comment = commentFixture({
       id: `server-${input.clientRequestId}`,

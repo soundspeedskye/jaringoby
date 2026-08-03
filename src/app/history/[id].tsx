@@ -32,6 +32,8 @@ import {
   useProfiles,
   useRoom,
 } from "@/providers/app-data-hooks";
+import { useAppActions } from "@/providers/app-actions-provider";
+import { useAppDialog } from "@/providers/app-dialog-provider";
 import { formatDateLabel, formatWon } from "@/utils/format";
 
 export default function HistoryDetailScreen() {
@@ -39,6 +41,8 @@ export default function HistoryDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const periodId = Array.isArray(params.id) ? params.id[0] : params.id;
   const currentUser = useCurrentUser();
+  const { deleteArchivedPeriod } = useAppActions();
+  const { showDialog } = useAppDialog();
   const period = usePeriod(periodId);
   const room = useRoom(period?.roomId);
   const periodExpenses = usePeriodExpenses(periodId);
@@ -97,6 +101,26 @@ export default function HistoryDetailScreen() {
     (expenseId: string) => router.push(`/expense/${expenseId}`),
     [router],
   );
+  const canDeletePeriod = room?.ownerId === currentUser?.id;
+  const confirmDeletePeriod = useCallback(() => {
+    if (!period) return;
+    showDialog(
+      "지난 주차를 삭제할까요?",
+      "이 주차의 지출, 댓글, 정산 결과와 첨부 사진이 모두 삭제되며 되돌릴 수 없어요.",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: () => {
+            void deleteArchivedPeriod(period.id)
+              .then(() => router.replace("/history"))
+              .catch(() => undefined);
+          },
+        },
+      ],
+    );
+  }, [deleteArchivedPeriod, period, router, showDialog]);
   const renderArchivedExpense = useCallback(
     ({ item: expense }: { item: Expense }) => (
       <ArchivedExpenseRecord
@@ -141,7 +165,20 @@ export default function HistoryDetailScreen() {
         }
         ListHeaderComponent={
           <>
-            <PageHeader onBack={() => router.back()} title="지난 주차" />
+            <PageHeader
+              onBack={() => router.back()}
+              right={canDeletePeriod ? (
+                <Pressable
+                  accessibilityLabel="지난 주차 삭제"
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={confirmDeletePeriod}
+                >
+                  <Text style={styles.deletePeriodText}>삭제</Text>
+                </Pressable>
+              ) : undefined}
+              title="지난 주차"
+            />
 
             <NoticeBanner
               icon="archive-lock-outline"
@@ -429,6 +466,12 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   readOnlyBanner: { marginBottom: spacing.md },
+  deletePeriodText: {
+    color: palette.danger,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   hero: {
     padding: spacing.xl,
     borderRadius: radii.lg,

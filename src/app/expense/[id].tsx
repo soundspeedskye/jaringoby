@@ -5,12 +5,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   memo,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import {
+  BackHandler,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -140,16 +142,33 @@ export default function ExpenseDetailScreen() {
   const canMutateComments = phase ? isCommentMutationPhase(phase) : false;
   const [editingExpense, setEditingExpense] = useState(false);
   const [expenseError, setExpenseError] = useState<string | null>(null);
+  // New expenses replace the form route with this detail route, so there may
+  // be no reliable native history to pop. The challenge home is the stable
+  // return destination after viewing, deleting, or cancelling a new expense.
+  const returnToChallengeHome = useCallback(() => {
+    router.replace("/");
+  }, [router]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        returnToChallengeHome();
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [returnToChallengeHome]);
 
   if (!expense || !expenseId) {
     return (
       <Screen testID="expense-detail-screen">
-        <PageHeader onBack={() => router.back()} title="지출 상세" />
+        <PageHeader onBack={returnToChallengeHome} title="지출 상세" />
         <EmptyState
           action={
             <PrimaryButton
               label="뒤로 가기"
-              onPress={() => router.back()}
+              onPress={returnToChallengeHome}
               variant="secondary"
             />
           }
@@ -173,7 +192,7 @@ export default function ExpenseDetailScreen() {
             void (async () => {
               try {
                 await deleteExpense(expense.id);
-                router.back();
+                returnToChallengeHome();
               } catch (reason) {
                 setExpenseError(
                   reason instanceof Error
@@ -198,7 +217,7 @@ export default function ExpenseDetailScreen() {
         expenseId={expense.id}
         header={
           <>
-            <PageHeader onBack={() => router.back()} title="지출 상세" />
+            <PageHeader onBack={returnToChallengeHome} title="지출 상세" />
 
             {phase === "ARCHIVED" ? (
               <NoticeBanner

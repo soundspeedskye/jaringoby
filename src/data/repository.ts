@@ -30,6 +30,7 @@ export interface AppRepository {
     options?: UpdateExpenseOptions,
   ): Promise<Expense>;
   deleteExpense(expenseId: string): Promise<void>;
+  deleteArchivedPeriod(periodId: string): Promise<void>;
   addComment(input: AddCommentInput): Promise<Comment>;
   updateComment(commentId: string, body: string): Promise<Comment>;
   deleteComment(commentId: string): Promise<void>;

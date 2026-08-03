@@ -23,6 +23,7 @@ export type AppActionsContextValue = {
   addExpense: (input: AddExpenseInput) => Promise<Expense>;
   updateExpense: (expenseId: string, patch: Partial<AddExpenseInput>) => Promise<Expense>;
   deleteExpense: (expenseId: string) => Promise<void>;
+  deleteArchivedPeriod: (periodId: string) => Promise<void>;
   addComment: (input: AddCommentInput) => Promise<Comment>;
   updateComment: (commentId: string, body: string) => Promise<Comment>;
   deleteComment: (commentId: string) => Promise<void>;
@@ -64,6 +65,10 @@ export function AppActionsProvider({
     (expenseId: string) => execute(() => repository.deleteExpense(expenseId)),
     [execute, repository],
   );
+  const deleteArchivedPeriod = useCallback(
+    (periodId: string) => execute(() => repository.deleteArchivedPeriod(periodId)),
+    [execute, repository],
+  );
   const addComment = useCallback(
     (input: AddCommentInput) => execute(() => repository.addComment(input)),
     [execute, repository],
@@ -85,6 +90,7 @@ export function AppActionsProvider({
     addExpense,
     updateExpense,
     deleteExpense,
+    deleteArchivedPeriod,
     addComment,
     updateComment,
     deleteComment,
@@ -93,6 +99,7 @@ export function AppActionsProvider({
     addExpense,
     createRoom,
     deleteComment,
+    deleteArchivedPeriod,
     deleteExpense,
     joinRoom,
     previewInvite,

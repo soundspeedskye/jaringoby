@@ -460,6 +460,26 @@ export class SupabaseRepository implements AppRepository {
     await this.reloadAndNotify();
   }
 
+  async deleteArchivedPeriod(periodId: string): Promise<void> {
+    await this.requireUserId();
+    const snapshot = this.lastSnapshot ?? await this.load();
+    const photoPaths = snapshot.expenses
+      .filter((expense) => expense.periodId === periodId)
+      .map((expense) => expense.photoPath)
+      .filter((path): path is string => typeof path === 'string');
+    const { error } = await this.client.rpc('delete_archived_period', {
+      p_period_id: periodId,
+    });
+    if (error) throw translateError(error, '지난 주차를 삭제하지 못했어요.');
+    if (photoPaths.length) {
+      const { error: storageError } = await this.client.storage
+        .from('expense-photos')
+        .remove(photoPaths);
+      if (storageError) console.warn('삭제된 지난 주차의 사진 정리 오류', storageError);
+    }
+    await this.reloadAndNotify();
+  }
+
   async addComment(input: AddCommentInput): Promise<Comment> {
     await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId);

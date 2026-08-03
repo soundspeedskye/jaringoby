@@ -433,6 +433,40 @@ export class OfflineQueueRepository implements AppRepository {
     void this.startFlush(false).catch(() => undefined);
   }
 
+  async deleteArchivedPeriod(periodId: string): Promise<void> {
+    await this.withLock(async () => {
+      await this.ensureBaseLocked();
+      const snapshot = this.composeLocked();
+      const expenseIds = new Set(
+        snapshot.expenses
+          .filter((expense) => expense.periodId === periodId)
+          .map((expense) => expense.id),
+      );
+      const hasPendingMutation = this.queue.operations.some((operation) => (
+        (operation.kind === 'ADD_EXPENSE' && operation.input.periodId === periodId)
+        || ('targetId' in operation && expenseIds.has(operation.targetId))
+        || ('baseEntity' in operation && 'periodId' in operation.baseEntity
+          && operation.baseEntity.periodId === periodId)
+      ));
+      if (hasPendingMutation) {
+        throw new OfflineQueueRepositoryError(
+          'PERIOD_DELETE_PENDING_MUTATIONS',
+          '동기화 대기 중인 지출 또는 댓글이 있어 지난 주차를 삭제할 수 없어요.',
+        );
+      }
+      if (!await this.network.fetch()) {
+        throw new OfflineQueueRepositoryError(
+          'PERIOD_DELETE_REQUIRES_ONLINE',
+          '지난 주차 삭제는 인터넷에 연결된 상태에서만 할 수 있어요.',
+        );
+      }
+      await this.base.deleteArchivedPeriod(periodId);
+      this.baseSnapshot = normalizeSnapshot(await this.base.load());
+      await this.persistCachedSnapshotLocked(this.baseSnapshot);
+      this.emitLocked();
+    });
+  }
+
   async addComment(input: AddCommentInput): Promise<Comment> {
     const result = await this.withLock(async () => {
       await this.ensureBaseLocked();

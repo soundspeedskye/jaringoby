@@ -259,6 +259,31 @@ export class LocalRepository implements AppRepository {
     await this.persist();
   }
 
+  async deleteArchivedPeriod(periodId: string): Promise<void> {
+    const state = await this.requireState();
+    const period = this.findPeriod(state, periodId);
+    const room = this.findRoom(state, period.roomId);
+    if (room.ownerId !== state.currentUserId) {
+      throw new Error('방장만 지난 주차를 삭제할 수 있어요.');
+    }
+    if (period.phase !== 'ARCHIVED') {
+      throw new Error('정산이 완료된 지난 주차만 삭제할 수 있어요.');
+    }
+
+    const expenseIds = new Set(
+      state.expenses
+        .filter((expense) => expense.periodId === periodId)
+        .map((expense) => expense.id),
+    );
+    state.comments = state.comments.filter((comment) => !expenseIds.has(comment.expenseId));
+    state.expenses = state.expenses.filter((expense) => expense.periodId !== periodId);
+    state.periodMembers = state.periodMembers.filter((member) => member.periodId !== periodId);
+    state.periodResults = state.periodResults.filter((result) => result.periodId !== periodId);
+    state.periods = state.periods.filter((item) => item.id !== periodId);
+    this.refreshState(state);
+    await this.persist();
+  }
+
   async addComment(input: AddCommentInput): Promise<Comment> {
     const state = await this.requireState();
     const duplicate = state.comments.find((comment) => comment.clientRequestId === input.clientRequestId);

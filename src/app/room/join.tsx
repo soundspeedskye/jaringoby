@@ -1,8 +1,9 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   StyleSheet,
   Text,
@@ -52,6 +53,23 @@ export default function JoinRoomScreen() {
   );
   const normalizedCode = normalizeInviteCode(code);
   const phase = timeline ? getPeriodPhase(timeline, now) : null;
+  // This modal may be opened from a deep link or a native stack whose previous
+  // screen was removed. The room home is the stable return destination in both
+  // cases, including when the user already belongs to a room.
+  const returnToRoomHome = useCallback(() => {
+    router.replace("/");
+  }, [router]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        returnToRoomHome();
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [returnToRoomHome]);
 
   const lookUp = async () => {
     setMessage(null);
@@ -100,7 +118,7 @@ export default function JoinRoomScreen() {
       <ModalFormScreen
         headerBottomSpacing="md"
         loading
-        onBack={() => router.back()}
+        onBack={returnToRoomHome}
         testID="join-room-screen"
         title="방 참여"
       />
@@ -112,7 +130,7 @@ export default function JoinRoomScreen() {
   return (
     <ModalFormScreen
       headerBottomSpacing="md"
-      onBack={() => router.back()}
+      onBack={returnToRoomHome}
       testID="join-room-screen"
       title="방 참여"
     >
