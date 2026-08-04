@@ -7,12 +7,14 @@ import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
 import { useAppActions } from "@/providers/app-actions-provider";
 import { usePendingExceptionApprovals } from "@/providers/app-data-hooks";
+import { useAppDialog } from "@/providers/app-dialog-provider";
 import { formatWon } from "@/utils/format";
 
 /** 홈 상단 "예외 승인 대기함"(안 B): 내가 승인해야 할 예외를 모아 보여준다. */
 export function ExceptionApprovalInbox() {
   const pending = usePendingExceptionApprovals();
   const { approveExpenseException } = useAppActions();
+  const { showDialog } = useAppDialog();
   const router = useRouter();
   const [expanded, setExpanded] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -24,8 +26,13 @@ export function ExceptionApprovalInbox() {
     void (async () => {
       try {
         await approveExpenseException(expenseId);
-      } catch {
-        // 오류는 상세 화면에서 확인 후 재시도한다.
+      } catch (reason) {
+        showDialog(
+          "예외를 승인하지 못했어요",
+          reason instanceof Error
+            ? reason.message
+            : "잠시 후 다시 시도해 주세요.",
+        );
       } finally {
         setBusyId(null);
       }
