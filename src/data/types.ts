@@ -141,6 +141,22 @@ export type Comment = {
   version?: number;
 };
 
+/** 지출에 붙은 예외 제안. 활성 멤버 전원 승인 시 정산에서 제외된다. */
+export type ExpenseException = {
+  expenseId: string;
+  /** 짧은 사유 (기념일·야근 등). 최대 10자. */
+  reason: string;
+  requestedBy: string;
+  requestedAt: string;
+};
+
+/** 예외에 대한 멤버 개별 승인. (expenseId, userId) 단위. */
+export type ExpenseExceptionApproval = {
+  expenseId: string;
+  userId: string;
+  createdAt: string;
+};
+
 export type AppSnapshot = {
   currentUserId: string;
   profiles: Profile[];
@@ -152,6 +168,8 @@ export type AppSnapshot = {
   memberStats: RoomMemberStats[];
   expenses: Expense[];
   comments: Comment[];
+  expenseExceptions: ExpenseException[];
+  expenseExceptionApprovals: ExpenseExceptionApproval[];
   processedRequestIds: string[];
 };
 
@@ -205,6 +223,8 @@ export type AddExpenseInput = Pick<
   "periodId" | "amount" | "pointAmount" | "category" | "memo" | "photoUri" | "occurredAt"
 > & {
   clientRequestId: string;
+  /** 예외 제안 사유(생성 시에만). 비우면 일반 지출. */
+  exceptionReason?: string;
 };
 
 export type AddCommentInput = Pick<

@@ -307,6 +307,23 @@ export class OfflineQueueRepository implements AppRepository {
     return result;
   }
 
+  // Exception approvals settle the exclusion set shared by every member, so they
+  // go straight to the server instead of being queued and replayed offline.
+  async approveExpenseException(expenseId: string): Promise<void> {
+    await this.base.approveExpenseException(expenseId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async removeExpenseExceptionApproval(expenseId: string): Promise<void> {
+    await this.base.removeExpenseExceptionApproval(expenseId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async withdrawExpenseException(expenseId: string): Promise<void> {
+    await this.base.withdrawExpenseException(expenseId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
   async addExpense(input: AddExpenseInput): Promise<Expense> {
     const result = await this.withLock(async () => {
       await this.ensureBaseLocked();

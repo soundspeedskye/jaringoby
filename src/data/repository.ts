@@ -27,6 +27,9 @@ export interface AppRepository {
   leaveRoom(roomId: string, successorId?: string): Promise<void>;
   switchRoom(input: SwitchRoomInput): Promise<RoomMember>;
   addExpense(input: AddExpenseInput): Promise<Expense>;
+  approveExpenseException(expenseId: string): Promise<void>;
+  removeExpenseExceptionApproval(expenseId: string): Promise<void>;
+  withdrawExpenseException(expenseId: string): Promise<void>;
   updateExpense(
     expenseId: string,
     patch: Partial<AddExpenseInput>,

@@ -9,6 +9,7 @@ import type {
   Comment,
   CreateRoomInput,
   Expense,
+  ExpenseException,
   InvitePreview,
   Period,
   PeriodMember,
@@ -28,7 +29,9 @@ import {
   evaluateCommentMutationPermission,
   evaluateExpenseMutationPermission,
   evaluateExpenseEligibility,
+  EXPENSE_EXCEPTION_REASON_MAX_LENGTH,
   generateInviteCode,
+  isExceptionUnanimouslyApproved,
   getPeriodPhase,
   getWeekStart,
   isExpenseCategory,
@@ -73,6 +76,9 @@ export class LocalRepository implements AppRepository {
     if (this.snapshot) return clone(this.snapshot);
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     this.snapshot = stored ? (JSON.parse(stored) as AppSnapshot) : createDemoSnapshot();
+    // 예외 기능 이전에 저장된 v3 스냅샷에는 예외 배열이 없다. 기본값으로 채운다.
+    this.snapshot.expenseExceptions ??= [];
+    this.snapshot.expenseExceptionApprovals ??= [];
     this.refreshState(this.snapshot);
     await this.persist();
     return clone(this.snapshot);
@@ -307,6 +313,7 @@ export class LocalRepository implements AppRepository {
     };
     state.expenses.unshift(expense);
     state.processedRequestIds.push(input.clientRequestId);
+    this.recordExceptionOnCreate(state, expense, input.exceptionReason);
     await this.persist();
     return clone(expense);
   }
@@ -355,6 +362,12 @@ export class LocalRepository implements AppRepository {
         .map((expense) => expense.id),
     );
     state.comments = state.comments.filter((comment) => !expenseIds.has(comment.expenseId));
+    state.expenseExceptions = state.expenseExceptions.filter(
+      (exception) => !expenseIds.has(exception.expenseId),
+    );
+    state.expenseExceptionApprovals = state.expenseExceptionApprovals.filter(
+      (approval) => !expenseIds.has(approval.expenseId),
+    );
     state.expenses = state.expenses.filter((expense) => expense.periodId !== periodId);
     state.periodMembers = state.periodMembers.filter((member) => member.periodId !== periodId);
     state.periodResults = state.periodResults.filter((result) => result.periodId !== periodId);
@@ -410,10 +423,103 @@ export class LocalRepository implements AppRepository {
     await this.persist();
   }
 
+  async approveExpenseException(expenseId: string): Promise<void> {
+    const state = await this.requireState();
+    const expense = this.findExpense(state, expenseId);
+    this.assertExceptionApprovable(state, expense);
+    const already = state.expenseExceptionApprovals.some(
+      (approval) =>
+        approval.expenseId === expenseId && approval.userId === state.currentUserId,
+    );
+    if (!already) {
+      state.expenseExceptionApprovals.push({
+        expenseId,
+        userId: state.currentUserId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    await this.persist();
+  }
+
+  async removeExpenseExceptionApproval(expenseId: string): Promise<void> {
+    const state = await this.requireState();
+    const expense = this.findExpense(state, expenseId);
+    this.assertExceptionApprovable(state, expense);
+    state.expenseExceptionApprovals = state.expenseExceptionApprovals.filter(
+      (approval) =>
+        !(approval.expenseId === expenseId && approval.userId === state.currentUserId),
+    );
+    await this.persist();
+  }
+
+  async withdrawExpenseException(expenseId: string): Promise<void> {
+    const state = await this.requireState();
+    const expense = this.findExpense(state, expenseId);
+    if (expense.userId !== state.currentUserId) {
+      throw new Error('예외를 요청한 사람만 취소할 수 있어요.');
+    }
+    if (expense.periodId) {
+      const period = this.findPeriod(state, expense.periodId);
+      const timeline = createPeriodTimeline(period.weekStart);
+      if (Date.now() >= timeline.C) throw new Error('정산 마감이 지나 예외를 변경할 수 없어요.');
+    }
+    state.expenseExceptions = state.expenseExceptions.filter(
+      (exception) => exception.expenseId !== expenseId,
+    );
+    state.expenseExceptionApprovals = state.expenseExceptionApprovals.filter(
+      (approval) => approval.expenseId !== expenseId,
+    );
+    await this.persist();
+  }
+
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {
     this.listeners.add(listener);
     if (this.snapshot) listener(clone(this.snapshot));
     return () => this.listeners.delete(listener);
+  }
+
+  private recordExceptionOnCreate(
+    state: AppSnapshot,
+    expense: Expense,
+    reasonInput: string | undefined,
+  ): void {
+    const reason = reasonInput?.trim();
+    if (!reason) return;
+    if (!expense.periodId) throw new Error('주차 지출만 예외로 요청할 수 있어요.');
+    if (reason.length > EXPENSE_EXCEPTION_REASON_MAX_LENGTH) {
+      throw new Error(`예외 사유는 ${EXPENSE_EXCEPTION_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`);
+    }
+    const exception: ExpenseException = {
+      expenseId: expense.id,
+      reason,
+      requestedBy: expense.userId,
+      requestedAt: expense.createdAt,
+    };
+    state.expenseExceptions.push(exception);
+    // 제안자는 생성과 동시에 자동 승인된다.
+    state.expenseExceptionApprovals.push({
+      expenseId: expense.id,
+      userId: expense.userId,
+      createdAt: expense.createdAt,
+    });
+  }
+
+  private assertExceptionApprovable(state: AppSnapshot, expense: Expense): void {
+    const exception = state.expenseExceptions.find(
+      (item) => item.expenseId === expense.id,
+    );
+    if (!exception) throw new Error('예외 요청이 없는 지출이에요.');
+    if (!expense.periodId) throw new Error('주차 지출만 승인할 수 있어요.');
+    const period = this.findPeriod(state, expense.periodId);
+    const timeline = createPeriodTimeline(period.weekStart);
+    if (Date.now() >= timeline.C) throw new Error('정산 마감이 지나 예외를 승인할 수 없어요.');
+    const isActiveMember = state.periodMembers.some(
+      (member) =>
+        member.periodId === expense.periodId &&
+        member.userId === state.currentUserId &&
+        member.status === 'ACTIVE',
+    );
+    if (!isActiveMember) throw new Error('이 주차의 참여자만 승인할 수 있어요.');
   }
 
   private async requireState(): Promise<AppSnapshot> {
@@ -523,13 +629,15 @@ export class LocalRepository implements AppRepository {
     const members = state.periodMembers.filter((member) => member.periodId === period.id);
     if (members.length === 0) return;
     const profileById = new Map(state.profiles.map((profile) => [profile.id, profile]));
+    const excludedExpenseIds = this.settlementExcludedExpenseIds(state, period);
     const rows = members.map((member) => {
       const spent = state.expenses
         .filter(
           (expense) =>
             expense.periodId === period.id &&
             expense.userId === member.userId &&
-            !expense.deletedAt,
+            !expense.deletedAt &&
+            !excludedExpenseIds.has(expense.id),
         )
         .reduce((sum, expense) => sum + expense.amount, 0);
       return { member, spent, remaining: member.appliedLimit - spent };
@@ -554,6 +662,38 @@ export class LocalRepository implements AppRepository {
       };
       state.periodResults.push(result);
     }
+  }
+
+  /**
+   * 이 주차에서 정산 제외되는 지출 ID. 예외가 붙어 있고 C(마감) 이전에 활성
+   * 멤버 전원이 승인한 지출만 제외된다. 서버 finalize_period_core와 동일 규칙.
+   */
+  private settlementExcludedExpenseIds(state: AppSnapshot, period: Period): Set<string> {
+    const excluded = new Set<string>();
+    if (state.expenseExceptions.length === 0) return excluded;
+    const cutoffMs = createPeriodTimeline(period.weekStart).C;
+    const activeMemberIds = state.periodMembers
+      .filter((member) => member.periodId === period.id && member.status === 'ACTIVE')
+      .map((member) => member.userId);
+    const activeMemberIdSet = new Set(activeMemberIds);
+    for (const exception of state.expenseExceptions) {
+      const expense = state.expenses.find((item) => item.id === exception.expenseId);
+      if (!expense || expense.periodId !== period.id || expense.deletedAt) continue;
+      const approvedUserIds = new Set(
+        state.expenseExceptionApprovals
+          .filter(
+            (approval) =>
+              approval.expenseId === exception.expenseId &&
+              activeMemberIdSet.has(approval.userId) &&
+              Date.parse(approval.createdAt) <= cutoffMs,
+          )
+          .map((approval) => approval.userId),
+      );
+      if (isExceptionUnanimouslyApproved({ activeMemberIds, approvedUserIds })) {
+        excluded.add(exception.expenseId);
+      }
+    }
+    return excluded;
   }
 
   private calendarOf(period: Period): WeekdayCalendar {

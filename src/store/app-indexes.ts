@@ -3,6 +3,7 @@ import type {
   AppSnapshot,
   Comment,
   Expense,
+  ExpenseException,
   Period,
   PeriodMember,
   PeriodResult,
@@ -10,7 +11,7 @@ import type {
   Room,
   RoomMemberStats,
 } from '@/data/types';
-import { selectCrownHolders } from '@/domain';
+import { isExceptionUnanimouslyApproved, selectCrownHolders } from '@/domain';
 
 export type AppIndexes = {
   roomById: Map<string, Room>;
@@ -26,10 +27,15 @@ export type AppIndexes = {
   resultsByPeriodId: Map<string, PeriodResult[]>;
   statsByRoomId: Map<string, RoomMemberStats[]>;
   crownIdsByPeriodId: Map<string, string[]>;
+  exceptionByExpenseId: Map<string, ExpenseException>;
+  approvedUserIdsByExpenseId: Map<string, Set<string>>;
+  /** 예외가 만장일치로 승인돼 정산에서 빠지는 지출 ID(전 주차 통합). */
+  settlementExcludedExpenseIds: Set<string>;
 };
 
 const EMPTY_MEMBERS: PeriodMember[] = [];
 const EMPTY_EXPENSES: Expense[] = [];
+const EMPTY_APPROVERS: ReadonlySet<string> = new Set();
 
 export function buildAppIndexes(
   snapshot: AppSnapshot | null,
@@ -58,6 +64,9 @@ export function buildAppIndexes(
   const commentIndexes = canReuse && snapshot.comments === previousSnapshot.comments
     ? pickCommentIndexes(previousIndexes)
     : buildCommentIndexes(snapshot.comments);
+  const exceptionIndexes = canReuse && exceptionInputsAreShared(snapshot, previousSnapshot)
+    ? pickExceptionIndexes(previousIndexes)
+    : buildExceptionIndexes(snapshot, membersByPeriodId, expenseIndexes.expenseById);
   const resultsByPeriodId =
     canReuse && snapshot.periodResults === previousSnapshot.periodResults
       ? previousIndexes.resultsByPeriodId
@@ -73,6 +82,7 @@ export function buildAppIndexes(
       membersByPeriodId,
       expensesByPeriodAndUserId: expenseIndexes.expensesByPeriodAndUserId,
       resultsByPeriodId,
+      settlementExcludedExpenseIds: exceptionIndexes.settlementExcludedExpenseIds,
     });
 
   return {
@@ -82,6 +92,7 @@ export function buildAppIndexes(
     membersByPeriodId,
     ...expenseIndexes,
     ...commentIndexes,
+    ...exceptionIndexes,
     resultsByPeriodId,
     statsByRoomId,
     crownIdsByPeriodId,
@@ -103,6 +114,9 @@ function createEmptyIndexes(): AppIndexes {
     resultsByPeriodId: new Map(),
     statsByRoomId: new Map(),
     crownIdsByPeriodId: new Map(),
+    exceptionByExpenseId: new Map(),
+    approvedUserIdsByExpenseId: new Map(),
+    settlementExcludedExpenseIds: new Set(),
   };
 }
 
@@ -156,12 +170,52 @@ function buildCommentIndexes(comments: Comment[]): Pick<
   return { commentsByExpenseId, commentCountByExpenseId };
 }
 
+function buildExceptionIndexes(
+  snapshot: AppSnapshot,
+  membersByPeriodId: Map<string, PeriodMember[]>,
+  expenseById: Map<string, Expense>,
+): Pick<
+  AppIndexes,
+  'exceptionByExpenseId' | 'approvedUserIdsByExpenseId' | 'settlementExcludedExpenseIds'
+> {
+  const exceptionByExpenseId = new Map<string, ExpenseException>();
+  const approvedUserIdsByExpenseId = new Map<string, Set<string>>();
+  const settlementExcludedExpenseIds = new Set<string>();
+
+  snapshot.expenseExceptions.forEach((exception) => {
+    exceptionByExpenseId.set(exception.expenseId, exception);
+  });
+  snapshot.expenseExceptionApprovals.forEach((approval) => {
+    let approvers = approvedUserIdsByExpenseId.get(approval.expenseId);
+    if (!approvers) {
+      approvers = new Set<string>();
+      approvedUserIdsByExpenseId.set(approval.expenseId, approvers);
+    }
+    approvers.add(approval.userId);
+  });
+
+  exceptionByExpenseId.forEach((_exception, expenseId) => {
+    const expense = expenseById.get(expenseId);
+    if (!expense || !expense.periodId) return;
+    const activeMemberIds = (membersByPeriodId.get(expense.periodId) ?? EMPTY_MEMBERS)
+      .filter((member) => member.status === 'ACTIVE')
+      .map((member) => member.userId);
+    const approvedUserIds = approvedUserIdsByExpenseId.get(expenseId) ?? EMPTY_APPROVERS;
+    if (isExceptionUnanimouslyApproved({ activeMemberIds, approvedUserIds })) {
+      settlementExcludedExpenseIds.add(expenseId);
+    }
+  });
+
+  return { exceptionByExpenseId, approvedUserIdsByExpenseId, settlementExcludedExpenseIds };
+}
+
 function buildCrownIndex(input: {
   snapshot: AppSnapshot;
   profileById: Map<string, Profile>;
   membersByPeriodId: Map<string, PeriodMember[]>;
   expensesByPeriodAndUserId: Map<string, Map<string, Expense[]>>;
   resultsByPeriodId: Map<string, PeriodResult[]>;
+  settlementExcludedExpenseIds: Set<string>;
 }): Map<string, string[]> {
   const crownIdsByPeriodId = new Map<string, string[]>();
   input.snapshot.periods.forEach((period) => {
@@ -187,7 +241,13 @@ function buildCrownIndex(input: {
         appliedLimit: member.appliedLimit,
         eligibleSpending: (
           expensesByPeriodAndUserId.get(period.id)?.get(member.userId) ?? EMPTY_EXPENSES
-        ).reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0),
+        ).reduce(
+          (sum, expense) =>
+            input.settlementExcludedExpenseIds.has(expense.id)
+              ? sum
+              : sum + expenseOfficialAmount(expense),
+          0,
+        ),
       })),
       'ACTIVE',
     ).holderIds;
@@ -205,7 +265,30 @@ function crownInputsAreShared(
     && snapshot.periodResults === previousSnapshot.periodResults
     && snapshot.periodMembers === previousSnapshot.periodMembers
     && snapshot.profiles === previousSnapshot.profiles
+    && snapshot.expenses === previousSnapshot.expenses
+    && snapshot.expenseExceptions === previousSnapshot.expenseExceptions
+    && snapshot.expenseExceptionApprovals === previousSnapshot.expenseExceptionApprovals;
+}
+
+function exceptionInputsAreShared(
+  snapshot: AppSnapshot,
+  previousSnapshot: AppSnapshot,
+): boolean {
+  return snapshot.expenseExceptions === previousSnapshot.expenseExceptions
+    && snapshot.expenseExceptionApprovals === previousSnapshot.expenseExceptionApprovals
+    && snapshot.periodMembers === previousSnapshot.periodMembers
     && snapshot.expenses === previousSnapshot.expenses;
+}
+
+function pickExceptionIndexes(indexes: AppIndexes): Pick<
+  AppIndexes,
+  'exceptionByExpenseId' | 'approvedUserIdsByExpenseId' | 'settlementExcludedExpenseIds'
+> {
+  return {
+    exceptionByExpenseId: indexes.exceptionByExpenseId,
+    approvedUserIdsByExpenseId: indexes.approvedUserIdsByExpenseId,
+    settlementExcludedExpenseIds: indexes.settlementExcludedExpenseIds,
+  };
 }
 
 function pickExpenseIndexes(indexes: AppIndexes): Pick<

@@ -24,6 +24,9 @@ export type AppActionsContextValue = {
   leaveRoom: (roomId: string, successorId?: string) => Promise<void>;
   switchRoom: (input: SwitchRoomInput) => Promise<RoomMember>;
   addExpense: (input: AddExpenseInput) => Promise<Expense>;
+  approveExpenseException: (expenseId: string) => Promise<void>;
+  removeExpenseExceptionApproval: (expenseId: string) => Promise<void>;
+  withdrawExpenseException: (expenseId: string) => Promise<void>;
   updateExpense: (expenseId: string, patch: Partial<AddExpenseInput>) => Promise<Expense>;
   deleteExpense: (expenseId: string) => Promise<void>;
   deleteArchivedPeriod: (periodId: string) => Promise<void>;
@@ -69,6 +72,19 @@ export function AppActionsProvider({
     (input: AddExpenseInput) => execute(() => repository.addExpense(input)),
     [execute, repository],
   );
+  const approveExpenseException = useCallback(
+    (expenseId: string) => execute(() => repository.approveExpenseException(expenseId)),
+    [execute, repository],
+  );
+  const removeExpenseExceptionApproval = useCallback(
+    (expenseId: string) =>
+      execute(() => repository.removeExpenseExceptionApproval(expenseId)),
+    [execute, repository],
+  );
+  const withdrawExpenseException = useCallback(
+    (expenseId: string) => execute(() => repository.withdrawExpenseException(expenseId)),
+    [execute, repository],
+  );
   const updateExpense = useCallback(
     (expenseId: string, patch: Partial<AddExpenseInput>) => execute(() => repository.updateExpense(expenseId, patch)),
     [execute, repository],
@@ -102,6 +118,9 @@ export function AppActionsProvider({
     leaveRoom,
     switchRoom,
     addExpense,
+    approveExpenseException,
+    removeExpenseExceptionApproval,
+    withdrawExpenseException,
     updateExpense,
     deleteExpense,
     deleteArchivedPeriod,
@@ -111,6 +130,9 @@ export function AppActionsProvider({
   }), [
     addComment,
     addExpense,
+    approveExpenseException,
+    removeExpenseExceptionApproval,
+    withdrawExpenseException,
     createRoom,
     deleteComment,
     deleteArchivedPeriod,

@@ -32,6 +32,7 @@ import {
   usePeriodExpenses,
   usePeriodMembers,
   useProfiles,
+  useSettlementExcludedExpenseIds,
 } from "@/providers/app-data-hooks";
 import { useAppStatus, useAppStatusActions } from "@/providers/app-status-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
@@ -97,6 +98,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
   );
   const commentCounts = useCommentCounts(expenses);
   const crownIds = useCrownIds(currentPeriod?.id);
+  const excludedExpenseIds = useSettlementExcludedExpenseIds();
   const expensesByUserId = useMemo(() => {
     const grouped = new Map<string, Expense[]>();
     expenses.forEach((expense) => {
@@ -148,7 +150,10 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
         const memberExpenses =
           expensesByUserId.get(member.userId) ?? EMPTY_EXPENSES;
         const spent = memberExpenses.reduce(
-          (sum, expense) => sum + expenseOfficialAmount(expense),
+          (sum, expense) =>
+            excludedExpenseIds.has(expense.id)
+              ? sum
+              : sum + expenseOfficialAmount(expense),
           0,
         );
         const latestCreatedExpense = memberExpenses[0];
@@ -167,7 +172,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
           isCurrentUser: member.userId === currentUser.id,
         };
       });
-  }, [crownIds, currentUser, expensesByUserId, members, profilesById]);
+  }, [crownIds, currentUser, excludedExpenseIds, expensesByUserId, members, profilesById]);
 
   const actions = useMemo<RoomHomeActions>(
     () => ({
@@ -195,7 +200,8 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
       (expense) => expense.userId === currentUser.id,
     );
     const mySpent = myExpenses.reduce(
-      (sum, expense) => sum + expenseOfficialAmount(expense),
+      (sum, expense) =>
+        excludedExpenseIds.has(expense.id) ? sum : sum + expenseOfficialAmount(expense),
       0,
     );
     const myPendingDelta = myExpenses.reduce(
@@ -267,6 +273,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     currentPeriod,
     currentUser,
     error,
+    excludedExpenseIds,
     expenses,
     loading,
     memberRows,

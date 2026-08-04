@@ -48,6 +48,21 @@ export function isExpenseCategory(value: string): value is ExpenseCategory {
   return (EXPENSE_CATEGORIES as readonly string[]).includes(value);
 }
 
+export const EXPENSE_EXCEPTION_REASON_MAX_LENGTH = 10;
+
+/**
+ * 예외가 정산에서 제외되려면 그 주차의 활성 멤버 전원이 승인해야 한다.
+ * 제안자는 생성 시 자동 승인되므로 승인 집합에 포함된다. 활성 멤버가 없으면
+ * 제외하지 않는다(정산 대상이 없음).
+ */
+export function isExceptionUnanimouslyApproved(input: {
+  readonly activeMemberIds: readonly string[];
+  readonly approvedUserIds: ReadonlySet<string>;
+}): boolean {
+  if (input.activeMemberIds.length === 0) return false;
+  return input.activeMemberIds.every((id) => input.approvedUserIds.has(id));
+}
+
 export function evaluateExpenseEligibility(input: {
   readonly expectedPeriodId: string;
   readonly timeline: PeriodTimeline;

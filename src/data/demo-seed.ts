@@ -205,6 +205,8 @@ export function createDemoSnapshot(): AppSnapshot {
         syncStatus: 'SYNCED',
       },
     ],
+    expenseExceptions: [],
+    expenseExceptionApprovals: [],
     processedRequestIds: [],
   };
 }

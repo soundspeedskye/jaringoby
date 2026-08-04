@@ -11,6 +11,8 @@ import type {
   Comment,
   CreateRoomInput,
   Expense,
+  ExpenseException,
+  ExpenseExceptionApproval,
   InvitePreview,
   Period,
   PeriodMember,
@@ -38,6 +40,8 @@ const REALTIME_TABLES = [
   'period_results',
   'expenses',
   'comments',
+  'expense_exceptions',
+  'expense_exception_approvals',
 ] as const;
 type RealtimeTable = (typeof REALTIME_TABLES)[number];
 
@@ -179,6 +183,19 @@ type CommentRow = {
 type PreferenceRow = {
   room_id: string;
   is_hidden: boolean;
+};
+
+type ExpenseExceptionRow = {
+  expense_id: string;
+  reason: string;
+  requested_by: string;
+  requested_at: string;
+};
+
+type ExpenseExceptionApprovalRow = {
+  expense_id: string;
+  user_id: string;
+  created_at: string;
 };
 
 export class RepositoryError extends Error {
@@ -404,6 +421,33 @@ export class SupabaseRepository implements AppRepository {
     return clone(member);
   }
 
+  async approveExpenseException(expenseId: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('approve_expense_exception', {
+      p_expense_id: expenseId,
+    });
+    if (error) throw translateError(error, '예외를 승인하지 못했어요.');
+    await this.reloadAndNotify();
+  }
+
+  async removeExpenseExceptionApproval(expenseId: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('remove_expense_exception_approval', {
+      p_expense_id: expenseId,
+    });
+    if (error) throw translateError(error, '승인을 취소하지 못했어요.');
+    await this.reloadAndNotify();
+  }
+
+  async withdrawExpenseException(expenseId: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('withdraw_expense_exception', {
+      p_expense_id: expenseId,
+    });
+    if (error) throw translateError(error, '예외를 취소하지 못했어요.');
+    await this.reloadAndNotify();
+  }
+
   async addExpense(input: AddExpenseInput): Promise<Expense> {
     const userId = await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId);
@@ -419,6 +463,7 @@ export class SupabaseRepository implements AppRepository {
       p_memo: input.memo || null,
       p_photo_path: photoPath,
       p_client_request_id: requestId,
+      p_exception_reason: input.exceptionReason?.trim() || null,
     });
     if (error) {
       if (photoPath) await this.removeOrphanPhoto(photoPath);
@@ -584,6 +629,8 @@ export class SupabaseRepository implements AppRepository {
       invitesResult,
       expenseRows,
       commentRows,
+      exceptionRows,
+      approvalRows,
       preferencesResult,
     ] = await Promise.all([
       this.client.from('profiles').select('id,nickname,avatar_path'),
@@ -613,6 +660,8 @@ export class SupabaseRepository implements AppRepository {
       this.client.from('invite_codes').select('room_id,code,is_active').eq('is_active', true),
       this.fetchExpenseRows(),
       this.fetchCommentRows(),
+      this.fetchExceptionRows(),
+      this.fetchExceptionApprovalRows(),
       this.client.from('user_room_preferences').select('room_id,is_hidden'),
     ]);
 
@@ -675,6 +724,12 @@ export class SupabaseRepository implements AppRepository {
     const visibleExpenseRows = filterVisibleExpenseRows(expenseRows, visiblePeriodIds);
     const visibleExpenseIds = new Set(visibleExpenseRows.map((row) => row.id));
     const visibleCommentRows = filterVisibleCommentRows(commentRows, visibleExpenseIds);
+    const visibleExceptionRows = exceptionRows.filter((row) =>
+      visibleExpenseIds.has(row.expense_id),
+    );
+    const visibleApprovalRows = approvalRows.filter((row) =>
+      visibleExpenseIds.has(row.expense_id),
+    );
 
     return {
       currentUserId: userId,
@@ -695,6 +750,8 @@ export class SupabaseRepository implements AppRepository {
         .map(mapStats),
       expenses: visibleExpenseRows.map((row) => mapExpense(row, expenseSignedUrls)),
       comments: visibleCommentRows.map(mapComment),
+      expenseExceptions: visibleExceptionRows.map(mapExpenseException),
+      expenseExceptionApprovals: visibleApprovalRows.map(mapExpenseExceptionApproval),
       processedRequestIds: collectProcessedRequestIds(expenseRows, commentRows, userId),
     };
   }
@@ -719,6 +776,26 @@ export class SupabaseRepository implements AppRepository {
       throw translateError(result.error, '댓글 데이터를 갱신하지 못했어요.');
     }
     return rows<CommentRow>(result.data);
+  }
+
+  private async fetchExceptionRows(): Promise<ExpenseExceptionRow[]> {
+    const result = await this.client
+      .from('expense_exceptions')
+      .select('expense_id,reason,requested_by,requested_at');
+    if (result.error) {
+      throw translateError(result.error, '예외 데이터를 갱신하지 못했어요.');
+    }
+    return rows<ExpenseExceptionRow>(result.data);
+  }
+
+  private async fetchExceptionApprovalRows(): Promise<ExpenseExceptionApprovalRow[]> {
+    const result = await this.client
+      .from('expense_exception_approvals')
+      .select('expense_id,user_id,created_at');
+    if (result.error) {
+      throw translateError(result.error, '예외 승인 데이터를 갱신하지 못했어요.');
+    }
+    return rows<ExpenseExceptionApprovalRow>(result.data);
   }
 
   private async requireUserId(): Promise<string> {
@@ -1157,6 +1234,25 @@ function mapComment(row: CommentRow): Comment {
     deletedAt: row.deleted_at ?? undefined,
     syncStatus: 'SYNCED',
     version: row.version,
+  };
+}
+
+function mapExpenseException(row: ExpenseExceptionRow): ExpenseException {
+  return {
+    expenseId: row.expense_id,
+    reason: row.reason,
+    requestedBy: row.requested_by,
+    requestedAt: row.requested_at,
+  };
+}
+
+function mapExpenseExceptionApproval(
+  row: ExpenseExceptionApprovalRow,
+): ExpenseExceptionApproval {
+  return {
+    expenseId: row.expense_id,
+    userId: row.user_id,
+    createdAt: row.created_at,
   };
 }
 
