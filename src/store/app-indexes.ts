@@ -11,7 +11,7 @@ import type {
   Room,
   RoomMemberStats,
 } from '@/data/types';
-import { isExceptionUnanimouslyApproved, selectCrownHolders } from '@/domain';
+import { collectSettlementExcludedExpenseIds, selectCrownHolders } from '@/domain';
 
 export type AppIndexes = {
   roomById: Map<string, Room>;
@@ -35,7 +35,6 @@ export type AppIndexes = {
 
 const EMPTY_MEMBERS: PeriodMember[] = [];
 const EMPTY_EXPENSES: Expense[] = [];
-const EMPTY_APPROVERS: ReadonlySet<string> = new Set();
 
 export function buildAppIndexes(
   snapshot: AppSnapshot | null,
@@ -180,7 +179,6 @@ function buildExceptionIndexes(
 > {
   const exceptionByExpenseId = new Map<string, ExpenseException>();
   const approvedUserIdsByExpenseId = new Map<string, Set<string>>();
-  const settlementExcludedExpenseIds = new Set<string>();
 
   snapshot.expenseExceptions.forEach((exception) => {
     exceptionByExpenseId.set(exception.expenseId, exception);
@@ -194,16 +192,18 @@ function buildExceptionIndexes(
     approvers.add(approval.userId);
   });
 
-  exceptionByExpenseId.forEach((_exception, expenseId) => {
-    const expense = expenseById.get(expenseId);
-    if (!expense || !expense.periodId) return;
-    const activeMemberIds = (membersByPeriodId.get(expense.periodId) ?? EMPTY_MEMBERS)
-      .filter((member) => member.status === 'ACTIVE')
-      .map((member) => member.userId);
-    const approvedUserIds = approvedUserIdsByExpenseId.get(expenseId) ?? EMPTY_APPROVERS;
-    if (isExceptionUnanimouslyApproved({ activeMemberIds, approvedUserIds })) {
-      settlementExcludedExpenseIds.add(expenseId);
-    }
+  // 라이브 표시는 컷오프 없이 현재까지의 승인으로 판정한다. C 마감 적용은
+  // 서버·로컬 finalize에서만(이미 승인은 C 이후 차단되므로 결과는 동일).
+  const settlementExcludedExpenseIds = collectSettlementExcludedExpenseIds({
+    exceptionExpenseIds: exceptionByExpenseId.keys(),
+    approvals: snapshot.expenseExceptionApprovals,
+    activeMemberIdsOf: (expenseId) => {
+      const expense = expenseById.get(expenseId);
+      if (!expense || !expense.periodId) return undefined;
+      return (membersByPeriodId.get(expense.periodId) ?? EMPTY_MEMBERS)
+        .filter((member) => member.status === 'ACTIVE')
+        .map((member) => member.userId);
+    },
   });
 
   return { exceptionByExpenseId, approvedUserIdsByExpenseId, settlementExcludedExpenseIds };

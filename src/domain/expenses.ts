@@ -63,6 +63,53 @@ export function isExceptionUnanimouslyApproved(input: {
   return input.activeMemberIds.every((id) => input.approvedUserIds.has(id));
 }
 
+/** 예외 승인 1건. 구조적 형태만 요구해 도메인이 데이터 타입에 의존하지 않는다. */
+export type ExceptionApprovalRecord = {
+  readonly expenseId: string;
+  readonly userId: string;
+  readonly createdAt: string;
+};
+
+/**
+ * 예외가 붙은 지출들 중 "활성 멤버 전원 승인"으로 정산에서 제외되는 지출 ID 집합.
+ * 라이브 인덱스와 로컬 finalize가 같은 규칙을 쓰도록 단일 구현으로 둔다.
+ *
+ * - `activeMemberIdsOf`가 undefined를 반환하면 그 지출은 건너뛴다(삭제·비주차 등).
+ * - `cutoffMsOf`가 주어지면 그 시각 이후 승인은 무시한다(서버 finalize의 C 마감과 동일).
+ *   생략하면 컷오프 없이 현재까지의 승인으로 판정한다(홈·상세의 낙관적 표시).
+ */
+export function collectSettlementExcludedExpenseIds(input: {
+  readonly exceptionExpenseIds: Iterable<string>;
+  readonly approvals: readonly ExceptionApprovalRecord[];
+  readonly activeMemberIdsOf: (expenseId: string) => readonly string[] | undefined;
+  readonly cutoffMsOf?: (expenseId: string) => number | undefined;
+}): Set<string> {
+  const approvalsByExpenseId = new Map<string, ExceptionApprovalRecord[]>();
+  for (const approval of input.approvals) {
+    const list = approvalsByExpenseId.get(approval.expenseId);
+    if (list) list.push(approval);
+    else approvalsByExpenseId.set(approval.expenseId, [approval]);
+  }
+
+  const excluded = new Set<string>();
+  for (const expenseId of input.exceptionExpenseIds) {
+    const activeMemberIds = input.activeMemberIdsOf(expenseId);
+    if (!activeMemberIds) continue;
+    const activeMemberIdSet = new Set(activeMemberIds);
+    const cutoffMs = input.cutoffMsOf?.(expenseId);
+    const approvedUserIds = new Set<string>();
+    for (const approval of approvalsByExpenseId.get(expenseId) ?? []) {
+      if (!activeMemberIdSet.has(approval.userId)) continue;
+      if (cutoffMs !== undefined && Date.parse(approval.createdAt) > cutoffMs) continue;
+      approvedUserIds.add(approval.userId);
+    }
+    if (isExceptionUnanimouslyApproved({ activeMemberIds, approvedUserIds })) {
+      excluded.add(expenseId);
+    }
+  }
+  return excluded;
+}
+
 export function evaluateExpenseEligibility(input: {
   readonly expectedPeriodId: string;
   readonly timeline: PeriodTimeline;

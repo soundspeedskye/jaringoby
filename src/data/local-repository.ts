@@ -29,9 +29,9 @@ import {
   evaluateCommentMutationPermission,
   evaluateExpenseMutationPermission,
   evaluateExpenseEligibility,
+  collectSettlementExcludedExpenseIds,
   EXPENSE_EXCEPTION_REASON_MAX_LENGTH,
   generateInviteCode,
-  isExceptionUnanimouslyApproved,
   getPeriodPhase,
   getWeekStart,
   isExpenseCategory,
@@ -669,31 +669,25 @@ export class LocalRepository implements AppRepository {
    * 멤버 전원이 승인한 지출만 제외된다. 서버 finalize_period_core와 동일 규칙.
    */
   private settlementExcludedExpenseIds(state: AppSnapshot, period: Period): Set<string> {
-    const excluded = new Set<string>();
-    if (state.expenseExceptions.length === 0) return excluded;
+    if (state.expenseExceptions.length === 0) return new Set();
     const cutoffMs = createPeriodTimeline(period.weekStart).C;
     const activeMemberIds = state.periodMembers
       .filter((member) => member.periodId === period.id && member.status === 'ACTIVE')
       .map((member) => member.userId);
-    const activeMemberIdSet = new Set(activeMemberIds);
-    for (const exception of state.expenseExceptions) {
-      const expense = state.expenses.find((item) => item.id === exception.expenseId);
-      if (!expense || expense.periodId !== period.id || expense.deletedAt) continue;
-      const approvedUserIds = new Set(
-        state.expenseExceptionApprovals
-          .filter(
-            (approval) =>
-              approval.expenseId === exception.expenseId &&
-              activeMemberIdSet.has(approval.userId) &&
-              Date.parse(approval.createdAt) <= cutoffMs,
-          )
-          .map((approval) => approval.userId),
-      );
-      if (isExceptionUnanimouslyApproved({ activeMemberIds, approvedUserIds })) {
-        excluded.add(exception.expenseId);
-      }
-    }
-    return excluded;
+    const expenseById = new Map(state.expenses.map((expense) => [expense.id, expense]));
+    // 이 주차에 살아있는(삭제 안 된) 예외 지출만 판정 대상으로 넘긴다.
+    const eligibleExpenseIds = state.expenseExceptions
+      .map((exception) => exception.expenseId)
+      .filter((expenseId) => {
+        const expense = expenseById.get(expenseId);
+        return Boolean(expense && expense.periodId === period.id && !expense.deletedAt);
+      });
+    return collectSettlementExcludedExpenseIds({
+      exceptionExpenseIds: eligibleExpenseIds,
+      approvals: state.expenseExceptionApprovals,
+      activeMemberIdsOf: () => activeMemberIds,
+      cutoffMsOf: () => cutoffMs,
+    });
   }
 
   private calendarOf(period: Period): WeekdayCalendar {
