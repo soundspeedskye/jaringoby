@@ -2,6 +2,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { ExceptionApprovalInbox } from "@/components/room/exception-approval-inbox";
 import { MemberList } from "@/components/room/member-list";
 import { RoomHero } from "@/components/room/room-hero";
 import { NoticeBanner } from "@/components/ui/notice-banner";
@@ -46,6 +47,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
   const { addExpense, clearError, createRoom, joinRoom } = actions;
   return (
     <>
+      <ExceptionApprovalInbox />
       <View style={styles.topActions}>
         <Text style={styles.greeting}>
           {currentUser.nickname}님, 이번주도 모아볼까요?

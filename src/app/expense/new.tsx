@@ -2,7 +2,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ModalFormScreen } from "@/components/layout/modal-form-screen";
 import { ChoiceChip } from "@/components/ui/choice-chip";
@@ -25,6 +25,7 @@ import {
   createPeriodTimeline,
   effectiveDatesOfPeriod,
   EXPENSE_CATEGORIES,
+  EXPENSE_EXCEPTION_REASON_MAX_LENGTH,
   getPeriodPhase,
   isExpenseMutationPhase,
   toSeoulLocalDate,
@@ -74,6 +75,8 @@ export default function NewExpenseScreen() {
   const [usesPoints, setUsesPoints] = useState(false);
   const [pointAmountText, setPointAmountText] = useState("");
   const [category, setCategory] = useState<ExpenseCategory>("점심");
+  const [isException, setIsException] = useState(false);
+  const [exceptionReason, setExceptionReason] = useState("");
   const [memo, setMemo] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [occurredAt, setOccurredAt] = useState(() =>
@@ -154,6 +157,17 @@ export default function NewExpenseScreen() {
       setFormError("메모는 200자 이내로 입력해 주세요.");
       return;
     }
+    const trimmedReason = exceptionReason.trim();
+    if (isException && !trimmedReason) {
+      setFormError("예외 사유를 입력해 주세요.");
+      return;
+    }
+    if (trimmedReason.length > EXPENSE_EXCEPTION_REASON_MAX_LENGTH) {
+      setFormError(
+        `예외 사유는 ${EXPENSE_EXCEPTION_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`,
+      );
+      return;
+    }
     const occurredOn = toSeoulLocalDate(occurredAt);
     if (!effectiveDates.includes(occurredOn)) {
       setFormError("주말이나 공휴일 지출은 주차 한도에 넣을 수 없어요.");
@@ -183,6 +197,7 @@ export default function NewExpenseScreen() {
         photoUri,
         occurredAt: occurredAt.toISOString(),
         clientRequestId,
+        exceptionReason: isException ? trimmedReason : undefined,
       });
       // rid: 오프라인 큐가 낙관적 ID를 서버 ID로 교체해도 상세 화면이
       // 멱등 키(clientRequestId)로 같은 지출을 계속 찾을 수 있게 한다.
@@ -341,7 +356,44 @@ export default function NewExpenseScreen() {
         </View>
       ) : null}
 
-      <FormSection style={styles.categorySection} title="카테고리">
+      <View style={styles.categorySection}>
+        <View style={styles.categoryHeader}>
+          <Text style={styles.categoryTitle}>카테고리</Text>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: isException }}
+            hitSlop={8}
+            onPress={() => {
+              setIsException((value) => !value);
+              if (isException) setExceptionReason("");
+            }}
+            style={styles.exceptionToggle}
+          >
+            <View
+              style={[styles.checkbox, isException && styles.checkboxChecked]}
+            >
+              {isException ? (
+                <MaterialCommunityIcons
+                  color={palette.cream}
+                  name="check"
+                  size={14}
+                />
+              ) : null}
+            </View>
+            <Text style={styles.exceptionLabel}>예외</Text>
+          </Pressable>
+          {isException ? (
+            <TextInput
+              accessibilityLabel="예외 사유"
+              maxLength={EXPENSE_EXCEPTION_REASON_MAX_LENGTH}
+              onChangeText={setExceptionReason}
+              placeholder="사유"
+              placeholderTextColor={palette.muted}
+              style={styles.exceptionInput}
+              value={exceptionReason}
+            />
+          ) : null}
+        </View>
         <View
           accessibilityLabel="지출 카테고리 선택"
           accessibilityRole="radiogroup"
@@ -358,7 +410,12 @@ export default function NewExpenseScreen() {
             />
           ))}
         </View>
-      </FormSection>
+        {isException ? (
+          <Text style={styles.exceptionHint}>
+            나를 제외한 모든 멤버들의 승인이 필요합니다.
+          </Text>
+        ) : null}
+      </View>
 
       <FormSection style={styles.timeSection} title="발생 일시">
         <OccurrenceDateTimePicker
@@ -421,10 +478,17 @@ function OccurrenceDateTimePicker({
           accessibilityLabel={`발생 일시 ${formatSeoulDateTime(value)}, 변경`}
           accessibilityRole="button"
           onPress={open}
-          style={({ pressed }) => [styles.timeCard, pressed && styles.timeCardPressed]}
+          style={({ pressed }) => [
+            styles.timeCard,
+            pressed && styles.timeCardPressed,
+          ]}
         >
           <Text style={styles.timeValue}>{formatSeoulDateTime(value)}</Text>
-          <MaterialCommunityIcons color={palette.green} name="chevron-right" size={22} />
+          <MaterialCommunityIcons
+            color={palette.green}
+            name="chevron-right"
+            size={22}
+          />
         </Pressable>
       )}
       renderWeb={() => (
@@ -581,7 +645,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-  categorySection: { marginVertical: spacing.xl },
+  categorySection: {
+    marginTop: spacing.xxl,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  categoryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    // 체크 시 인풋(높이 34)이 생겨도 헤더 높이를 고정해 칩이 밀리지 않게 한다.
+    minHeight: 34,
+  },
+  categoryTitle: {
+    color: palette.ink,
+    fontFamily: fonts.hand,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  exceptionToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: spacing.sm,
+  },
+  exceptionLabel: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  exceptionInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 34,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: palette.green,
+    borderRadius: radii.sm,
+    backgroundColor: palette.paper,
+    color: palette.ink,
+    fontFamily: fonts.hand,
+    fontSize: 13,
+  },
+  exceptionHint: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 11,
+    lineHeight: 17,
+  },
   categories: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   category: {
     width: "31%",
