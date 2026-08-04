@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalRepository } from '@/data/local-repository';
-import type { AppSnapshot } from '@/data/types';
+import type { AppSnapshot, Period, PeriodMember } from '@/data/types';
+import { buildAppIndexes } from '@/store/app-indexes';
 
 const storage = new Map<string, string>();
 
@@ -45,6 +46,8 @@ function seed(): AppSnapshot {
     memberStats: [],
     expenses: [],
     comments: [],
+    expenseExceptions: [],
+    expenseExceptionApprovals: [],
     processedRequestIds: [],
   };
 }
@@ -123,5 +126,133 @@ describe('LocalRepository leave/switch', () => {
     const snapshot = await repository.load();
     // 대상 참여가 실패하면 원래 방 멤버십은 그대로여야 한다.
     expect(memberStatus(snapshot, 'room-a', 'user-me')?.status).toBe('ACTIVE');
+  });
+});
+
+// 2026-08-03(월) 주차. 수요일 정오를 기준 시각으로 고정한다.
+const WEEK_START = '2026-08-03';
+const WEDNESDAY_NOON = new Date('2026-08-05T12:00:00+09:00');
+const SATURDAY_EVENING = new Date('2026-08-08T20:00:00+09:00'); // C(토 12:00) 이후
+
+function livePeriod(): Period {
+  return {
+    id: 'period-c',
+    roomId: 'room-c',
+    weekIndex: 1,
+    weekStart: WEEK_START,
+    weekEnd: '2026-08-07',
+    selectedDayCount: 5,
+    validDayCount: 5,
+    holidayDates: [],
+    holidayVersionId: 'demo-empty',
+    phase: 'ACTIVE',
+    isRestWeek: false,
+    createdAt: '2026-08-03T00:00:00+09:00',
+  };
+}
+
+function liveMember(userId: string): PeriodMember {
+  return {
+    periodId: 'period-c',
+    userId,
+    joinedAt: '2026-08-03T00:00:00+09:00',
+    joinedDate: WEEK_START,
+    eligibleDayCount: 5,
+    appliedLimit: 50_000,
+    status: 'ACTIVE',
+    isLateJoiner: false,
+  };
+}
+
+/** room-c에 살아있는 주차 + user-y의 예외 지출을 심는다. currentUser는 인자로. */
+function seedWithException(currentUserId: string): AppSnapshot {
+  const base = seed();
+  base.currentUserId = currentUserId;
+  base.periods = [livePeriod()];
+  base.periodMembers = [liveMember('user-me'), liveMember('user-y')];
+  base.expenses = [
+    {
+      id: 'expense-1',
+      clientRequestId: 'req-1',
+      periodId: 'period-c',
+      userId: 'user-y',
+      amount: 30_000,
+      pointAmount: 0,
+      category: '저녁',
+      memo: '',
+      occurredAt: '2026-08-05T03:00:00.000Z',
+      createdAt: '2026-08-05T03:00:00.000Z',
+      updatedAt: '2026-08-05T03:00:00.000Z',
+      syncStatus: 'SYNCED',
+    },
+  ];
+  base.expenseExceptions = [
+    {
+      expenseId: 'expense-1',
+      reason: '야근',
+      requestedBy: 'user-y',
+      requestedAt: '2026-08-05T03:00:00.000Z',
+    },
+  ];
+  // 제안자(user-y)는 생성 시 자동 승인된 상태.
+  base.expenseExceptionApprovals = [
+    { expenseId: 'expense-1', userId: 'user-y', createdAt: '2026-08-05T03:00:00.000Z' },
+  ];
+  return base;
+}
+
+describe('LocalRepository expense exception', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('excludes the expense from settlement once every active member approves', async () => {
+    vi.useFakeTimers({ now: WEDNESDAY_NOON });
+    storage.clear();
+    storage.set(STORAGE_KEY, JSON.stringify(seedWithException('user-me')));
+
+    const repository = new LocalRepository();
+    const before = await repository.load();
+    // user-y만 승인 → 아직 만장일치 아님.
+    expect(
+      buildAppIndexes(before).settlementExcludedExpenseIds.has('expense-1'),
+    ).toBe(false);
+
+    await repository.approveExpenseException('expense-1');
+    const after = await repository.load();
+    expect(
+      buildAppIndexes(after).settlementExcludedExpenseIds.has('expense-1'),
+    ).toBe(true);
+  });
+
+  it('rejects approval after the adjustment cutoff C', async () => {
+    vi.useFakeTimers({ now: SATURDAY_EVENING });
+    storage.clear();
+    storage.set(STORAGE_KEY, JSON.stringify(seedWithException('user-me')));
+
+    const repository = new LocalRepository();
+    await expect(repository.approveExpenseException('expense-1')).rejects.toThrow(
+      /마감/u,
+    );
+  });
+
+  it('lets only the requester withdraw the exception', async () => {
+    vi.useFakeTimers({ now: WEDNESDAY_NOON });
+    storage.clear();
+    storage.set(STORAGE_KEY, JSON.stringify(seedWithException('user-me')));
+
+    const repository = new LocalRepository();
+    // user-me는 제안자가 아니다.
+    await expect(repository.withdrawExpenseException('expense-1')).rejects.toThrow(
+      /요청/u,
+    );
+
+    const asRequester = new LocalRepository();
+    storage.set(STORAGE_KEY, JSON.stringify(seedWithException('user-y')));
+    await asRequester.load();
+    await asRequester.withdrawExpenseException('expense-1');
+    const snapshot = await asRequester.load();
+    expect(snapshot.expenseExceptions).toHaveLength(0);
+    expect(snapshot.expenseExceptionApprovals).toHaveLength(0);
   });
 });

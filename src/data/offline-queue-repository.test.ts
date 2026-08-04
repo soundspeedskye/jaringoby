@@ -582,6 +582,18 @@ class FakeRepository implements AppRepository {
     throw new Error('not implemented');
   }
 
+  async approveExpenseException(_expenseId: string): Promise<void> {
+    throw new Error('not implemented');
+  }
+
+  async removeExpenseExceptionApproval(_expenseId: string): Promise<void> {
+    throw new Error('not implemented');
+  }
+
+  async withdrawExpenseException(_expenseId: string): Promise<void> {
+    throw new Error('not implemented');
+  }
+
   async addExpense(input: AddExpenseInput): Promise<Expense> {
     const existing = this.snapshot.expenses.find(
       (expense) => expense.clientRequestId === input.clientRequestId,
@@ -713,6 +725,8 @@ function snapshotFixture(userId: string, period: Period): AppSnapshot {
     memberStats: [],
     expenses: [],
     comments: [],
+    expenseExceptions: [],
+    expenseExceptionApprovals: [],
     processedRequestIds: [],
   };
 }
