@@ -3,11 +3,9 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { memo, useCallback, useMemo } from "react";
 import {
-  Platform,
   Pressable,
   SectionList,
   StyleSheet,
-  Switch,
   Text,
   View,
   type SectionListRenderItemInfo,
@@ -22,6 +20,7 @@ import { fonts, palette, radii, spacing } from "@/constants/design";
 import type { OfflineMutationSummary } from "@/data/offline-queue-repository";
 import { useAppActions } from "@/providers/app-actions-provider";
 import {
+  useActiveRoom,
   useAppDataMode,
   useCurrentUser,
   useHistory,
@@ -29,11 +28,6 @@ import {
 import { useAppDialog } from "@/providers/app-dialog-provider";
 import { useSession } from "@/providers/session-provider";
 import { useSyncQueue } from "@/providers/sync-provider";
-import {
-  useNotificationPreferences,
-  type NotificationPreferences,
-} from "@/services/notification-preferences-store";
-import { requestNotificationPermission } from "@/services/notification-service";
 
 type ProfileListItem =
   | {
@@ -43,14 +37,6 @@ type ProfileListItem =
       label: string;
       value?: string;
       onPress: () => void;
-    }
-  | {
-      key: string;
-      type: "toggle";
-      icon: keyof typeof MaterialCommunityIcons.glyphMap;
-      label: string;
-      value: boolean;
-      onChange: (value: boolean) => void;
     }
   | {
       key: string;
@@ -67,6 +53,7 @@ type ProfileSection = {
 export default function ProfileScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
+  const activeRoom = useActiveRoom();
   const { pastPeriods } = useHistory();
   const dataMode = useAppDataMode();
   const { resetDemo } = useAppActions();
@@ -78,30 +65,6 @@ export default function ProfileScreen() {
   } = useSyncQueue();
   const { showDialog } = useAppDialog();
   const { requiresAuth, signOut } = useSession();
-  const { preferences: notifications, updatePreference } =
-    useNotificationPreferences();
-
-  const updateNotifications = useCallback(
-    async (key: keyof NotificationPreferences, value: boolean) => {
-      if (value && !(await requestNotificationPermission())) {
-        showDialog(
-          "알림 권한이 필요해요",
-          "기기 설정에서 자린고비 알림을 허용해 주세요.",
-        );
-        return;
-      }
-      try {
-        await updatePreference(key, value);
-      } catch {
-        showDialog(
-          "알림 설정을 저장하지 못했어요",
-          "잠시 후 다시 시도해 주세요.",
-        );
-      }
-    },
-    [showDialog, updatePreference],
-  );
-
   const copySyncError = useCallback(
     async (operationId: string) => {
       const message = await getCopyableSyncError(operationId);
@@ -252,6 +215,24 @@ export default function ProfileScreen() {
           },
         ],
       },
+      ...(activeRoom
+        ? [
+            {
+              key: "room",
+              title: "방",
+              data: [
+                {
+                  key: "leave-room",
+                  type: "setting" as const,
+                  icon: "door-open" as const,
+                  label: "방 나가기",
+                  value: activeRoom.name,
+                  onPress: () => router.push("/room/leave"),
+                },
+              ],
+            },
+          ]
+        : []),
       ...(syncOperations.length
         ? [
             {
@@ -267,58 +248,6 @@ export default function ProfileScreen() {
             },
           ]
         : []),
-      {
-        key: "notifications",
-        title: "알림",
-        data: [
-          {
-            key: "social-events",
-            type: "toggle",
-            icon: "message-reply-text-outline",
-            label: "댓글·답글",
-            value: notifications.socialEvents,
-            onChange: (value) =>
-              void updateNotifications("socialEvents", value),
-          },
-          {
-            key: "period-events",
-            type: "toggle",
-            icon: "bell-outline",
-            label: "시작·보정·정산",
-            value: notifications.periodEvents,
-            onChange: (value) =>
-              void updateNotifications("periodEvents", value),
-          },
-        ],
-      },
-      {
-        key: "safety",
-        title: "안전과 데이터",
-        data: [
-          {
-            key: "block-report",
-            type: "setting",
-            icon: "shield-check-outline",
-            label: "차단·신고 관리",
-            onPress: () =>
-              showDialog(
-                "준비된 정책",
-                "차단한 멤버의 금액은 유지하고 사진·댓글만 흐림 처리합니다.",
-              ),
-          },
-          {
-            key: "privacy",
-            type: "setting",
-            icon: "file-document-outline",
-            label: "개인정보 및 보관 정책",
-            onPress: () =>
-              showDialog(
-                "보관 정책",
-                "완료 기록은 읽기 전용으로 보관하며 삭제 요청 시 콘텐츠를 비식별화합니다.",
-              ),
-          },
-        ],
-      },
       ...(requiresAuth
         ? [
             {
@@ -338,15 +267,12 @@ export default function ProfileScreen() {
         : []),
     ],
     [
+      activeRoom,
       confirmSignOut,
-      notifications.periodEvents,
-      notifications.socialEvents,
       pastPeriods.length,
       requiresAuth,
       router,
-      showDialog,
       syncOperations,
-      updateNotifications,
     ],
   );
   const renderProfileItem = useCallback(
@@ -356,16 +282,6 @@ export default function ProfileScreen() {
           <SyncOperationRow
             onPress={manageSyncOperation}
             operation={item.operation}
-          />
-        );
-      }
-      if (item.type === "toggle") {
-        return (
-          <ToggleRow
-            icon={item.icon}
-            label={item.label}
-            onChange={item.onChange}
-            value={item.value}
           />
         );
       }
@@ -525,33 +441,6 @@ const SettingRow = memo(function SettingRow({
   );
 });
 
-const ToggleRow = memo(function ToggleRow({
-  icon,
-  label,
-  value,
-  onChange,
-}: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  label: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <View style={styles.row}>
-      <MaterialCommunityIcons color={palette.green} name={icon} size={21} />
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Switch
-        accessibilityLabel={label}
-        onValueChange={onChange}
-        style={styles.toggleSwitch}
-        thumbColor={palette.cream}
-        trackColor={{ false: palette.line, true: palette.green }}
-        value={value}
-      />
-    </View>
-  );
-});
-
 const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
@@ -602,10 +491,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   rowValue: { color: palette.muted, fontFamily: fonts.hand, fontSize: 13 },
-  toggleSwitch: Platform.select({
-    ios: { transform: [{ translateY: 2 }] },
-    default: {},
-  }),
   syncText: { flex: 1, gap: 3 },
   syncStatus: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
   resetSection: { marginTop: spacing.xxl },
