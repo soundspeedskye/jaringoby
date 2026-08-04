@@ -9,6 +9,7 @@ import type {
   Profile,
   Room,
   RoomMemberStats,
+  RoomRole,
 } from '@/data/types';
 import type { DataMode } from '@/data/repository-factory';
 import {
@@ -23,6 +24,15 @@ const EMPTY_EXPENSES: Expense[] = [];
 const EMPTY_COMMENTS: Comment[] = [];
 const EMPTY_RESULTS: PeriodResult[] = [];
 const EMPTY_IDS: string[] = [];
+const EMPTY_ROOM_MEMBERS: RoomMemberSummary[] = [];
+
+export type RoomMemberSummary = {
+  userId: string;
+  nickname: string;
+  avatar: string;
+  role: RoomRole;
+  isCurrentUser: boolean;
+};
 const selectDataMode = (state: AppStoreState) => state.dataMode;
 const selectCurrentUser = (state: AppStoreState) => state.currentUser;
 const selectActiveRoom = (state: AppStoreState) => state.activeRoom;
@@ -64,6 +74,49 @@ export function useHistory(): { pastPeriods: Period[] } {
     selectHistory,
     historyEqual,
   );
+}
+
+/** 방의 활성 멤버 목록(프로필 포함). 방장 위임·나가기 UI에서 쓴다. */
+export function useActiveRoomMembers(roomId: string | undefined): RoomMemberSummary[] {
+  const selector = useCallback(
+    (state: AppStoreState): RoomMemberSummary[] => {
+      const snapshot = state.snapshot;
+      if (!roomId || !snapshot) return EMPTY_ROOM_MEMBERS;
+      const currentUserId = snapshot.currentUserId;
+      return snapshot.roomMembers
+        .filter((member) => member.roomId === roomId && member.status === 'ACTIVE')
+        .map((member) => {
+          const profile = state.indexes.profileById.get(member.userId);
+          return {
+            userId: member.userId,
+            nickname: profile?.nickname ?? '알 수 없음',
+            avatar: profile?.avatar ?? '',
+            role: member.role,
+            isCurrentUser: member.userId === currentUserId,
+          };
+        });
+    },
+    [roomId],
+  );
+  return useAppStoreSelector(selector, roomMemberSummariesEqual);
+}
+
+function roomMemberSummariesEqual(
+  left: readonly RoomMemberSummary[],
+  right: readonly RoomMemberSummary[],
+): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => {
+    const other = right[index];
+    return (
+      value.userId === other.userId &&
+      value.nickname === other.nickname &&
+      value.avatar === other.avatar &&
+      value.role === other.role &&
+      value.isCurrentUser === other.isCurrentUser
+    );
+  });
 }
 
 export function useRoom(roomId: string | undefined): Room | undefined {

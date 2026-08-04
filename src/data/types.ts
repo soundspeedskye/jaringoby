@@ -191,6 +191,15 @@ export type CreateRoomInput = {
   clientRequestId?: string;
 };
 
+export type SwitchRoomInput = {
+  /** 지금 참여 중이라 떠나야 하는 방. */
+  leaveRoomId: string;
+  /** 방장이 떠날 때 방장을 넘겨받을 활성 멤버. 방장이 아니면 비운다. */
+  successorId?: string;
+  /** 새로 참여할 방의 참여 코드. */
+  joinCode: string;
+};
+
 export type AddExpenseInput = Pick<
   Expense,
   "periodId" | "amount" | "pointAmount" | "category" | "memo" | "photoUri" | "occurredAt"

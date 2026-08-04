@@ -11,6 +11,7 @@ import type {
   InvitePreview,
   Room,
   RoomMember,
+  SwitchRoomInput,
 } from '@/data/types';
 import { useAppExecution } from '@/providers/app-status-provider';
 import { useAppStore } from '@/providers/app-store-provider';
@@ -20,6 +21,8 @@ export type AppActionsContextValue = {
   createRoom: (input: CreateRoomInput) => Promise<Room>;
   previewInvite: (inviteCode: string) => Promise<InvitePreview>;
   joinRoom: (inviteCode: string) => Promise<RoomMember>;
+  leaveRoom: (roomId: string, successorId?: string) => Promise<void>;
+  switchRoom: (input: SwitchRoomInput) => Promise<RoomMember>;
   addExpense: (input: AddExpenseInput) => Promise<Expense>;
   updateExpense: (expenseId: string, patch: Partial<AddExpenseInput>) => Promise<Expense>;
   deleteExpense: (expenseId: string) => Promise<void>;
@@ -51,6 +54,15 @@ export function AppActionsProvider({
   );
   const joinRoom = useCallback(
     (code: string) => execute(() => repository.joinRoom(code)),
+    [execute, repository],
+  );
+  const leaveRoom = useCallback(
+    (roomId: string, successorId?: string) =>
+      execute(() => repository.leaveRoom(roomId, successorId)),
+    [execute, repository],
+  );
+  const switchRoom = useCallback(
+    (input: SwitchRoomInput) => execute(() => repository.switchRoom(input)),
     [execute, repository],
   );
   const addExpense = useCallback(
@@ -87,6 +99,8 @@ export function AppActionsProvider({
     createRoom,
     previewInvite,
     joinRoom,
+    leaveRoom,
+    switchRoom,
     addExpense,
     updateExpense,
     deleteExpense,
@@ -102,6 +116,8 @@ export function AppActionsProvider({
     deleteArchivedPeriod,
     deleteExpense,
     joinRoom,
+    leaveRoom,
+    switchRoom,
     previewInvite,
     resetDemo,
     updateComment,

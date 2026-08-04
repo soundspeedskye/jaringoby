@@ -8,6 +8,7 @@ import type {
   InvitePreview,
   Room,
   RoomMember,
+  SwitchRoomInput,
 } from '@/data/types';
 
 export type Unsubscribe = () => void;
@@ -23,6 +24,8 @@ export interface AppRepository {
   createRoom(input: CreateRoomInput): Promise<Room>;
   previewInvite(inviteCode: string): Promise<InvitePreview>;
   joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember>;
+  leaveRoom(roomId: string, successorId?: string): Promise<void>;
+  switchRoom(input: SwitchRoomInput): Promise<RoomMember>;
   addExpense(input: AddExpenseInput): Promise<Expense>;
   updateExpense(
     expenseId: string,

@@ -16,6 +16,7 @@ import type {
   Room,
   RoomMember,
   RoomMemberStats,
+  SwitchRoomInput,
 } from '@/data/types';
 import {
   assertKrwAmount,
@@ -136,17 +137,32 @@ export class LocalRepository implements AppRepository {
 
   async joinRoom(code: string, joinedAt = new Date().toISOString()): Promise<RoomMember> {
     const state = await this.requireState();
-    const room = state.rooms.find((item) => item.inviteCode === code.trim().toUpperCase());
-    if (!room) throw new Error('참여 코드를 확인해 주세요.');
-    if (room.status === 'CLOSED') throw new Error('이미 닫힌 방이에요.');
-    const existing = state.roomMembers.find(
-      (member) => member.roomId === room.id && member.userId === state.currentUserId,
-    );
-    if (existing) throw new Error('이미 참여했거나 참여했던 방이에요.');
-    if (this.activeRoomMemberCount(state, room.id) >= room.capacity) {
-      throw new Error('방 정원이 가득 찼어요.');
-    }
+    const member = this.joinRoomInternal(state, code, joinedAt);
+    await this.persist();
+    return clone(member);
+  }
 
+  async leaveRoom(roomId: string, successorId?: string): Promise<void> {
+    const state = await this.requireState();
+    this.leaveRoomInternal(state, roomId, successorId);
+    await this.persist();
+  }
+
+  async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
+    const state = await this.requireState();
+    const joinedAt = new Date().toISOString();
+    // Validate the join target before touching the current room: mirroring the
+    // server's atomic switch, a bad code or full room must not strand the user
+    // outside every room.
+    this.assertCanJoin(state, input.joinCode);
+    this.leaveRoomInternal(state, input.leaveRoomId, input.successorId);
+    const member = this.joinRoomInternal(state, input.joinCode, joinedAt);
+    await this.persist();
+    return clone(member);
+  }
+
+  private joinRoomInternal(state: AppSnapshot, code: string, joinedAt: string): RoomMember {
+    const room = this.assertCanJoin(state, code);
     const member: RoomMember = {
       roomId: room.id,
       userId: state.currentUserId,
@@ -162,8 +178,71 @@ export class LocalRepository implements AppRepository {
     if (currentPeriod) {
       this.upsertPeriodMember(state, room, currentPeriod, state.currentUserId, joinedDate, joinedAt);
     }
-    await this.persist();
-    return clone(member);
+    return member;
+  }
+
+  private assertCanJoin(state: AppSnapshot, code: string): Room {
+    const room = state.rooms.find((item) => item.inviteCode === code.trim().toUpperCase());
+    if (!room) throw new Error('참여 코드를 확인해 주세요.');
+    if (room.status === 'CLOSED') throw new Error('이미 닫힌 방이에요.');
+    const existing = state.roomMembers.find(
+      (member) => member.roomId === room.id && member.userId === state.currentUserId,
+    );
+    if (existing) throw new Error('이미 참여했거나 참여했던 방이에요.');
+    if (this.activeRoomMemberCount(state, room.id) >= room.capacity) {
+      throw new Error('방 정원이 가득 찼어요.');
+    }
+    return room;
+  }
+
+  private leaveRoomInternal(state: AppSnapshot, roomId: string, successorId?: string): void {
+    const userId = state.currentUserId;
+    const room = state.rooms.find((item) => item.id === roomId);
+    if (!room) throw new Error('방을 찾을 수 없어요.');
+    const member = state.roomMembers.find(
+      (item) => item.roomId === roomId && item.userId === userId,
+    );
+    if (!member || member.status !== 'ACTIVE') {
+      throw new Error('참여 중인 방이 아니에요.');
+    }
+
+    if (member.role === 'OWNER') {
+      if (!successorId || successorId === userId) {
+        throw new Error('방장이 나가려면 다른 참여자에게 방장을 넘겨야 해요.');
+      }
+      const successor = state.roomMembers.find(
+        (item) =>
+          item.roomId === roomId && item.userId === successorId && item.status === 'ACTIVE',
+      );
+      if (!successor) throw new Error('방장을 넘길 활성 참여자를 선택해 주세요.');
+      successor.role = 'OWNER';
+      room.ownerId = successorId;
+      member.role = 'MEMBER';
+    }
+    member.status = 'LEFT';
+
+    // 미시작 주차의 참여 흔적은 지우고, 진행 중 주차는 LEFT로 남긴다(정산 기록엔
+    // 남되 왕관 대상에서 빠진다). 이미 끝난 주차의 기록은 건드리지 않는다.
+    const nowMs = Date.now();
+    const remaining: PeriodMember[] = [];
+    for (const periodMember of state.periodMembers) {
+      if (periodMember.userId !== userId) {
+        remaining.push(periodMember);
+        continue;
+      }
+      const period = state.periods.find((item) => item.id === periodMember.periodId);
+      if (!period || period.roomId !== roomId) {
+        remaining.push(periodMember);
+        continue;
+      }
+      const timeline = createPeriodTimeline(period.weekStart);
+      if (nowMs < timeline.S) continue;
+      if (nowMs < timeline.E && periodMember.status === 'ACTIVE') {
+        periodMember.status = 'LEFT';
+      }
+      remaining.push(periodMember);
+    }
+    state.periodMembers = remaining;
   }
 
   async previewInvite(code: string): Promise<InvitePreview> {

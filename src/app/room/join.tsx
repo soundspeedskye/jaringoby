@@ -27,6 +27,7 @@ import {
   normalizeInviteCode,
 } from "@/domain";
 import { useAppActions } from "@/providers/app-actions-provider";
+import { useActiveRoom } from "@/providers/app-data-hooks";
 import { useAppStatus } from "@/providers/app-status-provider";
 import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { formatWon } from "@/utils/format";
@@ -34,6 +35,7 @@ import { formatWon } from "@/utils/format";
 export default function JoinRoomScreen() {
   const router = useRouter();
   const { joinRoom, previewInvite } = useAppActions();
+  const activeRoom = useActiveRoom();
   const { loading } = useAppStatus();
   const [code, setCode] = useState("");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
@@ -95,8 +97,23 @@ export default function JoinRoomScreen() {
     }
   };
 
+  // 한 사람은 한 방에만 참여할 수 있다. 이미 방에 있으면 새 방으로 곧장 참여하지
+  // 않고, 현재 방을 나가고 참여하는 화면(원자적 전환)으로 넘긴다.
+  const isSwitch = Boolean(activeRoom && preview && activeRoom.id !== preview.roomId);
+
   const join = async () => {
     if (!preview) return;
+    if (isSwitch) {
+      router.push({
+        pathname: "/room/leave",
+        params: {
+          mode: "switch",
+          joinCode: preview.code,
+          targetName: preview.name,
+        },
+      });
+      return;
+    }
     setMessage(null);
     setJoining(true);
     try {
@@ -261,6 +278,18 @@ export default function JoinRoomScreen() {
             있고, 내 챌린지 지출도 멤버에게 공유돼요.
           </NoticeBanner>
 
+          {isSwitch && preview.canJoin ? (
+            <NoticeBanner
+              compact
+              icon="swap-horizontal"
+              style={styles.notice}
+              tone="warning"
+            >
+              참여하려면 지금 참여 중인 “{activeRoom?.name}” 방을 나가야 해요. 다음
+              화면에서 확인해요.
+            </NoticeBanner>
+          ) : null}
+
           {!preview.canJoin ? (
             <NoticeBanner compact style={styles.notice} tone="danger">
               현재는 이 방에 참여할 수 없어요. 정원이 가득 찼거나 이미 참여한
@@ -272,9 +301,11 @@ export default function JoinRoomScreen() {
             disabled={joinDisabled}
             label={
               preview.canJoin
-                ? preview.participatesThisWeek
-                  ? `${formatWon(preview.appliedLimit)} 한도로 참여`
-                  : "다음 주부터 참여"
+                ? isSwitch
+                  ? `현재 방 나가고 참여`
+                  : preview.participatesThisWeek
+                    ? `${formatWon(preview.appliedLimit)} 한도로 참여`
+                    : "다음 주부터 참여"
                 : "참여할 수 없음"
             }
             loading={joining}

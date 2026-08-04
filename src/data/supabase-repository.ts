@@ -19,6 +19,7 @@ import type {
   Room,
   RoomMember,
   RoomMemberStats,
+  SwitchRoomInput,
 } from '@/data/types';
 import type { ExpenseCategory, LocalDate, MemberStatus, PeriodPhase } from '@/domain/types';
 
@@ -358,6 +359,41 @@ export class SupabaseRepository implements AppRepository {
       throw inviteError(typeof payload?.error_code === 'string' ? payload.error_code : 'INVALID_CODE');
     }
     const memberPayload = asObject(payload.member);
+    const roomId = requiredString(memberPayload?.room_id, '참여 방 ID');
+    const userId = requiredString(memberPayload?.user_id, '참여 사용자 ID');
+    const snapshot = await this.reloadAndNotify();
+    const member = snapshot.roomMembers.find(
+      (item) => item.roomId === roomId && item.userId === userId,
+    );
+    if (!member) throw new RepositoryError('INVALID_RESPONSE', '참여 결과를 다시 불러오지 못했어요.');
+    return clone(member);
+  }
+
+  async leaveRoom(roomId: string, successorId?: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('leave_room', {
+      p_room_id: roomId,
+      p_successor_user_id: successorId ?? null,
+    });
+    if (error) throw translateError(error, '방을 나가지 못했어요.');
+    await this.reloadAndNotify();
+  }
+
+  async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
+    await this.requireUserId();
+    const joinCode = input.joinCode.trim().toUpperCase();
+    const { data, error } = await this.client.rpc('switch_room', {
+      p_leave_room_id: input.leaveRoomId,
+      p_successor_user_id: input.successorId ?? null,
+      p_join_code: joinCode,
+    });
+    // The join half reports capacity/re-join failures by rolling the whole
+    // switch back and raising, so the friendly reason arrives as an error.
+    if (error) throw switchRoomError(error);
+
+    const payload = firstObject(data);
+    const joinPayload = asObject(payload?.join);
+    const memberPayload = asObject(joinPayload?.member);
     const roomId = requiredString(memberPayload?.room_id, '참여 방 ID');
     const userId = requiredString(memberPayload?.user_id, '참여 사용자 ID');
     const snapshot = await this.reloadAndNotify();
@@ -1274,6 +1310,19 @@ function inviteError(code: string): RepositoryError {
     ALREADY_PARTICIPATED: '이미 참여했거나 참여했던 방이에요.',
   };
   return new RepositoryError(code, messages[code] ?? '방에 참여할 수 없어요.');
+}
+
+// switch_room rolls the leave back and raises when the join half fails, tagging
+// the reason as "switch_room join failed: <CODE>". Recover that code so the
+// caller sees the same friendly message join_room would have produced; anything
+// else (e.g. owner-successor rules from the leave half) falls through to the
+// shared policy translator.
+function switchRoomError(error: unknown): RepositoryError {
+  const value = asObject(error);
+  const message = typeof value?.message === 'string' ? value.message : '';
+  const matched = /switch_room join failed:\s*([A-Z_]+)/u.exec(message);
+  if (matched) return inviteError(matched[1]);
+  return translateError(error, '방을 옮기지 못했어요.');
 }
 
 function isAlreadyExistsError(error: unknown): boolean {

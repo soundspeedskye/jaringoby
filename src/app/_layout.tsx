@@ -63,6 +63,7 @@ function AuthenticatedApp() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="room/create" options={{ presentation: 'modal' }} />
             <Stack.Screen name="room/join" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="room/leave" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/[id]" />
             <Stack.Screen name="history/index" />

@@ -17,6 +17,7 @@ import type {
   InvitePreview,
   Room,
   RoomMember,
+  SwitchRoomInput,
 } from '@/data/types';
 import { createPeriodTimeline } from '@/domain';
 
@@ -289,6 +290,19 @@ export class OfflineQueueRepository implements AppRepository {
 
   async joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember> {
     const result = await this.base.joinRoom(inviteCode, joinedAt);
+    void this.refreshBase().catch(() => undefined);
+    return result;
+  }
+
+  // Leaving and switching settle memberships and hand off ownership, so they
+  // run straight through to the server rather than being queued offline.
+  async leaveRoom(roomId: string, successorId?: string): Promise<void> {
+    await this.base.leaveRoom(roomId, successorId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
+    const result = await this.base.switchRoom(input);
     void this.refreshBase().catch(() => undefined);
     return result;
   }
