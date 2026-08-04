@@ -6,7 +6,14 @@ import { MemberList } from "@/components/room/member-list";
 import { RoomHero } from "@/components/room/room-hero";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { SectionHeader } from "@/components/ui/section-header";
-import { fonts, palette, radii, shadow, spacing, tabularNums } from "@/constants/design";
+import {
+  fonts,
+  palette,
+  radii,
+  shadow,
+  spacing,
+  tabularNums,
+} from "@/constants/design";
 import { isExpenseMutationPhase, type PeriodPhase } from "@/domain";
 import type { RoomHomeActions, RoomHomeData } from "@/hooks/use-room-home";
 import { formatDateLabel } from "@/utils/format";
@@ -41,7 +48,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
     <>
       <View style={styles.topActions}>
         <Text style={styles.greeting}>
-          {currentUser.nickname}님, 이번주도 아껴볼까요?
+          {currentUser.nickname}님, 이번주도 모아볼까요?
         </Text>
         <View style={styles.actionButtons}>
           <Pressable
@@ -76,7 +83,11 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
           style={styles.errorBanner}
         >
           <Text style={styles.errorText}>{error}</Text>
-          <MaterialCommunityIcons color={palette.danger} name="close" size={18} />
+          <MaterialCommunityIcons
+            color={palette.danger}
+            name="close"
+            size={18}
+          />
         </Pressable>
       ) : null}
 
@@ -132,9 +143,9 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
 
       <SectionHeader
         right={
-          !currentPeriod.isRestWeek
-          && currentMember
-          && isExpenseMutationPhase(phase) ? (
+          !currentPeriod.isRestWeek &&
+          currentMember &&
+          isExpenseMutationPhase(phase) ? (
             <Pressable
               accessibilityRole="button"
               onPress={addExpense}
@@ -211,7 +222,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(182,83,72,0.10)",
   },
-  errorText: { color: palette.danger, flex: 1, fontFamily: fonts.hand, fontSize: 13 },
+  errorText: {
+    color: palette.danger,
+    flex: 1,
+    fontFamily: fonts.hand,
+    fontSize: 13,
+  },
   memberSection: {
     marginTop: spacing.xl,
     paddingHorizontal: spacing.xs,
@@ -226,8 +242,18 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(52,49,40,0.12)",
   },
   inviteCopy: { flex: 1, minWidth: 0 },
-  codeLabel: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "700" },
-  codeHint: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 3 },
+  codeLabel: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  codeHint: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+    marginTop: 3,
+  },
   codePill: {
     minHeight: 38,
     flexDirection: "row",
@@ -252,7 +278,13 @@ const styles = StyleSheet.create({
     height: 16,
     backgroundColor: "rgba(52,49,40,0.18)",
   },
-  capacity: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, fontWeight: "600", ...tabularNums },
+  capacity: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+    fontWeight: "600",
+    ...tabularNums,
+  },
   phaseBanner: {
     marginTop: spacing.lg,
   },
@@ -270,5 +302,10 @@ const styles = StyleSheet.create({
     backgroundColor: palette.green,
     ...shadow,
   },
-  addButtonText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 13, fontWeight: "700" },
+  addButtonText: {
+    color: palette.cream,
+    fontFamily: fonts.handBold,
+    fontSize: 13,
+    fontWeight: "700",
+  },
 });

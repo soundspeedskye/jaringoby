@@ -1,5 +1,11 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { MemberExpenseList } from "@/components/room/member-expense-list";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -47,21 +53,25 @@ function RoomHomeEmpty({
           style={styles.errorBanner}
         >
           <Text style={styles.errorText}>{error}</Text>
-          <MaterialCommunityIcons color={palette.danger} name="close" size={18} />
+          <MaterialCommunityIcons
+            color={palette.danger}
+            name="close"
+            size={18}
+          />
         </Pressable>
       ) : null}
       <View style={styles.emptyHeader}>
-        <Text style={styles.kicker}>자린고비</Text>
+        <Text style={styles.kicker}>Jaringoby</Text>
         <Text style={styles.emptyTitle}>
           {error
             ? "기록을 불러오지 못했어요."
-            : "함께하면 더 오래 지킬 수 있어요."}
+            : "티끌모아 티끌이어도\n땅 파서 티끌 안 나온다."}
         </Text>
-        <Text style={styles.emptyBody}>
-          {error
-            ? "네트워크와 로그인 상태를 확인한 뒤 다시 시도해 주세요. 아직 저장되지 않은 기록은 이 기기에 남아 있어요."
-            : "주당 기준금액을 정하고 친구를 초대하면 매주 평일 챌린지가 자동으로 열려요."}
-        </Text>
+        {error ? (
+          <Text style={styles.emptyBody}>
+            네트워크와 로그인 상태를 확인한 뒤 다시 시도해 주세요.
+          </Text>
+        ) : null}
       </View>
       <View style={styles.emptyActions}>
         {error ? (
@@ -93,7 +103,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: "rgba(182,83,72,0.10)",
   },
-  errorText: { color: palette.danger, flex: 1, fontFamily: fonts.hand, fontSize: 13 },
+  errorText: {
+    color: palette.danger,
+    flex: 1,
+    fontFamily: fonts.hand,
+    fontSize: 13,
+  },
   kicker: {
     color: palette.green,
     fontFamily: fonts.handBold,
