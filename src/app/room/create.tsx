@@ -10,15 +10,21 @@ import { GlassSurface } from "@/components/ui/glass-surface";
 import { KeyValueRow } from "@/components/ui/key-value-row";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
+import {
+  fonts,
+  palette,
+  radii,
+  spacing,
+  tabularNums,
+} from "@/constants/design";
 import {
   createKoreanHolidaySnapshot,
   createPeriodMemberPlan,
   createWeekdayCalendar,
   DEFAULT_MAX_ACTIVE_MEMBERS,
-  isWeekend,
   isValidRoomCapacity,
   isValidRoomName,
+  isWeekend,
   resolveFirstWeekStart,
   ROOM_NAME_MAX_CHARACTERS,
   toSeoulLocalDate,
@@ -116,8 +122,7 @@ export default function CreateRoomScreen() {
       />
 
       <NoticeBanner icon="calendar-sync-outline" style={styles.selectionNotice}>
-        챌린지는 매주 월요일부터 금요일까지 자동으로 열려요. 주말은 쉬고,
-        공휴일은 한도 계산에서 자동 제외됩니다.
+        챌린지는 영업일 기준 5일 동안 반복됩니다.
       </NoticeBanner>
 
       <View style={styles.amountRow}>
@@ -148,7 +153,9 @@ export default function CreateRoomScreen() {
           <View>
             <Text style={styles.previewKicker}>FIRST WEEK</Text>
             <Text style={styles.previewTitle}>
-              {weekendCreation ? "다음 주 월요일 시작" : "이번 주, 오늘부터 시작"}
+              {weekendCreation
+                ? "다음 주 월요일 시작"
+                : "이번 주, 오늘부터 시작"}
             </Text>
           </View>
           <Text style={styles.previewValue}>
@@ -167,12 +174,10 @@ export default function CreateRoomScreen() {
         />
         <Text style={styles.previewFootnote}>
           {weekendCreation
-            ? "주말에는 다음 주 월요일에 첫 주차가 열리고 전체 평일이 적용돼요."
+            ? "주말에는 다음 주 월요일에 첫 주차가 열립니다."
             : plan?.isLateJoin
-              ? "주 중간에 시작해 남은 평일만큼 일할 계산돼요. 다음 주부터는 전체 한도가 적용됩니다."
-              : "이번 주 전체 평일이 적용돼요."}
-          {" "}
-          공휴일이 끼면 서버가 자동으로 한도를 낮춰 계산해요.
+              ? "주 중간에 시작해 남은 평일만큼 일할 계산돼요."
+              : "이번 주 전체 평일이 적용돼요."}{" "}
         </Text>
       </GlassSurface>
 
@@ -197,8 +202,7 @@ export default function CreateRoomScreen() {
           ) : null}
         </View>
         <Text style={styles.confirmationText}>
-          방을 만들면 주당 기준금액은 방을 닫기 전까지 변경할 수 없고, 챌린지는
-          매주 자동으로 반복된다는 것을 확인했어요.
+          주당 기준금액은 변경할 수 없고, 챌린지는 매주 자동으로 반복됩니다.
         </Text>
       </Pressable>
 
@@ -275,7 +279,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 3,
   },
-  previewValue: { color: palette.green, fontFamily: fonts.number, fontSize: 25, fontWeight: "800", ...tabularNums },
+  previewValue: {
+    color: palette.green,
+    fontFamily: fonts.number,
+    fontSize: 25,
+    fontWeight: "800",
+    ...tabularNums,
+  },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: palette.line,
