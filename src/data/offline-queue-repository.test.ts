@@ -578,6 +578,10 @@ class FakeRepository implements AppRepository {
     throw new Error('not implemented');
   }
 
+  async closeRoom(_roomId: string): Promise<void> {
+    throw new Error('not implemented');
+  }
+
   async switchRoom(_input: SwitchRoomInput): Promise<RoomMember> {
     throw new Error('not implemented');
   }

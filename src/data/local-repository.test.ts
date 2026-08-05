@@ -256,3 +256,38 @@ describe('LocalRepository expense exception', () => {
     expect(snapshot.expenseExceptionApprovals).toHaveLength(0);
   });
 });
+
+describe('LocalRepository closeRoom', () => {
+  beforeEach(() => {
+    storage.clear();
+  });
+
+  it('closes a solo-owned room', async () => {
+    const solo = seed();
+    solo.roomMembers = solo.roomMembers.filter(
+      (member) => !(member.roomId === 'room-c' && member.userId === 'user-y'),
+    );
+    storage.set(STORAGE_KEY, JSON.stringify(solo));
+
+    const repository = new LocalRepository();
+    await repository.closeRoom('room-c');
+    const snapshot = await repository.load();
+    const room = snapshot.rooms.find((item) => item.id === 'room-c');
+    expect(room?.status).toBe('CLOSED');
+    expect(room?.closedAt).toBeTruthy();
+  });
+
+  it('refuses to close a room that still has other members', async () => {
+    storage.set(STORAGE_KEY, JSON.stringify(seed()));
+    const repository = new LocalRepository();
+    // room-c: user-me(방장) + user-y(멤버) → 혼자가 아님.
+    await expect(repository.closeRoom('room-c')).rejects.toThrow(/혼자/u);
+  });
+
+  it('refuses to close a room the current user does not own', async () => {
+    storage.set(STORAGE_KEY, JSON.stringify(seed()));
+    const repository = new LocalRepository();
+    // room-a 방장은 user-x, 현재 사용자(user-me)는 멤버.
+    await expect(repository.closeRoom('room-a')).rejects.toThrow(/방장/u);
+  });
+});
