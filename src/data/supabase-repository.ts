@@ -434,7 +434,9 @@ export class SupabaseRepository implements AppRepository {
       p_expense_id: expenseId,
     });
     if (error) throw translateError(error, '예외를 승인하지 못했어요.');
-    await this.reloadAndNotify();
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['expense_exception_approvals']),
+    );
   }
 
   async removeExpenseExceptionApproval(expenseId: string): Promise<void> {
@@ -443,7 +445,9 @@ export class SupabaseRepository implements AppRepository {
       p_expense_id: expenseId,
     });
     if (error) throw translateError(error, '승인을 취소하지 못했어요.');
-    await this.reloadAndNotify();
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['expense_exception_approvals']),
+    );
   }
 
   async withdrawExpenseException(expenseId: string): Promise<void> {
@@ -452,7 +456,10 @@ export class SupabaseRepository implements AppRepository {
       p_expense_id: expenseId,
     });
     if (error) throw translateError(error, '예외를 취소하지 못했어요.');
-    await this.reloadAndNotify();
+    // Withdrawing drops the exception row and cascades its approvals.
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['expense_exceptions', 'expense_exception_approvals']),
+    );
   }
 
   async addExpense(input: AddExpenseInput): Promise<Expense> {
@@ -478,7 +485,10 @@ export class SupabaseRepository implements AppRepository {
     }
 
     const id = requiredString(firstObject(data)?.id, '생성된 지출 ID');
-    const snapshot = await this.reloadAndNotify();
+    // add_expense can also insert an exception row, so patch both tables.
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['expenses', 'expense_exceptions']),
+    );
     return clone(requireExpense(snapshot, id));
   }
 
@@ -532,7 +542,9 @@ export class SupabaseRepository implements AppRepository {
     if (uploadedNewPhoto && current.photoPath && current.photoPath !== photoPath) {
       await this.removeOrphanPhoto(current.photoPath);
     }
-    const snapshot = await this.reloadAndNotify();
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['expenses']),
+    );
     return clone(requireExpense(snapshot, expenseId));
   }
 
@@ -545,7 +557,7 @@ export class SupabaseRepository implements AppRepository {
     });
     if (error) throw translateError(error, '지출을 삭제하지 못했어요.');
     if (current.photoPath) await this.removeOrphanPhoto(current.photoPath);
-    await this.reloadAndNotify();
+    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['expenses']));
   }
 
   async deleteArchivedPeriod(periodId: string): Promise<void> {
@@ -580,7 +592,9 @@ export class SupabaseRepository implements AppRepository {
     if (error) throw translateError(error, '댓글을 보내지 못했어요.');
 
     const id = requiredString(firstObject(data)?.id, '생성된 댓글 ID');
-    const snapshot = await this.reloadAndNotify();
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['comments']),
+    );
     return clone(requireComment(snapshot, id));
   }
 
@@ -593,7 +607,9 @@ export class SupabaseRepository implements AppRepository {
       p_expected_version: requireVersion(current.version, '댓글'),
     });
     if (error) throw translateError(error, '댓글을 수정하지 못했어요.');
-    const snapshot = await this.reloadAndNotify();
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['comments']),
+    );
     return clone(requireComment(snapshot, commentId));
   }
 
@@ -605,7 +621,7 @@ export class SupabaseRepository implements AppRepository {
       p_expected_version: requireVersion(current.version, '댓글'),
     });
     if (error) throw translateError(error, '댓글을 삭제하지 못했어요.');
-    await this.reloadAndNotify();
+    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['comments']));
   }
 
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {
@@ -976,7 +992,11 @@ export class SupabaseRepository implements AppRepository {
     baseSnapshot: AppSnapshot | null = this.lastSnapshot,
   ): Promise<AppSnapshot> {
     const canPatchSnapshot = [...tables].every(
-      (table) => table === 'expenses' || table === 'comments',
+      (table) =>
+        table === 'expenses' ||
+        table === 'comments' ||
+        table === 'expense_exceptions' ||
+        table === 'expense_exception_approvals',
     );
     const previous = baseSnapshot;
     if (!previous || !canPatchSnapshot || tables.size === 0) {
@@ -986,12 +1006,20 @@ export class SupabaseRepository implements AppRepository {
     const userId = await this.requireUserId();
     const shouldFetchExpenses = tables.has('expenses');
     const shouldFetchComments = tables.has('comments');
-    const [expenseRows, commentRows] = await Promise.all([
+    const shouldFetchExceptions = tables.has('expense_exceptions');
+    const shouldFetchApprovals = tables.has('expense_exception_approvals');
+    const [expenseRows, commentRows, exceptionRows, approvalRows] = await Promise.all([
       shouldFetchExpenses
         ? this.fetchExpenseRows()
         : Promise.resolve(null),
       shouldFetchComments
         ? this.fetchCommentRows()
+        : Promise.resolve(null),
+      shouldFetchExceptions
+        ? this.fetchExceptionRows()
+        : Promise.resolve(null),
+      shouldFetchApprovals
+        ? this.fetchExceptionApprovalRows()
         : Promise.resolve(null),
     ]);
 
@@ -1019,11 +1047,31 @@ export class SupabaseRepository implements AppRepository {
     }
 
     const visibleExpenseIds = new Set(expenses.map((expense) => expense.id));
+    const expensesChanged = visibleExpenseRows !== null;
     const comments = commentRows
       ? filterVisibleCommentRows(commentRows, visibleExpenseIds).map(mapComment)
-      : visibleExpenseRows
+      : expensesChanged
         ? previous.comments.filter((comment) => visibleExpenseIds.has(comment.expenseId))
         : previous.comments;
+    // Exceptions/approvals live in their own arrays keyed by expense_id, so a
+    // patch either refetches the touched table or re-filters the carried-over
+    // rows against the (possibly shrunk) visible expense set.
+    const expenseExceptions = exceptionRows
+      ? exceptionRows
+          .filter((row) => visibleExpenseIds.has(row.expense_id))
+          .map(mapExpenseException)
+      : expensesChanged
+        ? previous.expenseExceptions.filter((row) => visibleExpenseIds.has(row.expenseId))
+        : previous.expenseExceptions;
+    const expenseExceptionApprovals = approvalRows
+      ? approvalRows
+          .filter((row) => visibleExpenseIds.has(row.expense_id))
+          .map(mapExpenseExceptionApproval)
+      : expensesChanged
+        ? previous.expenseExceptionApprovals.filter((row) =>
+            visibleExpenseIds.has(row.expenseId),
+          )
+        : previous.expenseExceptionApprovals;
     const processedRequestIds = new Set(previous.processedRequestIds);
     collectProcessedRequestIds(expenseRows ?? [], commentRows ?? [], userId)
       .forEach((requestId) => processedRequestIds.add(requestId));
@@ -1033,6 +1081,8 @@ export class SupabaseRepository implements AppRepository {
       currentUserId: userId,
       expenses,
       comments,
+      expenseExceptions,
+      expenseExceptionApprovals,
       processedRequestIds: [...processedRequestIds],
     };
   }
