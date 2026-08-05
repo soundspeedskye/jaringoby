@@ -73,6 +73,11 @@ export function buildAppIndexes(
   const statsByRoomId = canReuse && snapshot.memberStats === previousSnapshot.memberStats
     ? previousIndexes.statsByRoomId
     : groupValues(snapshot.memberStats, (stats) => stats.roomId);
+  // Finalized periods derive their crowns purely from periodResults, so when
+  // those are unchanged their crown arrays can be reused even if expenses moved;
+  // only live (unfinalized) periods need recomputing.
+  const resultsUnchanged =
+    canReuse && snapshot.periodResults === previousSnapshot.periodResults;
   const crownIdsByPeriodId = canReuse && crownInputsAreShared(snapshot, previousSnapshot)
     ? previousIndexes.crownIdsByPeriodId
     : buildCrownIndex({
@@ -82,6 +87,7 @@ export function buildAppIndexes(
       expensesByPeriodAndUserId: expenseIndexes.expensesByPeriodAndUserId,
       resultsByPeriodId,
       settlementExcludedExpenseIds: exceptionIndexes.settlementExcludedExpenseIds,
+      reuseFinalizedFrom: resultsUnchanged ? previousIndexes?.crownIdsByPeriodId : undefined,
     });
 
   return {
@@ -216,6 +222,8 @@ function buildCrownIndex(input: {
   expensesByPeriodAndUserId: Map<string, Map<string, Expense[]>>;
   resultsByPeriodId: Map<string, PeriodResult[]>;
   settlementExcludedExpenseIds: Set<string>;
+  /** Prior crowns to reuse for finalized periods when periodResults are unchanged. */
+  reuseFinalizedFrom?: Map<string, string[]>;
 }): Map<string, string[]> {
   const crownIdsByPeriodId = new Map<string, string[]>();
   input.snapshot.periods.forEach((period) => {
@@ -227,9 +235,10 @@ function buildCrownIndex(input: {
     } = input;
     const results = resultsByPeriodId.get(period.id);
     if (results?.length) {
+      const reused = input.reuseFinalizedFrom?.get(period.id);
       crownIdsByPeriodId.set(
         period.id,
-        results.filter((result) => result.isCrown).map((result) => result.userId),
+        reused ?? results.filter((result) => result.isCrown).map((result) => result.userId),
       );
       return;
     }
