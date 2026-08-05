@@ -18,7 +18,13 @@ import { GlassSurface } from "@/components/ui/glass-surface";
 import { KeyValueRow } from "@/components/ui/key-value-row";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
+import {
+  fonts,
+  palette,
+  radii,
+  spacing,
+  tabularNums,
+} from "@/constants/design";
 import type { InvitePreview } from "@/data/types";
 import {
   createPeriodTimeline,
@@ -26,10 +32,10 @@ import {
   isValidInviteCodeFormat,
   normalizeInviteCode,
 } from "@/domain";
+import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { useAppActions } from "@/providers/app-actions-provider";
 import { useActiveRoom } from "@/providers/app-data-hooks";
 import { useAppStatus } from "@/providers/app-status-provider";
-import { useDeadlineNow } from "@/hooks/use-deadline-now";
 import { formatWon } from "@/utils/format";
 
 export default function JoinRoomScreen() {
@@ -99,12 +105,17 @@ export default function JoinRoomScreen() {
 
   // 한 사람은 한 방에만 참여할 수 있다. 이미 방에 있으면 새 방으로 곧장 참여하지
   // 않고, 현재 방을 나가고 참여하는 화면(원자적 전환)으로 넘긴다.
-  const isSwitch = Boolean(activeRoom && preview && activeRoom.id !== preview.roomId);
+  const isSwitch = Boolean(
+    activeRoom && preview && activeRoom.id !== preview.roomId,
+  );
 
   const join = async () => {
     if (!preview) return;
     if (isSwitch) {
-      router.push({
+      // 참여 화면도 leave 화면도 모두 modal presentation이라, push하면 시트가
+      // 두 겹으로 쌓인다. 전환 확정은 이 참여 흐름을 그대로 잇는 단계이므로
+      // 현재 시트를 교체해 한 겹으로 이어지게 한다.
+      router.replace({
         pathname: "/room/leave",
         params: {
           mode: "switch",
@@ -121,9 +132,7 @@ export default function JoinRoomScreen() {
       router.replace("/");
     } catch (reason) {
       setMessage(
-        reason instanceof Error
-          ? reason.message
-          : "방에 참여하지 못했어요.",
+        reason instanceof Error ? reason.message : "방에 참여하지 못했어요.",
       );
     } finally {
       setJoining(false);
@@ -151,10 +160,6 @@ export default function JoinRoomScreen() {
       testID="join-room-screen"
       title="방 참여"
     >
-      <Text style={styles.intro}>
-        초대받은 6자리 코드를 입력하면 참여 전에 이번 주차와 내 적용한도를
-        확인할 수 있어요.
-      </Text>
       <View style={styles.codeRow}>
         <View style={styles.codeField}>
           <Field
@@ -210,7 +215,9 @@ export default function JoinRoomScreen() {
             </View>
             <View style={styles.previewCopy}>
               <Text style={styles.phase}>
-                {phase ? phaseLabel(phase, preview.participatesThisWeek) : "다음 주 월요일 시작"}
+                {phase
+                  ? phaseLabel(phase, preview.participatesThisWeek)
+                  : "다음 주 월요일 시작"}
               </Text>
               <Text style={styles.roomName}>{preview.name}</Text>
               <Text style={styles.period}>
@@ -274,8 +281,8 @@ export default function JoinRoomScreen() {
             style={styles.visibilityNotice}
             tone="warning"
           >
-            참여하면 합류 전 기록을 포함해 이 방의 지출 사진과 댓글 전체를 볼 수
-            있고, 내 챌린지 지출도 멤버에게 공유돼요.
+            참여하면 합류 전 기록을 포함해 이 방의 정보 전체를 볼 수 있으며, 내
+            정보도 이 방의 다른 멤버에게 공개됩니다.
           </NoticeBanner>
 
           {isSwitch && preview.canJoin ? (
@@ -285,15 +292,14 @@ export default function JoinRoomScreen() {
               style={styles.notice}
               tone="warning"
             >
-              참여하려면 지금 참여 중인 “{activeRoom?.name}” 방을 나가야 해요. 다음
-              화면에서 확인해요.
+              참여하려면 지금 참여 중인 “{activeRoom?.name}” 방에서 나가게
+              됩니다.
             </NoticeBanner>
           ) : null}
 
           {!preview.canJoin ? (
             <NoticeBanner compact style={styles.notice} tone="danger">
-              현재는 이 방에 참여할 수 없어요. 정원이 가득 찼거나 이미 참여한
-              방이에요.
+              정원이 가득 찼거나 이미 참여한 방이에요.
             </NoticeBanner>
           ) : null}
 
@@ -314,9 +320,8 @@ export default function JoinRoomScreen() {
         </GlassSurface>
       ) : (
         <EmptyState
-          description="참여 버튼을 누르기 전에는 방에 들어가지 않아요."
           icon="ticket-confirmation-outline"
-          title="코드를 확인하면 방 미리보기가 열려요."
+          title="코드를 확인하면 방을 미리볼 수 있습니다."
           variant="preview"
         />
       )}
@@ -327,7 +332,9 @@ export default function JoinRoomScreen() {
 function phaseLabel(phase: string, participatesThisWeek: boolean): string {
   if (phase === "WAITING") return "다음 주차 대기 중 · 참여 가능";
   if (phase === "ACTIVE")
-    return participatesThisWeek ? "이번 주 진행 중 · 오늘부터 참여" : "이번 주 진행 중";
+    return participatesThisWeek
+      ? "이번 주 진행 중 · 오늘부터 참여"
+      : "이번 주 진행 중";
   if (phase === "ADJUSTMENT") return "보정 중 · 다음 주부터 참여";
   if (phase === "SETTLEMENT") return "정산 중 · 다음 주부터 참여";
   return "완료";
@@ -341,7 +348,12 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: spacing.xl,
   },
-  codeRow: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
   codeField: { flex: 1 },
   lookupButton: {
     minHeight: 52,
@@ -353,7 +365,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: palette.green,
   },
-  lookupText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
+  lookupText: {
+    color: palette.cream,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   message: { marginTop: spacing.sm },
   preview: {
     padding: spacing.xl,
@@ -370,7 +387,12 @@ const styles = StyleSheet.create({
     backgroundColor: palette.green,
   },
   previewCopy: { flex: 1 },
-  phase: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "700" },
+  phase: {
+    color: palette.coralText,
+    fontFamily: fonts.handBold,
+    fontSize: 11,
+    fontWeight: "700",
+  },
   roomName: {
     color: palette.ink,
     fontFamily: fonts.handBold,
@@ -378,7 +400,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 2,
   },
-  period: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, marginTop: 4, ...tabularNums },
+  period: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 12,
+    marginTop: 4,
+    ...tabularNums,
+  },
   ruleBox: {
     marginTop: spacing.xl,
     padding: spacing.md,
@@ -396,14 +424,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
     ...tabularNums,
   },
-  formula: { color: palette.ink, fontFamily: fonts.number, fontSize: 12, marginTop: 5, ...tabularNums },
+  formula: {
+    color: palette.ink,
+    fontFamily: fonts.number,
+    fontSize: 12,
+    marginTop: 5,
+    ...tabularNums,
+  },
   holidays: {
     padding: spacing.md,
     borderRadius: radii.md,
     backgroundColor: "rgba(240,185,46,0.12)",
     marginBottom: spacing.md,
   },
-  holidayTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "700" },
+  holidayTitle: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 11,
+    fontWeight: "700",
+  },
   holidayDates: {
     color: palette.muted,
     fontFamily: fonts.hand,
