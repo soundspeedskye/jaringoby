@@ -25,11 +25,8 @@ export default function RootLayout() {
     'Pretendard-Bold': require('../../assets/fonts/Pretendard-Bold.ttf'),
   });
 
-  useEffect(() => {
-    // 폰트가 준비되거나 실패해도 스플래시는 내린다(실패 시 시스템 폰트로 폴백).
-    if (fontsLoaded || fontError) void SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
-
+  // 스플래시는 폰트 로드만으로 내리지 않는다. 세션이 확정될 때까지 유지해
+  // (AuthenticatedApp에서 hideAsync) 세션 확정 전 데이터 계층 마운트를 막는다.
   if (!fontsLoaded && !fontError) return null;
 
   return (
@@ -44,12 +41,24 @@ function AuthenticatedApp() {
   const segments = useSegments();
   const { loading, recoveryMode, requiresAuth, session } = useSession();
   const inAuthGroup = segments[0] === '(auth)';
+  // 세션 부트스트랩 중. 이 구간엔 아직 유저가 확정되지 않아 데이터 계층을
+  // 마운트하면 signed-out 마운트에서 전체 조회가 한 번 낭비된다(재방문 사용자).
+  const bootstrapping = requiresAuth && loading;
 
   useEffect(() => {
     if (loading || !requiresAuth) return;
     if (!session && !inAuthGroup) router.replace('/sign-in');
     if (session && inAuthGroup && !recoveryMode) router.replace('/');
   }, [inAuthGroup, loading, recoveryMode, requiresAuth, router, session]);
+
+  useEffect(() => {
+    // 세션 확정(또는 데모 모드)까지 스플래시를 유지하고, 준비되면 내린다.
+    if (!bootstrapping) void SplashScreen.hideAsync();
+  }, [bootstrapping]);
+
+  // 세션이 확정된 뒤에만 데이터 Provider를 마운트한다. 스플래시가 이 구간을
+  // 덮으므로 화면 깜빡임 없이 전체 조회가 정확히 1회만 실행된다.
+  if (bootstrapping) return null;
 
   return (
     <AppProvider
