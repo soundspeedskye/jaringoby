@@ -154,6 +154,22 @@ export class LocalRepository implements AppRepository {
     await this.persist();
   }
 
+  async closeRoom(roomId: string): Promise<void> {
+    const state = await this.requireState();
+    const room = this.findRoom(state, roomId);
+    if (room.ownerId !== state.currentUserId) {
+      throw new Error('방장만 방을 닫을 수 있어요.');
+    }
+    if (room.status === 'CLOSED') return;
+    if (this.activeRoomMemberCount(state, roomId) > 1) {
+      throw new Error('혼자 남은 방만 닫을 수 있어요.');
+    }
+    // 방을 닫으면 새 주차가 열리지 않고(refreshState) 지난 방 목록으로 이동한다.
+    room.status = 'CLOSED';
+    room.closedAt = new Date().toISOString();
+    await this.persist();
+  }
+
   async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
     const state = await this.requireState();
     const joinedAt = new Date().toISOString();

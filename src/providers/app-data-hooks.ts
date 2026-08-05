@@ -27,6 +27,7 @@ const EMPTY_IDS: string[] = [];
 const EMPTY_ROOM_MEMBERS: RoomMemberSummary[] = [];
 const EMPTY_APPROVERS: ReadonlySet<string> = new Set();
 const EMPTY_PENDING_APPROVALS: PendingExceptionApproval[] = [];
+const EMPTY_CLOSED_ROOMS: ClosedRoomSummary[] = [];
 
 export type RoomMemberSummary = {
   userId: string;
@@ -423,6 +424,65 @@ function pendingExceptionApprovalsEqual(
       value.category === other.category &&
       value.approvedCount === other.approvedCount &&
       value.requiredCount === other.requiredCount
+    );
+  });
+}
+
+export type ClosedRoomSummary = {
+  id: string;
+  name: string;
+  memberCount: number;
+  baseAmount: number;
+  closedAt?: string;
+};
+
+/** 내가 속한 닫힌(지난) 방 목록. 최근 닫힌 순. 읽기 전용 요약. */
+export function useClosedRooms(): ClosedRoomSummary[] {
+  const selector = useCallback((state: AppStoreState): ClosedRoomSummary[] => {
+    const snapshot = state.snapshot;
+    const currentUserId = snapshot?.currentUserId;
+    if (!snapshot || !currentUserId) return EMPTY_CLOSED_ROOMS;
+    const myRoomIds = new Set(
+      snapshot.roomMembers
+        .filter((member) => member.userId === currentUserId)
+        .map((member) => member.roomId),
+    );
+    const memberCountByRoom = new Map<string, number>();
+    for (const member of snapshot.roomMembers) {
+      memberCountByRoom.set(
+        member.roomId,
+        (memberCountByRoom.get(member.roomId) ?? 0) + 1,
+      );
+    }
+    const closed = snapshot.rooms
+      .filter((room) => room.status === 'CLOSED' && myRoomIds.has(room.id))
+      .map((room) => ({
+        id: room.id,
+        name: room.name,
+        memberCount: memberCountByRoom.get(room.id) ?? 0,
+        baseAmount: room.baseAmount,
+        closedAt: room.closedAt,
+      }))
+      .sort((left, right) => (right.closedAt ?? '').localeCompare(left.closedAt ?? ''));
+    return closed.length ? closed : EMPTY_CLOSED_ROOMS;
+  }, []);
+  return useAppStoreSelector(selector, closedRoomsEqual);
+}
+
+function closedRoomsEqual(
+  left: readonly ClosedRoomSummary[],
+  right: readonly ClosedRoomSummary[],
+): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => {
+    const other = right[index];
+    return (
+      value.id === other.id &&
+      value.name === other.name &&
+      value.memberCount === other.memberCount &&
+      value.baseAmount === other.baseAmount &&
+      value.closedAt === other.closedAt
     );
   });
 }

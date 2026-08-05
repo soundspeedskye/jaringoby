@@ -25,6 +25,7 @@ export interface AppRepository {
   previewInvite(inviteCode: string): Promise<InvitePreview>;
   joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember>;
   leaveRoom(roomId: string, successorId?: string): Promise<void>;
+  closeRoom(roomId: string): Promise<void>;
   switchRoom(input: SwitchRoomInput): Promise<RoomMember>;
   addExpense(input: AddExpenseInput): Promise<Expense>;
   approveExpenseException(expenseId: string): Promise<void>;

@@ -396,6 +396,13 @@ export class SupabaseRepository implements AppRepository {
     await this.reloadAndNotify();
   }
 
+  async closeRoom(roomId: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('close_room', { p_room_id: roomId });
+    if (error) throw translateError(error, '방을 닫지 못했어요.');
+    await this.reloadAndNotify();
+  }
+
   async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
     await this.requireUserId();
     const joinCode = input.joinCode.trim().toUpperCase();

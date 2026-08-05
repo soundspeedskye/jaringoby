@@ -22,6 +22,7 @@ export type AppActionsContextValue = {
   previewInvite: (inviteCode: string) => Promise<InvitePreview>;
   joinRoom: (inviteCode: string) => Promise<RoomMember>;
   leaveRoom: (roomId: string, successorId?: string) => Promise<void>;
+  closeRoom: (roomId: string) => Promise<void>;
   switchRoom: (input: SwitchRoomInput) => Promise<RoomMember>;
   addExpense: (input: AddExpenseInput) => Promise<Expense>;
   approveExpenseException: (expenseId: string) => Promise<void>;
@@ -62,6 +63,10 @@ export function AppActionsProvider({
   const leaveRoom = useCallback(
     (roomId: string, successorId?: string) =>
       execute(() => repository.leaveRoom(roomId, successorId)),
+    [execute, repository],
+  );
+  const closeRoom = useCallback(
+    (roomId: string) => execute(() => repository.closeRoom(roomId)),
     [execute, repository],
   );
   const switchRoom = useCallback(
@@ -116,6 +121,7 @@ export function AppActionsProvider({
     previewInvite,
     joinRoom,
     leaveRoom,
+    closeRoom,
     switchRoom,
     addExpense,
     approveExpenseException,
@@ -133,6 +139,7 @@ export function AppActionsProvider({
     approveExpenseException,
     removeExpenseExceptionApproval,
     withdrawExpenseException,
+    closeRoom,
     createRoom,
     deleteComment,
     deleteArchivedPeriod,

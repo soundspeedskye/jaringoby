@@ -301,6 +301,11 @@ export class OfflineQueueRepository implements AppRepository {
     void this.refreshBase().catch(() => undefined);
   }
 
+  async closeRoom(roomId: string): Promise<void> {
+    await this.base.closeRoom(roomId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
   async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
     const result = await this.base.switchRoom(input);
     void this.refreshBase().catch(() => undefined);
