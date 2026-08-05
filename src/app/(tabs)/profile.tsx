@@ -22,12 +22,14 @@ import { useAppActions } from "@/providers/app-actions-provider";
 import {
   useActiveRoom,
   useAppDataMode,
+  useClosedRooms,
   useCurrentUser,
   useHistory,
 } from "@/providers/app-data-hooks";
 import { useAppDialog } from "@/providers/app-dialog-provider";
 import { useSession } from "@/providers/session-provider";
 import { useSyncQueue } from "@/providers/sync-provider";
+import { formatWon } from "@/utils/format";
 
 type ProfileListItem =
   | {
@@ -37,6 +39,13 @@ type ProfileListItem =
       label: string;
       value?: string;
       onPress: () => void;
+    }
+  | {
+      key: string;
+      type: "room-summary";
+      name: string;
+      memberCount: number;
+      baseAmount: number;
     }
   | {
       key: string;
@@ -54,6 +63,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const currentUser = useCurrentUser();
   const activeRoom = useActiveRoom();
+  const closedRooms = useClosedRooms();
   const { pastPeriods } = useHistory();
   const dataMode = useAppDataMode();
   const { resetDemo } = useAppActions();
@@ -219,17 +229,33 @@ export default function ProfileScreen() {
         ? [
             {
               key: "room",
-              title: "방",
+              title: "현재 방",
               data: [
                 {
-                  key: "leave-room",
+                  key: "current-room",
                   type: "setting" as const,
                   icon: "door-open" as const,
-                  label: "방 나가기",
-                  value: activeRoom.name,
+                  label: activeRoom.name,
                   onPress: () => router.push("/room/leave"),
                 },
               ],
+            },
+          ]
+        : []),
+      ...(closedRooms.length
+        ? [
+            {
+              key: "past-rooms",
+              title: "지난 방",
+              data: closedRooms.map(
+                (room): ProfileListItem => ({
+                  key: `closed-${room.id}`,
+                  type: "room-summary",
+                  name: room.name,
+                  memberCount: room.memberCount,
+                  baseAmount: room.baseAmount,
+                }),
+              ),
             },
           ]
         : []),
@@ -268,6 +294,7 @@ export default function ProfileScreen() {
     ],
     [
       activeRoom,
+      closedRooms,
       confirmSignOut,
       pastPeriods.length,
       requiresAuth,
@@ -282,6 +309,15 @@ export default function ProfileScreen() {
           <SyncOperationRow
             onPress={manageSyncOperation}
             operation={item.operation}
+          />
+        );
+      }
+      if (item.type === "room-summary") {
+        return (
+          <RoomSummaryRow
+            baseAmount={item.baseAmount}
+            memberCount={item.memberCount}
+            name={item.name}
           />
         );
       }
@@ -415,6 +451,32 @@ function syncOperationLabel(kind: OfflineMutationSummary["kind"]): string {
   } as const;
   return labels[kind];
 }
+
+const RoomSummaryRow = memo(function RoomSummaryRow({
+  name,
+  memberCount,
+  baseAmount,
+}: {
+  name: string;
+  memberCount: number;
+  baseAmount: number;
+}) {
+  return (
+    <View style={styles.row}>
+      <MaterialCommunityIcons
+        color={palette.muted}
+        name="door-closed"
+        size={21}
+      />
+      <Text numberOfLines={1} style={styles.rowLabel}>
+        {name}
+      </Text>
+      <Text style={styles.rowValue}>
+        멤버 {memberCount}명 · {formatWon(baseAmount)}
+      </Text>
+    </View>
+  );
+});
 
 const SettingRow = memo(function SettingRow({
   icon,

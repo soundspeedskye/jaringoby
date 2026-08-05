@@ -17,6 +17,7 @@ import {
   useActiveRoomMembers,
   useCurrentUser,
 } from "@/providers/app-data-hooks";
+import { useAppDialog } from "@/providers/app-dialog-provider";
 
 type LeaveMode = "leave" | "switch";
 
@@ -35,7 +36,8 @@ export default function LeaveRoomScreen() {
   const activeRoom = useActiveRoom();
   const currentUser = useCurrentUser();
   const members = useActiveRoomMembers(activeRoom?.id);
-  const { leaveRoom, switchRoom } = useAppActions();
+  const { leaveRoom, switchRoom, closeRoom } = useAppActions();
+  const { showDialog } = useAppDialog();
 
   const [successorId, setSuccessorId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -92,6 +94,36 @@ export default function LeaveRoomScreen() {
     switchRoom,
   ]);
 
+  const closeSoloRoom = useCallback(() => {
+    if (!activeRoom) return;
+    showDialog(
+      "방 닫기",
+      "혼자 남은 이 방을 닫으면 지난 방 목록으로 옮겨지고, 다시 열 수 없어요. 계속할까요?",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "방 닫기",
+          style: "destructive",
+          onPress: () =>
+            void (async () => {
+              setMessage(null);
+              setSubmitting(true);
+              try {
+                await closeRoom(activeRoom.id);
+                goHome();
+              } catch (reason) {
+                setMessage(
+                  reason instanceof Error ? reason.message : "방을 닫지 못했어요.",
+                );
+              } finally {
+                setSubmitting(false);
+              }
+            })(),
+        },
+      ],
+    );
+  }, [activeRoom, closeRoom, goHome, showDialog]);
+
   const title = mode === "switch" ? "방 옮기기" : "방 나가기";
 
   if (!activeRoom || !currentUser) {
@@ -144,10 +176,19 @@ export default function LeaveRoomScreen() {
       </NoticeBanner>
 
       {soloOwner ? (
-        <NoticeBanner icon="account-alert-outline" tone="warning">
-          혼자 있는 방은 나갈 수 없어요. 먼저 다른 사람을 초대해 방장을
-          넘겨주세요.
-        </NoticeBanner>
+        <View style={styles.soloSection}>
+          <NoticeBanner icon="information-outline" tone="warning">
+            혼자 남은 방이에요. 방을 닫으면 지난 방 목록으로 옮겨지고 다시 열 수
+            없어요.
+          </NoticeBanner>
+          <PrimaryButton
+            label="방 닫기"
+            loading={submitting}
+            onPress={closeSoloRoom}
+            style={styles.submitButton}
+            variant="danger"
+          />
+        </View>
       ) : null}
 
       {needsSuccessor ? (
@@ -213,6 +254,7 @@ const styles = StyleSheet.create({
   },
   switchArrow: { alignItems: "flex-start", marginVertical: spacing.sm },
   warning: { marginBottom: spacing.md },
+  soloSection: { gap: spacing.md },
   successorSection: { marginTop: spacing.lg },
   successorTitle: {
     color: palette.ink,
