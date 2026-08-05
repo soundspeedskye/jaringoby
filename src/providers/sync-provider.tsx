@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -37,8 +38,13 @@ export function SyncProvider({
     operationStore.getSnapshot,
   );
 
+  // Tracks the queue revision last read, so data-only syncs (which reuse the
+  // revision) skip the getQueueOperations() filter/sort/map entirely.
+  const lastRevisionRef = useRef(-1);
   const refreshOperations = useCallback(async () => {
     if (!offlineQueue) return;
+    // Capture before the await so a queue change during it still re-refreshes.
+    lastRevisionRef.current = offlineQueue.getQueueRevision();
     try {
       operationStore.setOperations(await offlineQueue.getQueueOperations());
     } catch (reason) {
@@ -48,7 +54,9 @@ export function SyncProvider({
 
   useEffect(() => {
     if (!offlineQueue) return;
+    lastRevisionRef.current = -1;
     const unsubscribe = offlineQueue.subscribe(() => {
+      if (offlineQueue.getQueueRevision() === lastRevisionRef.current) return;
       void refreshOperations();
     });
     void refreshOperations();

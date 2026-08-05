@@ -213,6 +213,9 @@ export class OfflineQueueRepository implements AppRepository {
   private readonly photoRemovalsAfterCommit = new Set<string>();
   private readonly photoRemovalsAfterRollback = new Set<string>();
   private disposed = false;
+  // Bumped only when the durable queue (or the active session) changes, so
+  // subscribers can skip re-reading the operation list on data-only syncs.
+  private queueRevision = 0;
 
   constructor(
     private readonly base: AppRepository,
@@ -243,6 +246,9 @@ export class OfflineQueueRepository implements AppRepository {
     if (this.activeUserId === userId) return;
     this.activeUserId = userId;
     this.sessionEpoch += 1;
+    // The visible operation set is filtered by user, so a session change alters
+    // it even though the durable queue is untouched.
+    this.queueRevision += 1;
     this.baseSnapshot = null;
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
@@ -691,6 +697,14 @@ export class OfflineQueueRepository implements AppRepository {
       await this.persistLocked();
       this.emitLocked();
     });
+  }
+
+  /**
+   * Monotonic counter that changes only when the queue or active session does.
+   * Subscribers compare it to skip re-reading operations on data-only syncs.
+   */
+  getQueueRevision(): number {
+    return this.queueRevision;
   }
 
   async getQueueOperations(): Promise<OfflineMutationSummary[]> {
@@ -1483,6 +1497,7 @@ export class OfflineQueueRepository implements AppRepository {
       throw error;
     }
     this.persistedQueue = nextPersistedQueue;
+    this.queueRevision += 1;
     const committedRemovals = [...this.photoRemovalsAfterCommit];
     this.photoRemovalsAfterCommit.clear();
     this.photoRemovalsAfterRollback.clear();
