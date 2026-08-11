@@ -15,15 +15,12 @@ export function AppProvider({
   sessionUserId,
 }: PropsWithChildren<{ sessionUserId: string | null }>) {
   const [store] = useState(() =>
-    createAppStore({
-      dataMode: runtime.dataMode,
-    }),
+    createAppStore(),
   );
 
   return (
     <AppStoreProvider store={store}>
       <AppStatusProvider
-        dataMode={runtime.dataMode}
         repository={runtime.repository}
         sessionUserId={sessionUserId}
       >

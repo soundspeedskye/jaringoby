@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createDemoSnapshot } from '@/data/demo-seed';
 import { SupabaseRepository } from '@/data/supabase-repository';
 import type { AppSnapshot } from '@/data/types';
+import { createTestSnapshot } from '@/test/app-snapshot-fixture';
 
 vi.mock('expo-file-system', () => ({ File: class ExpoFile {} }));
 vi.mock('@/data/supabase-client', () => ({
@@ -22,7 +22,7 @@ type RepositoryHarness = {
 
 describe('SupabaseRepository refresh coordination', () => {
   it('joins load to an active reload instead of starting a competing fetch', async () => {
-    const snapshot = createDemoSnapshot();
+    const snapshot = createTestSnapshot();
     const deferred = createDeferred<AppSnapshot>();
     const repository = createRepository(snapshot.currentUserId);
     const harness = repository as unknown as RepositoryHarness;
@@ -40,7 +40,7 @@ describe('SupabaseRepository refresh coordination', () => {
   });
 
   it('upgrades an active partial reload when load requests a full refresh', async () => {
-    const initial = createDemoSnapshot();
+    const initial = createTestSnapshot();
     const partial = clone(initial);
     partial.comments.push({
       id: 'comment-partial',
@@ -83,7 +83,7 @@ describe('SupabaseRepository refresh coordination', () => {
   });
 
   it('publishes only the final snapshot when another dirty request arrives mid-fetch', async () => {
-    const initial = createDemoSnapshot();
+    const initial = createTestSnapshot();
     const intermediate = clone(initial);
     intermediate.comments.push({
       id: 'comment-intermediate',
@@ -97,7 +97,7 @@ describe('SupabaseRepository refresh coordination', () => {
     });
     const final = clone(intermediate);
     const expense = final.expenses[0];
-    if (!expense) throw new Error('demo expense missing');
+    if (!expense) throw new Error('test expense missing');
     expense.amount += 1;
 
     const firstFetch = createDeferred<AppSnapshot>();

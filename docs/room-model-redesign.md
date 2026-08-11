@@ -170,9 +170,9 @@ create table public.period_members (
 1. ✅ **스키마 마이그레이션** — `20260722090000_room_period_redesign.sql`. challenge* 전면 교체, rooms/periods/... 생성, expenses.period_id 전환, RLS·스토리지·realtime 재배선. 원격 push 완료.
 2. ✅ **RPC 재작성** — `20260722120000_room_period_rpcs.sql`. create_room / join_room / preview_room_invite / add_expense(period) / 주차 생성(`create_period_core`+`upsert_period_member` 단일 일할 경로) / 정산(`finalize_period_core`) / cron 2종 / `room_member_stats` 뷰. 원격 push 완료.
 3. ✅ **도메인 로직** — `week.ts`(주 헬퍼) + `period.ts`(`createWeekdayCalendar`·`createPeriodTimeline`·`createPeriodMemberPlan`). 단위테스트 50건(문서 예시·이중차감·D5·D6·floor 나눗셈 포함).
-4. ✅ **데이터 계층** — types/repository/supabase/local/offline-queue 전면 재작성. 데모 모드가 cron 동작(주차 생성·정산·통계)을 재현.
+4. ✅ **데이터 계층** — types/repository/supabase/offline-queue 전면 재작성. 서버 RPC와 cron이 주차 생성·정산·통계를 담당.
 5. ✅ **화면** — 방 생성(날짜 선택 제거)/초대/홈(이번 주차)/지출/지난 주차/누적 통계 카드. DatePicker 주말 비활성.
-6. ✅ **정리** — 하드코딩 공휴일 표 삭제, 데모 시드 재작성, challenge 네이밍 제거(`/room/*` 라우트, `PeriodPhase`/`PeriodTimeline`, 죽은 도메인 코드 삭제).
+6. ✅ **정리** — 하드코딩 공휴일 표 삭제, challenge 네이밍 제거(`/room/*` 라우트, `PeriodPhase`/`PeriodTimeline`, 죽은 도메인 코드 삭제).
 
 ## 7. 리스크 / 검토 필요
 

@@ -1,0 +1,65 @@
+import type { AppSnapshot } from '@/data/types';
+
+/** Minimal, production-shaped snapshot for store and repository unit tests. */
+export function createTestSnapshot(): AppSnapshot {
+  return {
+    currentUserId: 'user-me',
+    profiles: [
+      { id: 'user-me', nickname: '나', avatar: 'fox' },
+      { id: 'user-other', nickname: '상대', avatar: 'rabbit' },
+    ],
+    rooms: [{
+      id: 'room-test',
+      ownerId: 'user-me',
+      name: '테스트 방',
+      inviteCode: 'TEST12',
+      baseAmount: 50_000,
+      capacity: 2,
+      status: 'OPEN',
+      createdAt: '2026-08-03T00:00:00.000Z',
+    }],
+    roomMembers: [
+      { roomId: 'room-test', userId: 'user-me', role: 'OWNER', status: 'ACTIVE', joinedAt: '2026-08-03T00:00:00.000Z' },
+      { roomId: 'room-test', userId: 'user-other', role: 'MEMBER', status: 'ACTIVE', joinedAt: '2026-08-03T00:00:00.000Z' },
+    ],
+    periods: [{
+      id: 'period-test',
+      roomId: 'room-test',
+      weekIndex: 1,
+      weekStart: '2026-08-03',
+      weekEnd: '2026-08-07',
+      selectedDayCount: 5,
+      validDayCount: 5,
+      holidayDates: [],
+      holidayVersionId: 'test-holidays',
+      phase: 'ACTIVE',
+      isRestWeek: false,
+      createdAt: '2026-08-03T00:00:00.000Z',
+    }],
+    periodMembers: [
+      { periodId: 'period-test', userId: 'user-me', joinedAt: '2026-08-03T00:00:00.000Z', joinedDate: '2026-08-03', eligibleDayCount: 5, appliedLimit: 50_000, status: 'ACTIVE', isLateJoiner: false },
+      { periodId: 'period-test', userId: 'user-other', joinedAt: '2026-08-03T00:00:00.000Z', joinedDate: '2026-08-03', eligibleDayCount: 5, appliedLimit: 50_000, status: 'ACTIVE', isLateJoiner: false },
+    ],
+    periodResults: [],
+    memberStats: [],
+    expenses: [{
+      id: 'expense-test',
+      clientRequestId: 'expense-request-test',
+      periodId: 'period-test',
+      userId: 'user-me',
+      amount: 5_000,
+      pointAmount: 0,
+      category: '커피',
+      memo: '테스트',
+      occurredAt: '2026-08-03T09:00:00.000Z',
+      createdAt: '2026-08-03T09:00:00.000Z',
+      updatedAt: '2026-08-03T09:00:00.000Z',
+      syncStatus: 'SYNCED',
+      version: 1,
+    }],
+    comments: [],
+    expenseExceptions: [],
+    expenseExceptionApprovals: [],
+    processedRequestIds: [],
+  };
+}

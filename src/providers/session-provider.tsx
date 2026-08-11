@@ -8,7 +8,6 @@ import { getSupabaseClient } from '@/data/supabase-client';
 
 type SessionContextValue = {
   loading: boolean;
-  requiresAuth: boolean;
   recoveryMode: boolean;
   session: Session | null;
   signIn: (email: string, password: string) => Promise<void>;
@@ -23,13 +22,11 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: PropsWithChildren) {
   const runtime = getRepositoryRuntime();
-  const requiresAuth = runtime.dataMode === 'supabase';
-  const [loading, setLoading] = useState(requiresAuth);
+  const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
-    if (!requiresAuth) return;
     let cancelled = false;
     let bootstrapComplete = false;
     const client = getSupabaseClient();
@@ -81,7 +78,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       authSubscription.unsubscribe();
       linkSubscription.remove();
     };
-  }, [requiresAuth, runtime]);
+  }, [runtime]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     validateEmail(email);
@@ -133,7 +130,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<SessionContextValue>(() => ({
     loading,
-    requiresAuth,
     recoveryMode,
     session,
     signIn,
@@ -142,7 +138,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     updatePassword,
     completeRecovery: () => setRecoveryMode(false),
     signOut,
-  }), [loading, recoveryMode, requestPasswordReset, requiresAuth, session, signIn, signOut, signUp, updatePassword]);
+  }), [loading, recoveryMode, requestPasswordReset, session, signIn, signOut, signUp, updatePassword]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

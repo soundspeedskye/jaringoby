@@ -10,7 +10,6 @@ import {
 
 import type { AppRepository } from '@/data/repository';
 import type { AppSnapshot } from '@/data/types';
-import type { DataMode } from '@/data/repository-factory';
 import { useAppStore } from '@/providers/app-store-provider';
 
 type AppStatusContextValue = {
@@ -34,11 +33,9 @@ const AppExecutionContext = createContext<AppExecutionContextValue | null>(null)
 
 export function AppStatusProvider({
   children,
-  dataMode,
   repository,
   sessionUserId,
 }: PropsWithChildren<{
-  dataMode: DataMode;
   repository: AppRepository;
   sessionUserId: string | null;
 }>) {
@@ -47,10 +44,8 @@ export function AppStatusProvider({
   const [error, setError] = useState<string | null>(null);
 
   const acceptsSnapshot = useCallback(
-    (snapshot: AppSnapshot) => dataMode !== 'supabase' || (
-      Boolean(sessionUserId) && snapshot.currentUserId === sessionUserId
-    ),
-    [dataMode, sessionUserId],
+    (snapshot: AppSnapshot) => Boolean(sessionUserId) && snapshot.currentUserId === sessionUserId,
+    [sessionUserId],
   );
 
   const applySnapshot = useCallback((snapshot: AppSnapshot) => {

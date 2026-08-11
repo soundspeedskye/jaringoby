@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createDemoSnapshot } from '@/data/demo-seed';
 import type { Comment, Expense } from '@/data/types';
 import { createAppStore } from '@/store/app-store';
+import { createTestSnapshot } from '@/test/app-snapshot-fixture';
 
 describe('createAppStore', () => {
   it('does not notify subscribers for an equivalent cloned snapshot', () => {
     const store = createStore();
     const listener = vi.fn();
     store.subscribe(listener);
-    const snapshot = createDemoSnapshot();
+    const snapshot = createTestSnapshot();
 
     store.setSnapshot(snapshot);
     const firstState = store.getState();
@@ -21,7 +21,7 @@ describe('createAppStore', () => {
 
   it('preserves unrelated slices when only comments change', () => {
     const store = createStore();
-    const snapshot = createDemoSnapshot();
+    const snapshot = createTestSnapshot();
     store.setSnapshot(snapshot);
     const before = store.getState().snapshot;
     const beforeIndexes = store.getState().indexes;
@@ -77,11 +77,11 @@ describe('createAppStore', () => {
 
   it('preserves existing entity references when a record is inserted at the front', () => {
     const store = createStore();
-    const snapshot = createDemoSnapshot();
+    const snapshot = createTestSnapshot();
     store.setSnapshot(snapshot);
     const previousExpenses = store.getState().snapshot?.expenses;
     const existing = previousExpenses?.[0];
-    if (!previousExpenses || !existing) throw new Error('demo expense missing');
+    if (!previousExpenses || !existing) throw new Error('test expense missing');
 
     const incoming = clone(snapshot);
     incoming.expenses.unshift(newExpense(existing));
@@ -94,12 +94,12 @@ describe('createAppStore', () => {
 
   it('rebuilds only expense-dependent indexes when an expense changes', () => {
     const store = createStore();
-    const snapshot = createDemoSnapshot();
+    const snapshot = createTestSnapshot();
     store.setSnapshot(snapshot);
     const before = store.getState().indexes;
     const incoming = clone(snapshot);
     const expense = incoming.expenses[0];
-    if (!expense) throw new Error('demo expense missing');
+    if (!expense) throw new Error('test expense missing');
     expense.amount += 1;
     expense.updatedAt = '2026-07-23T00:00:00.000Z';
 
@@ -125,9 +125,7 @@ describe('createAppStore', () => {
 });
 
 function createStore() {
-  return createAppStore({
-    dataMode: 'demo',
-  });
+  return createAppStore();
 }
 
 function newComment(expenseId: string): Comment {
