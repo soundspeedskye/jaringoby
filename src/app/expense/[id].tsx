@@ -1553,13 +1553,13 @@ const styles = StyleSheet.create({
     borderLeftColor: palette.coral,
   },
   quoteAuthor: {
-    color: palette.coralText,
+    color: "#FFF7E3",
     fontFamily: fonts.handBold,
     fontSize: 9,
     fontWeight: "700",
   },
   quoteBody: {
-    color: palette.muted,
+    color: "#FFF7E3",
     fontFamily: fonts.hand,
     fontSize: 10,
     lineHeight: 14,
