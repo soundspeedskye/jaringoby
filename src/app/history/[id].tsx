@@ -302,6 +302,7 @@ export default function HistoryDetailScreen() {
                     ]}
                   >
                     <AnimalAvatar
+                      photoUri={row.profile?.avatarUri}
                       value={row.profile?.avatar}
                       size={42}
                       style={styles.memberAvatar}

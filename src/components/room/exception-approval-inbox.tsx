@@ -71,7 +71,7 @@ export function ExceptionApprovalInbox() {
                 onPress={() => router.push(`/expense/${item.expenseId}`)}
                 style={styles.rowMain}
               >
-                <AnimalAvatar size={34} value={item.requesterAvatar} />
+                <AnimalAvatar photoUri={item.requesterAvatarUri} size={34} value={item.requesterAvatar} />
                 <View style={styles.rowCopy}>
                   <Text numberOfLines={1} style={styles.rowTitle}>
                     {item.requesterNickname} · {item.category}{" "}

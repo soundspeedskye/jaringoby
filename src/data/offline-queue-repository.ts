@@ -17,6 +17,7 @@ import type {
   InvitePreview,
   Room,
   RoomMember,
+  Profile,
   SwitchRoomInput,
 } from '@/data/types';
 import { createPeriodTimeline } from '@/domain';
@@ -268,20 +269,18 @@ export class OfflineQueueRepository implements AppRepository {
     return clone(snapshot);
   }
 
-  async resetDemo(): Promise<AppSnapshot> {
-    const snapshot = await this.withLock(async () => {
-      await this.ready;
-      const snapshot = normalizeSnapshot(await this.base.resetDemo());
-      const userId = snapshot.currentUserId;
-      const removed = this.queue.operations.filter((operation) => operation.userId === userId);
-      this.queue.operations = this.queue.operations.filter((operation) => operation.userId !== userId);
-      for (const operation of removed) await this.releasePhotoLocked(operation);
-      this.baseSnapshot = snapshot;
-      await this.persistLocked();
-      this.emitLocked();
-      return this.composeLocked();
-    });
-    return clone(snapshot);
+  // 프로필은 사진 업로드와 서버 시각 기반 쿨다운을 함께 다루므로 오프라인
+  // 재생 대상이 아니다. 성공 뒤에는 기본 스냅샷을 즉시 다시 읽는다.
+  async updateNickname(nickname: string): Promise<Profile> {
+    const result = await this.base.updateNickname(nickname);
+    await this.refreshBase();
+    return result;
+  }
+
+  async updateAvatar(input: { avatarKey?: string; photoUri?: string | null }): Promise<Profile> {
+    const result = await this.base.updateAvatar(input);
+    await this.refreshBase();
+    return result;
   }
 
   async createRoom(input: CreateRoomInput): Promise<Room> {

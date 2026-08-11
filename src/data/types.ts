@@ -10,11 +10,15 @@ export type SyncStatus = "SYNCED" | "PENDING" | "FAILED";
 export type Profile = {
   id: string;
   nickname: string;
+  /** 사용자가 직접 고른 동물 키. 없으면 id 기반 기본 동물을 사용한다. */
+  avatarKey?: string;
   avatar: string;
   /** Short-lived URL for a private profile image, when one is configured. */
   avatarUri?: string;
   /** Private Storage object path; never render this value directly. */
   avatarPath?: string;
+  /** 마지막 닉네임 변경 후 다시 변경할 수 있는 서버 기준 시각. */
+  nicknameChangeAvailableAt?: string;
 };
 
 export type RoomStatus = "OPEN" | "CLOSED";

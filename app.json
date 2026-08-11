@@ -12,8 +12,8 @@
       "bundleIdentifier": "com.jaringoby.app",
       "supportsTablet": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "챌린지 지출 사진을 촬영하기 위해 카메라를 사용합니다.",
-        "NSPhotoLibraryUsageDescription": "챌린지 지출 사진을 선택하기 위해 사진 보관함을 사용합니다.",
+        "NSCameraUsageDescription": "지출 또는 프로필 사진을 촬영하기 위해 카메라를 사용합니다.",
+        "NSPhotoLibraryUsageDescription": "지출 또는 프로필 사진을 선택하기 위해 사진 보관함을 사용합니다.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -38,8 +38,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "챌린지 지출 사진을 선택하기 위해 사진 보관함을 사용합니다.",
-          "cameraPermission": "챌린지 지출 사진을 촬영하기 위해 카메라를 사용합니다."
+          "photosPermission": "지출 또는 프로필 사진을 선택하기 위해 사진 보관함을 사용합니다.",
+          "cameraPermission": "지출 또는 프로필 사진을 촬영하기 위해 카메라를 사용합니다."
         }
       ],
       [

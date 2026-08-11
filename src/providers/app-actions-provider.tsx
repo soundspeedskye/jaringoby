@@ -11,13 +11,14 @@ import type {
   InvitePreview,
   Room,
   RoomMember,
+  Profile,
   SwitchRoomInput,
 } from '@/data/types';
 import { useAppExecution } from '@/providers/app-status-provider';
-import { useAppStore } from '@/providers/app-store-provider';
 
 export type AppActionsContextValue = {
-  resetDemo: () => Promise<void>;
+  updateNickname: (nickname: string) => Promise<Profile>;
+  updateAvatar: (input: { avatarKey?: string; photoUri?: string | null }) => Promise<Profile>;
   createRoom: (input: CreateRoomInput) => Promise<Room>;
   previewInvite: (inviteCode: string) => Promise<InvitePreview>;
   joinRoom: (inviteCode: string) => Promise<RoomMember>;
@@ -42,11 +43,15 @@ export function AppActionsProvider({
   children,
   repository,
 }: PropsWithChildren<{ repository: AppRepository }>) {
-  const store = useAppStore();
   const { execute } = useAppExecution();
-  const resetDemo = useCallback(
-    () => execute(async () => void store.setSnapshot(await repository.resetDemo())),
-    [execute, repository, store],
+  const updateNickname = useCallback(
+    (nickname: string) => execute(() => repository.updateNickname(nickname)),
+    [execute, repository],
+  );
+  const updateAvatar = useCallback(
+    (input: { avatarKey?: string; photoUri?: string | null }) =>
+      execute(() => repository.updateAvatar(input)),
+    [execute, repository],
   );
   const createRoom = useCallback(
     (input: CreateRoomInput) => execute(() => repository.createRoom(input)),
@@ -116,7 +121,8 @@ export function AppActionsProvider({
   );
 
   const value = useMemo<AppActionsContextValue>(() => ({
-    resetDemo,
+    updateNickname,
+    updateAvatar,
     createRoom,
     previewInvite,
     joinRoom,
@@ -148,7 +154,8 @@ export function AppActionsProvider({
     leaveRoom,
     switchRoom,
     previewInvite,
-    resetDemo,
+    updateAvatar,
+    updateNickname,
     updateComment,
     updateExpense,
   ]);

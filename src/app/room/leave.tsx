@@ -208,7 +208,7 @@ export default function LeaveRoomScreen() {
                     selected && styles.successorRowOn,
                   ]}
                 >
-                  <AnimalAvatar size={36} value={member.avatar} />
+                  <AnimalAvatar photoUri={member.avatarUri} size={36} value={member.avatar} />
                   <Text style={styles.successorName}>{member.nickname}</Text>
                   <MaterialCommunityIcons
                     color={selected ? palette.green : palette.line}

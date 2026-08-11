@@ -68,6 +68,7 @@ export const MemberExpenseList = memo(function MemberExpenseList({
     }: SectionListRenderItemInfo<Expense, MemberExpenseSectionData>) => (
       <MemberExpenseRow
         avatar={section.member.avatar}
+        avatarUri={section.member.avatarUri}
         commentCount={commentCounts.get(expense.id) ?? 0}
         displayName={
           section.member.isCurrentUser ? "나" : section.member.nickname

@@ -28,11 +28,13 @@ import type { ExpenseCategory, LocalDate, MemberStatus, PeriodPhase } from '@/do
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
 const MAX_EXPENSE_PHOTO_BYTES = 10 * 1024 * 1024;
+const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
 const EXPENSE_COLUMNS =
   'id,client_request_id,period_id,user_id,amount,point_amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version';
 const COMMENT_COLUMNS =
   'id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version';
 const REALTIME_TABLES = [
+  'profiles',
   'rooms',
   'room_members',
   'periods',
@@ -69,7 +71,9 @@ type JsonObject = Record<string, unknown>;
 type ProfileRow = {
   id: string;
   nickname: string;
+  avatar_key: string | null;
   avatar_path: string | null;
+  nickname_changed_at: string | null;
 };
 
 type RoomRow = {
@@ -330,8 +334,44 @@ export class SupabaseRepository implements AppRepository {
     return clone(await this.loading);
   }
 
-  async resetDemo(): Promise<AppSnapshot> {
-    throw new RepositoryError('NOT_DEMO_MODE', '실서비스 데이터는 데모 초기화 대상이 아니에요.');
+  async updateNickname(nickname: string): Promise<Profile> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('update_my_nickname', {
+      p_nickname: nickname.trim(),
+    });
+    if (error) throw translateError(error, '닉네임을 변경하지 못했어요.');
+    const snapshot = await this.reloadAndNotify();
+    return clone(requireProfile(snapshot, snapshot.currentUserId));
+  }
+
+  async updateAvatar(input: { avatarKey?: string; photoUri?: string | null }): Promise<Profile> {
+    const userId = await this.requireUserId();
+    const snapshot = this.lastSnapshot ?? await this.load();
+    const current = requireProfile(snapshot, userId);
+    const avatarKey = input.avatarKey ?? current.avatarKey ?? current.avatar;
+    let avatarPath = current.avatarPath ?? null;
+    let uploadedPath: string | null = null;
+    if (input.photoUri !== undefined) {
+      if (input.photoUri) {
+        uploadedPath = await this.uploadProfilePhoto(input.photoUri, userId);
+        avatarPath = uploadedPath;
+      } else {
+        avatarPath = null;
+      }
+    }
+    const { error } = await this.client.rpc('update_my_avatar', {
+      p_avatar_key: avatarKey,
+      p_avatar_path: avatarPath,
+    });
+    if (error) {
+      if (uploadedPath) await this.removeOrphanProfilePhoto(uploadedPath);
+      throw translateError(error, '프로필 사진을 변경하지 못했어요.');
+    }
+    if (current.avatarPath && current.avatarPath !== avatarPath) {
+      await this.removeOrphanProfilePhoto(current.avatarPath);
+    }
+    const next = await this.reloadAndNotify();
+    return clone(requireProfile(next, userId));
   }
 
   async createRoom(input: CreateRoomInput): Promise<Room> {
@@ -656,7 +696,7 @@ export class SupabaseRepository implements AppRepository {
       approvalRows,
       preferencesResult,
     ] = await Promise.all([
-      this.client.from('profiles').select('id,nickname,avatar_path'),
+      this.client.from('profiles').select('id,nickname,avatar_key,avatar_path,nickname_changed_at'),
       this.client
         .from('rooms')
         .select('id,name,owner_id,base_amount,capacity,status,created_at,closed_at')
@@ -1134,11 +1174,35 @@ export class SupabaseRepository implements AppRepository {
     return path;
   }
 
+  private async uploadProfilePhoto(uri: string, userId: string): Promise<string> {
+    const file = await readPhoto(uri);
+    if (file.buffer.byteLength > MAX_PROFILE_PHOTO_BYTES) {
+      throw new RepositoryError('PHOTO_TOO_LARGE', '프로필 사진은 5MB 이하여야 해요.');
+    }
+    const path = `${userId}/${makeUuid()}.${file.extension}`;
+    const { error } = await this.client.storage.from('profile-images').upload(path, file.buffer, {
+      cacheControl: '3600',
+      contentType: file.contentType,
+      upsert: false,
+    });
+    if (error) throw translateError(error, '프로필 사진을 업로드하지 못했어요.');
+    return path;
+  }
+
   private async removeOrphanPhoto(path: string): Promise<void> {
     try {
       await this.cleanupExpensePhoto(path);
     } catch (error) {
       console.warn('교체 또는 삭제된 사진 정리 오류', error);
+    }
+  }
+
+  private async removeOrphanProfilePhoto(path: string): Promise<void> {
+    try {
+      const { error } = await this.client.storage.from('profile-images').remove([path]);
+      if (error) throw error;
+    } catch (error) {
+      console.warn('교체 또는 삭제된 프로필 사진 정리 오류', error);
     }
   }
 
@@ -1165,12 +1229,17 @@ export class SupabaseRepository implements AppRepository {
 
 function mapProfile(row: ProfileRow, signedUrls: Map<string, string>): Profile {
   const avatarPath = row.avatar_path ?? undefined;
+  const avatarKey = row.avatar_key ?? undefined;
   return {
     id: row.id,
     nickname: row.nickname,
-    avatar: defaultAvatar(row.id),
+    avatarKey,
+    avatar: avatarKey ?? defaultAvatar(row.id),
     avatarPath,
     avatarUri: avatarPath ? signedUrls.get(avatarPath) : undefined,
+    nicknameChangeAvailableAt: row.nickname_changed_at
+      ? new Date(Date.parse(row.nickname_changed_at) + 7 * 24 * 60 * 60 * 1_000).toISOString()
+      : undefined,
   };
 }
 
@@ -1418,6 +1487,12 @@ function translateError(error: unknown, fallback: string): RepositoryError {
   if (Number(status) === 401 || normalized.includes('jwt expired') || normalized.includes('invalid jwt')) {
     return new RepositoryError('AUTH_REQUIRED', '로그인이 만료됐어요. 다시 로그인해 주세요.', { cause: error });
   }
+  if (message === 'NICKNAME_COOLDOWN') {
+    return new RepositoryError('NICKNAME_COOLDOWN', '닉네임은 7일에 한 번만 변경할 수 있어요.', { cause: error });
+  }
+  if (message === 'INVALID_NICKNAME') {
+    return new RepositoryError('INVALID_NICKNAME', '닉네임은 앞뒤 공백을 제외하고 2~20자로 입력해 주세요.', { cause: error });
+  }
   if (code === '40001' || normalized.includes('version conflict')) {
     return new RepositoryError('VERSION_CONFLICT', '다른 기기에서 먼저 수정했어요. 새로고침한 뒤 다시 시도해 주세요.', { cause: error });
   }
@@ -1528,6 +1603,12 @@ function requireRoom(snapshot: AppSnapshot, id: string): Room {
   const room = snapshot.rooms.find((item) => item.id === id);
   if (!room) throw new RepositoryError('NOT_FOUND', '방을 찾을 수 없어요.');
   return room;
+}
+
+function requireProfile(snapshot: AppSnapshot, id: string): Profile {
+  const profile = snapshot.profiles.find((item) => item.id === id);
+  if (!profile) throw new RepositoryError('NOT_FOUND', '프로필을 찾을 수 없어요.');
+  return profile;
 }
 
 function requireExpense(snapshot: AppSnapshot, id: string): Expense {

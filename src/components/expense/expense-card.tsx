@@ -10,6 +10,7 @@ type ExpenseCardProps = {
   id: string;
   nickname: string;
   avatar: string;
+  avatarUri?: string;
   category: string;
   amount: number;
   pointAmount: number;
@@ -38,7 +39,7 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
           </View>
         ) : (
           <View style={styles.author}>
-            <AnimalAvatar value={props.avatar} size={32} />
+            <AnimalAvatar photoUri={props.avatarUri} value={props.avatar} size={32} />
             <View>
               <Text style={styles.name}>{props.nickname}</Text>
               <Text style={styles.meta}>{props.category} · {props.occurredAtLabel}{props.edited ? ' · 수정됨' : ''}</Text>

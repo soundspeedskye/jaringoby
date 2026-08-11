@@ -11,7 +11,6 @@ import type {
   RoomMemberStats,
   RoomRole,
 } from '@/data/types';
-import type { DataMode } from '@/data/repository-factory';
 import {
   shallowEqual,
   shallowMapEqual,
@@ -33,10 +32,10 @@ export type RoomMemberSummary = {
   userId: string;
   nickname: string;
   avatar: string;
+  avatarUri?: string;
   role: RoomRole;
   isCurrentUser: boolean;
 };
-const selectDataMode = (state: AppStoreState) => state.dataMode;
 const selectCurrentUser = (state: AppStoreState) => state.currentUser;
 const selectActiveRoom = (state: AppStoreState) => state.activeRoom;
 const selectCurrentRoom = (state: AppStoreState) => ({
@@ -48,10 +47,6 @@ const selectHistory = (state: AppStoreState) => ({ pastPeriods: state.pastPeriod
 const historyEqual = (left: { pastPeriods: Period[] }, right: { pastPeriods: Period[] }) => (
   shallowArrayEqual(left.pastPeriods, right.pastPeriods)
 );
-
-export function useAppDataMode(): DataMode {
-  return useAppStoreSelector(selectDataMode);
-}
 
 export function useCurrentUser(): Profile | null {
   return useAppStoreSelector(selectCurrentUser);
@@ -94,6 +89,7 @@ export function useActiveRoomMembers(roomId: string | undefined): RoomMemberSumm
             userId: member.userId,
             nickname: profile?.nickname ?? '알 수 없음',
             avatar: profile?.avatar ?? '',
+            avatarUri: profile?.avatarUri,
             role: member.role,
             isCurrentUser: member.userId === currentUserId,
           };
@@ -116,6 +112,7 @@ function roomMemberSummariesEqual(
       value.userId === other.userId &&
       value.nickname === other.nickname &&
       value.avatar === other.avatar &&
+      value.avatarUri === other.avatarUri &&
       value.role === other.role &&
       value.isCurrentUser === other.isCurrentUser
     );
@@ -346,6 +343,7 @@ export type PendingExceptionApproval = {
   reason: string;
   requesterNickname: string;
   requesterAvatar: string;
+  requesterAvatarUri?: string;
   amount: number;
   category: Expense['category'];
   approvedCount: number;
@@ -378,6 +376,7 @@ export function usePendingExceptionApprovals(): PendingExceptionApproval[] {
         reason: exception.reason,
         requesterNickname: profile?.nickname ?? '알 수 없음',
         requesterAvatar: profile?.avatar ?? '',
+        requesterAvatarUri: profile?.avatarUri,
         amount: expense.amount,
         category: expense.category,
         approvedCount: activeMembers.filter((member) => approvers.has(member.userId)).length,
@@ -420,6 +419,7 @@ function pendingExceptionApprovalsEqual(
       value.reason === other.reason &&
       value.requesterNickname === other.requesterNickname &&
       value.requesterAvatar === other.requesterAvatar &&
+      value.requesterAvatarUri === other.requesterAvatarUri &&
       value.amount === other.amount &&
       value.category === other.category &&
       value.approvedCount === other.approvedCount &&

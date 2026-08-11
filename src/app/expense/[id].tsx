@@ -308,6 +308,7 @@ const ExpenseSummary = memo(function ExpenseSummary({
       <View style={styles.expenseHeader}>
         <View style={styles.authorRow}>
           <AnimalAvatar
+            photoUri={author?.avatarUri}
             value={author?.avatar}
             size={40}
             style={styles.avatar}
@@ -1054,6 +1055,7 @@ const CommentItem = memo(function CommentItem({
     <View style={[styles.messageRow, mine && styles.messageRowMine]}>
       {!mine ? (
         <AnimalAvatar
+          photoUri={profile?.avatarUri}
           value={profile?.avatar}
           size={30}
           style={styles.messageAvatar}

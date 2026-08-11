@@ -8,6 +8,7 @@ export type MemberListItem = {
   id: string;
   nickname: string;
   avatar: string;
+  avatarUri?: string;
   detail: string;
   remaining: number;
   isCrowned: boolean;
@@ -37,7 +38,7 @@ export function MemberList({ members }: { members: MemberListItem[] }) {
               member.isCurrentUser && styles.currentUserRow,
               index === members.length - 1 && styles.lastRow,
             ]}>
-            <AnimalAvatar value={member.avatar} size={46} style={styles.avatar} />
+            <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={46} style={styles.avatar} />
             <View style={styles.copy}>
               <View style={styles.nameRow}>
                 <Text numberOfLines={1} style={styles.name}>

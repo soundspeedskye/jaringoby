@@ -8,6 +8,7 @@ import type {
   InvitePreview,
   Room,
   RoomMember,
+  Profile,
   SwitchRoomInput,
 } from '@/data/types';
 
@@ -20,7 +21,8 @@ export type UpdateExpenseOptions = {
 
 export interface AppRepository {
   load(): Promise<AppSnapshot>;
-  resetDemo(): Promise<AppSnapshot>;
+  updateNickname(nickname: string): Promise<Profile>;
+  updateAvatar(input: { avatarKey?: string; photoUri?: string | null }): Promise<Profile>;
   createRoom(input: CreateRoomInput): Promise<Room>;
   previewInvite(inviteCode: string): Promise<InvitePreview>;
   joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember>;

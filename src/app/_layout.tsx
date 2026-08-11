@@ -39,20 +39,20 @@ export default function RootLayout() {
 function AuthenticatedApp() {
   const router = useRouter();
   const segments = useSegments();
-  const { loading, recoveryMode, requiresAuth, session } = useSession();
+  const { loading, recoveryMode, session } = useSession();
   const inAuthGroup = segments[0] === '(auth)';
   // 세션 부트스트랩 중. 이 구간엔 아직 유저가 확정되지 않아 데이터 계층을
   // 마운트하면 signed-out 마운트에서 전체 조회가 한 번 낭비된다(재방문 사용자).
-  const bootstrapping = requiresAuth && loading;
+  const bootstrapping = loading;
 
   useEffect(() => {
-    if (loading || !requiresAuth) return;
+    if (loading) return;
     if (!session && !inAuthGroup) router.replace('/sign-in');
     if (session && inAuthGroup && !recoveryMode) router.replace('/');
-  }, [inAuthGroup, loading, recoveryMode, requiresAuth, router, session]);
+  }, [inAuthGroup, loading, recoveryMode, router, session]);
 
   useEffect(() => {
-    // 세션 확정(또는 데모 모드)까지 스플래시를 유지하고, 준비되면 내린다.
+    // 세션 확정까지 스플래시를 유지하고, 준비되면 내린다.
     if (!bootstrapping) void SplashScreen.hideAsync();
   }, [bootstrapping]);
 
@@ -62,7 +62,7 @@ function AuthenticatedApp() {
 
   return (
     <AppProvider
-      key={session?.user.id ?? (requiresAuth ? 'signed-out' : 'demo')}
+      key={session?.user.id ?? 'signed-out'}
       sessionUserId={session?.user.id ?? null}>
       <AppDialogProvider>
         <NotificationCoordinator>
@@ -73,6 +73,7 @@ function AuthenticatedApp() {
             <Stack.Screen name="room/create" options={{ presentation: 'modal' }} />
             <Stack.Screen name="room/join" options={{ presentation: 'modal' }} />
             <Stack.Screen name="room/leave" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="profile/edit" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/[id]" />
             <Stack.Screen name="history/index" />

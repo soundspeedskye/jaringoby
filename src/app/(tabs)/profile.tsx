@@ -13,15 +13,12 @@ import {
 
 import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import { GlassSurface } from "@/components/ui/glass-surface";
-import { PrimaryButton } from "@/components/ui/primary-button";
 import { ScreenFrame } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
 import { fonts, palette, radii, spacing } from "@/constants/design";
 import type { OfflineMutationSummary } from "@/data/offline-queue-repository";
-import { useAppActions } from "@/providers/app-actions-provider";
 import {
   useActiveRoom,
-  useAppDataMode,
   useClosedRooms,
   useCurrentUser,
   useHistory,
@@ -65,8 +62,6 @@ export default function ProfileScreen() {
   const activeRoom = useActiveRoom();
   const closedRooms = useClosedRooms();
   const { pastPeriods } = useHistory();
-  const dataMode = useAppDataMode();
-  const { resetDemo } = useAppActions();
   const {
     discardOperation: discardSyncOperation,
     getCopyableError: getCopyableSyncError,
@@ -74,7 +69,7 @@ export default function ProfileScreen() {
     retryOperation: retrySyncOperation,
   } = useSyncQueue();
   const { showDialog } = useAppDialog();
-  const { requiresAuth, signOut } = useSession();
+  const { signOut } = useSession();
   const copySyncError = useCallback(
     async (operationId: string) => {
       const message = await getCopyableSyncError(operationId);
@@ -274,30 +269,25 @@ export default function ProfileScreen() {
             },
           ]
         : []),
-      ...(requiresAuth
-        ? [
-            {
-              key: "account",
-              title: "계정",
-              data: [
-                {
-                  key: "sign-out",
-                  type: "setting" as const,
-                  icon: "logout" as const,
-                  label: "로그아웃",
-                  onPress: confirmSignOut,
-                },
-              ],
-            },
-          ]
-        : []),
+      {
+        key: "account",
+        title: "계정",
+        data: [
+          {
+            key: "sign-out",
+            type: "setting" as const,
+            icon: "logout" as const,
+            label: "로그아웃",
+            onPress: confirmSignOut,
+          },
+        ],
+      },
     ],
     [
       activeRoom,
       closedRooms,
       confirmSignOut,
       pastPeriods.length,
-      requiresAuth,
       router,
       syncOperations,
     ],
@@ -348,35 +338,13 @@ export default function ProfileScreen() {
       <SectionList
         contentContainerStyle={styles.content}
         keyExtractor={(item) => item.key}
-        ListFooterComponent={
-          dataMode === "demo" ? (
-            <View style={styles.resetSection}>
-              <PrimaryButton
-                label="데모 데이터 초기화"
-                onPress={() =>
-                  showDialog(
-                    "초기화할까요?",
-                    "앱의 로컬 데모 기록을 처음 상태로 되돌립니다.",
-                    [
-                      { text: "취소", style: "cancel" },
-                      {
-                        text: "초기화",
-                        style: "destructive",
-                        onPress: () => void resetDemo(),
-                      },
-                    ],
-                  )
-                }
-                variant="secondary"
-              />
-            </View>
-          ) : null
-        }
         ListHeaderComponent={
           <>
             <Text style={styles.title}>내 정보</Text>
+            <Pressable accessibilityHint="프로필 사진과 닉네임을 변경합니다" accessibilityRole="button" onPress={() => router.push('/profile/edit' as never)}>
             <GlassSurface style={styles.profileCard}>
               <AnimalAvatar
+                photoUri={currentUser?.avatarUri}
                 value={currentUser?.avatar}
                 size={72}
                 style={styles.avatar}
@@ -384,7 +352,9 @@ export default function ProfileScreen() {
               <Text style={styles.name}>
                 {currentUser?.nickname ?? "사용자"}
               </Text>
+              <MaterialCommunityIcons color={palette.muted} name="chevron-right" size={22} />
             </GlassSurface>
+            </Pressable>
           </>
         }
         renderItem={renderProfileItem}
@@ -555,5 +525,4 @@ const styles = StyleSheet.create({
   rowValue: { color: palette.muted, fontFamily: fonts.hand, fontSize: 13 },
   syncText: { flex: 1, gap: 3 },
   syncStatus: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12 },
-  resetSection: { marginTop: spacing.xxl },
 });

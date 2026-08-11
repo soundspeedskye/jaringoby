@@ -57,7 +57,7 @@ export const MemberExpenseSectionHeader = memo(
           pressed && styles.headerPressed,
         ]}
       >
-        <AnimalAvatar value={member.avatar} size={44} style={styles.avatar} />
+        <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={44} style={styles.avatar} />
 
         <View style={styles.memberCopy}>
           <View style={styles.nameRow}>
@@ -88,6 +88,7 @@ export const MemberExpenseSectionHeader = memo(
 
 export const MemberExpenseRow = memo(function MemberExpenseRow({
   avatar,
+  avatarUri,
   commentCount,
   displayName,
   expense,
@@ -95,6 +96,7 @@ export const MemberExpenseRow = memo(function MemberExpenseRow({
   onPress,
 }: {
   avatar: string;
+  avatarUri?: string;
   commentCount: number;
   displayName: string;
   expense: Expense;
@@ -107,6 +109,7 @@ export const MemberExpenseRow = memo(function MemberExpenseRow({
         amount={expense.amount}
         pointAmount={expense.pointAmount}
         avatar={avatar}
+        avatarUri={avatarUri}
         category={expense.category}
         commentCount={commentCount}
         edited={expense.createdAt !== expense.updatedAt}

@@ -22,6 +22,7 @@ import type {
   Expense,
   InvitePreview,
   Period,
+  Profile,
   Room,
   RoomMember,
   SwitchRoomInput,
@@ -558,8 +559,19 @@ class FakeRepository implements AppRepository {
     this.cleanedPhotoPaths.push(path);
   }
 
-  async resetDemo(): Promise<AppSnapshot> {
-    return this.load();
+  async updateNickname(nickname: string): Promise<Profile> {
+    const profile = this.snapshot.profiles.find((item) => item.id === this.userId);
+    if (!profile) throw new Error('NOT_FOUND');
+    profile.nickname = nickname;
+    return clone(profile);
+  }
+
+  async updateAvatar(input: { avatarKey?: string; photoUri?: string | null }): Promise<Profile> {
+    const profile = this.snapshot.profiles.find((item) => item.id === this.userId);
+    if (!profile) throw new Error('NOT_FOUND');
+    if (input.avatarKey) profile.avatar = input.avatarKey;
+    if (input.photoUri !== undefined) profile.avatarUri = input.photoUri ?? undefined;
+    return clone(profile);
   }
 
   async createRoom(_input: CreateRoomInput): Promise<Room> {

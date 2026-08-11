@@ -161,6 +161,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
           id: member.userId,
           nickname: profile?.nickname ?? "알 수 없음",
           avatar: profile?.avatar ?? "",
+          avatarUri: profile?.avatarUri,
           detail: latestCreatedExpense
             ? `${latestCreatedExpense.category} ${formatWon(latestCreatedExpense.amount)}`
             : member.isLateJoiner
