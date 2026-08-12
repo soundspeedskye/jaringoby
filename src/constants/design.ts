@@ -53,14 +53,13 @@ export const shadow = {
 } as const satisfies ViewStyle;
 
 // 서체 토큰. 패밀리명은 _layout.tsx useFonts의 key와 일치한다.
-// 결정: 제목·본문 모두 손글씨(굿네이버스)로, 숫자만 Pretendard로 둔다.
-//   hand/handBold = 굿네이버스 좋은이웃체(Regular/Bold) — 텍스트 전반의 개성·따뜻함.
-//   number = Pretendard-SemiBold — 금액·통계 등 정렬·신뢰가 필요한 숫자에만(+ tabularNums).
-//   ⚠️ 숫자·금액에는 손글씨(hand)를 쓰지 않는다.
+// 결정: 제목·본문·숫자를 IBM Plex Sans KR로 통일한다.
+//   hand/number = IBM Plex Sans KR Regular — 본문·보조 정보·일반 금액.
+//   handBold = IBM Plex Sans KR SemiBold — 제목·강조 텍스트·주요 금액.
 export const fonts = {
-  hand: 'GoodNeighbors',
-  handBold: 'GoodNeighbors-Bold',
-  number: 'Pretendard-SemiBold',
+  hand: 'IBMPlexSansKR-Regular',
+  handBold: 'IBMPlexSansKR-SemiBold',
+  number: 'IBMPlexSansKR-SemiBold',
 } as const;
 
 // 숫자 정렬 헬퍼. 금액·통계 등 자릿수가 흔들리면 안 되는 곳에 붙인다.

@@ -17,12 +17,8 @@ void SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   // 폰트 패밀리명은 이 map의 key로 등록된다(fonts.hand 토큰과 일치).
   const [fontsLoaded, fontError] = useFonts({
-    GoodNeighbors: require('../../assets/fonts/GoodNeighbors-Regular.otf'),
-    'GoodNeighbors-Bold': require('../../assets/fonts/GoodNeighbors-Bold.otf'),
-    'Pretendard-Regular': require('../../assets/fonts/Pretendard-Regular.ttf'),
-    'Pretendard-Medium': require('../../assets/fonts/Pretendard-Medium.ttf'),
-    'Pretendard-SemiBold': require('../../assets/fonts/Pretendard-SemiBold.ttf'),
-    'Pretendard-Bold': require('../../assets/fonts/Pretendard-Bold.ttf'),
+    'IBMPlexSansKR-Regular': require('../../assets/fonts/IBMPlexSansKR-Regular.ttf'),
+    'IBMPlexSansKR-SemiBold': require('../../assets/fonts/IBMPlexSansKR-SemiBold.ttf'),
   });
 
   // 스플래시는 폰트 로드만으로 내리지 않는다. 세션이 확정될 때까지 유지해
