@@ -3,26 +3,38 @@ import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  createContext,
+  forwardRef,
   memo,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type ComponentRef,
   type ReactNode,
 } from "react";
 import {
   BackHandler,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type FocusEvent,
+  type LayoutChangeEvent,
   type ListRenderItemInfo,
+  type ScrollViewProps,
 } from "react-native";
+import {
+  KeyboardChatScrollView,
+  KeyboardStickyView,
+} from "react-native-keyboard-controller";
+import { useDerivedValue, type SharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AnimalAvatar } from "@/components/avatar/animal-avatar";
@@ -507,6 +519,7 @@ function ExpenseEditor({
     patch: Partial<AddExpenseInput>,
   ) => Promise<Expense>;
 }) {
+  const onInputFocus = useContext(ExpenseDetailInputFocusContext);
   const [draftAmount, setDraftAmount] = useState(() =>
     formatKrwInput(String(expense.amount)),
   );
@@ -650,6 +663,7 @@ function ExpenseEditor({
         maxLength={200}
         multiline
         onChangeText={setDraftMemo}
+        onFocus={onInputFocus}
         style={styles.editMemo}
         value={draftMemo}
       />
@@ -704,6 +718,34 @@ type CommentActionProps = {
 };
 
 const EMPTY_COMMENT_REACTIONS: CommentReaction[] = [];
+const ExpenseDetailInputFocusContext = createContext<(event: FocusEvent) => void>(
+  () => undefined,
+);
+
+type CommentChatScrollViewProps = ScrollViewProps & {
+  extraContentPadding: SharedValue<number>;
+};
+
+const CommentChatScrollView = forwardRef<
+  ComponentRef<typeof KeyboardChatScrollView>,
+  CommentChatScrollViewProps
+>(
+  function CommentChatScrollView(
+    { extraContentPadding, ...props },
+    ref,
+  ) {
+    return (
+      <KeyboardChatScrollView
+        {...props}
+        automaticallyAdjustContentInsets={false}
+        contentInsetAdjustmentBehavior="never"
+        extraContentPadding={extraContentPadding}
+        keyboardLiftBehavior="always"
+        ref={ref}
+      />
+    );
+  },
+);
 
 function CommentSection({
   addComment,
@@ -732,7 +774,13 @@ function CommentSection({
     emoji: CommentReactionEmoji,
   ) => Promise<void>;
 }) {
+  const listRef = useRef<FlatList<Comment>>(null);
   const composerRef = useRef<TextInput>(null);
+  const [composerHeight, setComposerHeight] = useState(0);
+  const composerContentPadding = useDerivedValue(
+    () => composerHeight,
+    [composerHeight],
+  );
   const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -756,6 +804,52 @@ function CommentSection({
   const commentCount = useMemo(
     () => comments.filter((comment) => !comment.deletedAt).length,
     [comments],
+  );
+  const scrollInputAboveKeyboard = useCallback(
+    (event: FocusEvent) => {
+      const responder = listRef.current?.getScrollResponder() as
+        | ScrollView
+        | null
+        | undefined;
+      responder?.scrollResponderScrollNativeHandleToKeyboard(
+        event.target,
+        composerHeight + spacing.lg,
+        true,
+      );
+    },
+    [composerHeight],
+  );
+  const focusCommentEditor = useCallback(
+    (
+      commentId: string,
+      event: FocusEvent,
+    ) => {
+      const index = comments.findIndex((comment) => comment.id === commentId);
+      if (index >= 0) {
+        listRef.current?.scrollToIndex({
+          animated: true,
+          index,
+          viewPosition: 0.5,
+        });
+      }
+      scrollInputAboveKeyboard(event);
+    },
+    [comments, scrollInputAboveKeyboard],
+  );
+  const handleComposerLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      setComposerHeight(event.nativeEvent.layout.height);
+    },
+    [],
+  );
+  const renderScrollComponent = useCallback(
+    (props: ScrollViewProps) => (
+      <CommentChatScrollView
+        {...props}
+        extraContentPadding={composerContentPadding}
+      />
+    ),
+    [composerContentPadding],
   );
   const selectReply = useCallback(
     (comment: Comment) => {
@@ -800,6 +894,7 @@ function CommentSection({
           onBeginEdit={beginEdit}
           onError={setError}
           onFeedback={setFeedback}
+          onFocusEdit={focusCommentEditor}
           onFinishEdit={finishEdit}
           onReply={selectReply}
           profile={profilesById.get(comment.userId)}
@@ -827,62 +922,73 @@ function CommentSection({
       reactionsByCommentId,
       renderedAt,
       selectReply,
+      focusCommentEditor,
       toggleCommentReaction,
       updateComment,
     ],
   );
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.commentScreen}
-    >
-      <FlatList
-        accessibilityLabel="지출 댓글 대화"
-        contentContainerStyle={styles.commentListContent}
-        data={comments}
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={(comment) => comment.id}
-        ListEmptyComponent={
-          <EmptyState
-            title="아직 댓글이 없어요. 첫 응원을 남겨 보세요."
-            variant="compact"
-          />
-        }
-        ListHeaderComponent={
-          <>
-            {header}
-            <View style={styles.threadHeader}>
-              <View>
-                <Text style={styles.threadTitle}>댓글 {commentCount}</Text>
+    <ExpenseDetailInputFocusContext.Provider value={scrollInputAboveKeyboard}>
+      <View style={styles.commentScreen}>
+        <FlatList
+          accessibilityLabel="지출 댓글 대화"
+          contentContainerStyle={styles.commentListContent}
+          data={comments}
+          keyboardDismissMode={
+            Platform.OS === "ios" ? "interactive" : "on-drag"
+          }
+          keyboardShouldPersistTaps="handled"
+          keyExtractor={(comment) => comment.id}
+          ListEmptyComponent={
+            <EmptyState
+              title="아직 댓글이 없어요. 첫 응원을 남겨 보세요."
+              variant="compact"
+            />
+          }
+          ListHeaderComponent={
+            <>
+              {header}
+              <View style={styles.threadHeader}>
+                <View>
+                  <Text style={styles.threadTitle}>댓글 {commentCount}</Text>
+                </View>
+                <MaterialCommunityIcons
+                  color={palette.greenSoft}
+                  name="message-text-outline"
+                  size={23}
+                />
               </View>
-              <MaterialCommunityIcons
-                color={palette.greenSoft}
-                name="message-text-outline"
-                size={23}
-              />
-            </View>
-          </>
-        }
-        ItemSeparatorComponent={CommentSeparator}
-        renderItem={renderComment}
-        showsVerticalScrollIndicator={false}
-      />
+            </>
+          }
+          ItemSeparatorComponent={CommentSeparator}
+          renderItem={renderComment}
+          renderScrollComponent={renderScrollComponent}
+          ref={listRef}
+          showsVerticalScrollIndicator={false}
+          style={styles.commentList}
+        />
 
-      <CommentComposerDock
-        addComment={addComment}
-        canMutate={canMutate}
-        error={error}
-        expenseId={expenseId}
-        feedback={feedback}
-        inputRef={composerRef}
-        onError={setError}
-        onFeedback={setFeedback}
-        onReplyChange={setReplyDraft}
-        phase={phase}
-        replyDraft={replyDraft}
-      />
-    </KeyboardAvoidingView>
+        <KeyboardStickyView
+          onLayout={handleComposerLayout}
+          style={styles.composerSticky}
+        >
+          <CommentComposerDock
+            addComment={addComment}
+            canMutate={canMutate}
+            error={error}
+            expenseId={expenseId}
+            feedback={feedback}
+            inputRef={composerRef}
+            onError={setError}
+            onFeedback={setFeedback}
+            onReplyChange={setReplyDraft}
+            phase={phase}
+            replyDraft={replyDraft}
+          />
+        </KeyboardStickyView>
+      </View>
+    </ExpenseDetailInputFocusContext.Provider>
   );
 }
 
@@ -1001,6 +1107,7 @@ const CommentItem = memo(function CommentItem({
   onBeginEdit,
   onError,
   onFeedback,
+  onFocusEdit,
   onFinishEdit,
   onReply,
   profile,
@@ -1018,6 +1125,10 @@ const CommentItem = memo(function CommentItem({
   onBeginEdit: (comment: Comment) => void;
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
+  onFocusEdit: (
+    commentId: string,
+    event: FocusEvent,
+  ) => void;
   onFinishEdit: () => void;
   onReply: (comment: Comment) => void;
   profile?: Profile;
@@ -1169,6 +1280,7 @@ const CommentItem = memo(function CommentItem({
               maxLength={COMMENT_MAX_CHARACTERS}
               multiline
               onChangeText={setEditingBody}
+              onFocus={(event) => onFocusEdit(comment.id, event)}
               style={styles.editCommentInput}
               value={editingBody}
             />
@@ -1388,6 +1500,13 @@ function formatFullDate(value: Date): string {
 
 const styles = StyleSheet.create({
   commentScreen: { flex: 1 },
+  commentList: { flex: 1 },
+  composerSticky: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
   commentListContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
