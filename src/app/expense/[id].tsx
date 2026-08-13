@@ -414,7 +414,9 @@ function ExpenseExceptionCard({
           name="shield-half-full"
           size={17}
         />
-        <Text style={styles.exceptionTitle}>예외 요청 · “{summary.reason}”</Text>
+        <Text style={styles.exceptionTitle}>
+          예외 요청 · “{summary.reason}”
+        </Text>
       </View>
 
       {summary.isExcluded ? (
@@ -432,9 +434,7 @@ function ExpenseExceptionCard({
         <>
           <View style={styles.exceptionProgressRow}>
             <View style={styles.exceptionTrack}>
-              <View
-                style={[styles.exceptionFill, { width: `${percent}%` }]}
-              />
+              <View style={[styles.exceptionFill, { width: `${percent}%` }]} />
             </View>
             <Text style={styles.exceptionProgressText}>
               {summary.approvedCount}/{summary.requiredCount} 승인
@@ -452,7 +452,10 @@ function ExpenseExceptionCard({
             label="예외 취소"
             loading={busy}
             onPress={() =>
-              run(() => withdrawExpenseException(expenseId), "예외를 취소하지 못했어요.")
+              run(
+                () => withdrawExpenseException(expenseId),
+                "예외를 취소하지 못했어요.",
+              )
             }
             style={styles.exceptionButton}
             variant="secondary"
@@ -546,7 +549,9 @@ function ExpenseEditor({
     const pointAmount = usesPoints ? Number(pointAmountText) : 0;
     if (
       usesPoints &&
-      (!pointAmountText || !Number.isSafeInteger(pointAmount) || pointAmount < 1)
+      (!pointAmountText ||
+        !Number.isSafeInteger(pointAmount) ||
+        pointAmount < 1)
     ) {
       setError("포인트 사용 금액을 1원 이상의 정수로 입력해 주세요.");
       return;
@@ -605,7 +610,11 @@ function ExpenseEditor({
       >
         <View style={[styles.checkbox, usesPoints && styles.checkboxChecked]}>
           {usesPoints ? (
-            <MaterialCommunityIcons color={palette.cream} name="check" size={15} />
+            <MaterialCommunityIcons
+              color={palette.cream}
+              name="check"
+              size={15}
+            />
           ) : null}
         </View>
         <View style={styles.pointsToggleCopy}>
@@ -1025,6 +1034,7 @@ const CommentItem = memo(function CommentItem({
   const [reactingEmoji, setReactingEmoji] =
     useState<CommentReactionEmoji | null>(null);
   const mine = comment.userId === currentUserId;
+  // 반응을 한 번만 훑어 이모지별 개수·내 선택 여부를 집계한다(렌더는 조회만).
   const reactionSummary = useMemo(() => {
     const summary = new Map<string, { count: number; selected: boolean }>();
     reactions.forEach((reaction) => {
@@ -1433,7 +1443,13 @@ const styles = StyleSheet.create({
     ...tabularNums,
   },
   expenseAmounts: { alignItems: "flex-end", marginLeft: spacing.sm },
-  expensePointAmount: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 2, ...tabularNums },
+  expensePointAmount: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+    marginTop: 2,
+    ...tabularNums,
+  },
   expensePhoto: {
     width: "100%",
     aspectRatio: 16 / 10,
@@ -1536,7 +1552,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
   },
-  pointsToggle: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
+  pointsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
   pointAmountField: { marginTop: spacing.md },
   checkbox: {
     width: 22,
@@ -1550,7 +1571,12 @@ const styles = StyleSheet.create({
   },
   checkboxChecked: { backgroundColor: palette.green },
   pointsToggleCopy: { flex: 1 },
-  pointsToggleLabel: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
+  pointsToggleLabel: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   editCategories: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   editMemo: { minHeight: 76, textAlignVertical: "top" },
   editPhoto: {
