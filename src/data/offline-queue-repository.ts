@@ -12,6 +12,7 @@ import type {
   AddExpenseInput,
   AppSnapshot,
   Comment,
+  CommentReactionEmoji,
   CreateRoomInput,
   Expense,
   InvitePreview,
@@ -611,6 +612,28 @@ export class OfflineQueueRepository implements AppRepository {
       this.emitLocked();
     });
     void this.startFlush(false).catch(() => undefined);
+  }
+
+  // 반응은 멱등 토글의 최신 서버 상태가 필요해 오프라인 큐에 넣지 않는다.
+  async toggleCommentReaction(
+    commentId: string,
+    emoji: CommentReactionEmoji,
+  ): Promise<void> {
+    await this.base.toggleCommentReaction(commentId, emoji);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  // 읽음 처리는 서버의 사용자별 상태만 바꾸므로 오프라인 큐에 재생하지 않는다.
+  // 다음 동기화에서 받은 스냅샷이 최종 상태다.
+  async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
+    if (notificationIds.length === 0) return;
+    await this.base.markNotificationsRead(notificationIds);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    await this.base.markAllNotificationsRead();
+    void this.refreshBase().catch(() => undefined);
   }
 
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {

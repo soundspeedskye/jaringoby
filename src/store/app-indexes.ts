@@ -2,6 +2,7 @@ import { expenseOfficialAmount, isExpenseVisible } from '@/data/expense-sync';
 import type {
   AppSnapshot,
   Comment,
+  CommentReaction,
   Expense,
   ExpenseException,
   Period,
@@ -22,8 +23,11 @@ export type AppIndexes = {
   expensesByPeriodId: Map<string, Expense[]>;
   expensesByUserId: Map<string, Expense[]>;
   expensesByPeriodAndUserId: Map<string, Map<string, Expense[]>>;
+  /** 방별 피드 지출(삭제 제외), 게시 시각(createdAt) 최신순 정렬. */
+  feedExpensesByRoomId: Map<string, Expense[]>;
   commentsByExpenseId: Map<string, Comment[]>;
   commentCountByExpenseId: Map<string, number>;
+  reactionsByCommentId: Map<string, CommentReaction[]>;
   resultsByPeriodId: Map<string, PeriodResult[]>;
   statsByRoomId: Map<string, RoomMemberStats[]>;
   crownIdsByPeriodId: Map<string, string[]>;
@@ -63,6 +67,17 @@ export function buildAppIndexes(
   const commentIndexes = canReuse && snapshot.comments === previousSnapshot.comments
     ? pickCommentIndexes(previousIndexes)
     : buildCommentIndexes(snapshot.comments);
+  // 피드는 지출·주차 편성 둘 다에 의존한다. 둘 다 그대로면 재사용.
+  const feedExpensesByRoomId =
+    canReuse &&
+    snapshot.expenses === previousSnapshot.expenses &&
+    snapshot.periods === previousSnapshot.periods
+      ? previousIndexes.feedExpensesByRoomId
+      : buildRoomFeedIndex(snapshot.expenses, snapshot.periods);
+  const reactionsByCommentId =
+    canReuse && snapshot.commentReactions === previousSnapshot.commentReactions
+      ? previousIndexes.reactionsByCommentId
+      : groupValues(snapshot.commentReactions, (reaction) => reaction.commentId);
   const exceptionIndexes = canReuse && exceptionInputsAreShared(snapshot, previousSnapshot)
     ? pickExceptionIndexes(previousIndexes)
     : buildExceptionIndexes(snapshot, membersByPeriodId, expenseIndexes.expenseById);
@@ -96,7 +111,9 @@ export function buildAppIndexes(
     profileById,
     membersByPeriodId,
     ...expenseIndexes,
+    feedExpensesByRoomId,
     ...commentIndexes,
+    reactionsByCommentId,
     ...exceptionIndexes,
     resultsByPeriodId,
     statsByRoomId,
@@ -114,8 +131,10 @@ function createEmptyIndexes(): AppIndexes {
     expensesByPeriodId: new Map(),
     expensesByUserId: new Map(),
     expensesByPeriodAndUserId: new Map(),
+    feedExpensesByRoomId: new Map(),
     commentsByExpenseId: new Map(),
     commentCountByExpenseId: new Map(),
+    reactionsByCommentId: new Map(),
     resultsByPeriodId: new Map(),
     statsByRoomId: new Map(),
     crownIdsByPeriodId: new Map(),
@@ -154,6 +173,30 @@ function buildExpenseIndexes(expenses: Expense[]): Pick<
     expensesByUserId,
     expensesByPeriodAndUserId,
   };
+}
+
+/**
+ * 방별 피드 지출을 미리 계산한다. 셀렉터가 매 스토어 알림마다 전체 지출을
+ * 훑는 대신 이 인덱스만 조회하도록. 피드는 삭제된 지출을 숨긴다(pending 삭제
+ * 포함, isExpenseVisible보다 엄격). createdAt은 ISO(UTC)라 사전식=시간순.
+ */
+function buildRoomFeedIndex(
+  expenses: Expense[],
+  periods: Period[],
+): Map<string, Expense[]> {
+  const roomIdByPeriodId = new Map<string, string>();
+  periods.forEach((period) => roomIdByPeriodId.set(period.id, period.roomId));
+  const feedExpensesByRoomId = new Map<string, Expense[]>();
+  expenses.forEach((expense) => {
+    if (expense.deletedAt || !expense.periodId) return;
+    const roomId = roomIdByPeriodId.get(expense.periodId);
+    if (!roomId) return;
+    appendIndexValue(feedExpensesByRoomId, roomId, expense);
+  });
+  feedExpensesByRoomId.forEach((roomExpenses) => {
+    roomExpenses.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  });
+  return feedExpensesByRoomId;
 }
 
 function buildCommentIndexes(comments: Comment[]): Pick<

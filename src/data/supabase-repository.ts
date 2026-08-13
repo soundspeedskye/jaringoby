@@ -7,8 +7,11 @@ import { createSupabaseClientForAccessToken } from '@/data/supabase-client';
 import type {
   AddCommentInput,
   AddExpenseInput,
+  AppNotification,
   AppSnapshot,
   Comment,
+  CommentReaction,
+  CommentReactionEmoji,
   CreateRoomInput,
   Expense,
   ExpenseException,
@@ -33,6 +36,8 @@ const EXPENSE_COLUMNS =
   'id,client_request_id,period_id,user_id,amount,point_amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version';
 const COMMENT_COLUMNS =
   'id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version';
+const NOTIFICATION_COLUMNS =
+  'id,user_id,kind,actor_id,room_id,period_id,expense_id,comment_id,route,read_at,created_at';
 const REALTIME_TABLES = [
   'profiles',
   'rooms',
@@ -42,6 +47,8 @@ const REALTIME_TABLES = [
   'period_results',
   'expenses',
   'comments',
+  'comment_reactions',
+  'notifications',
   'expense_exceptions',
   'expense_exception_approvals',
 ] as const;
@@ -182,6 +189,27 @@ type CommentRow = {
   updated_at: string;
   deleted_at: string | null;
   version: number;
+};
+
+type CommentReactionRow = {
+  comment_id: string;
+  user_id: string;
+  emoji: CommentReactionEmoji;
+  created_at: string;
+};
+
+type NotificationRow = {
+  id: string;
+  user_id: string;
+  kind: string;
+  actor_id: string | null;
+  room_id: string | null;
+  period_id: string | null;
+  expense_id: string | null;
+  comment_id: string | null;
+  route: string;
+  read_at: string | null;
+  created_at: string;
 };
 
 type PreferenceRow = {
@@ -664,6 +692,45 @@ export class SupabaseRepository implements AppRepository {
     await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['comments']));
   }
 
+  async toggleCommentReaction(
+    commentId: string,
+    emoji: CommentReactionEmoji,
+  ): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('toggle_comment_reaction', {
+      p_comment_id: commentId,
+      p_emoji: emoji,
+    });
+    if (error) throw translateError(error, '댓글 반응을 변경하지 못했어요.');
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['comment_reactions']),
+    );
+  }
+
+  async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
+    await this.requireUserId();
+    const ids = [...new Set(notificationIds)].filter((id) => id.length > 0);
+    if (ids.length === 0) return;
+    const { error } = await this.client
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .in('id', ids)
+      .is('read_at', null);
+    if (error) throw translateError(error, '소식을 읽음 처리하지 못했어요.');
+    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['notifications']));
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    const userId = await this.requireUserId();
+    const { error } = await this.client
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .is('read_at', null);
+    if (error) throw translateError(error, '모든 소식을 읽음 처리하지 못했어요.');
+    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['notifications']));
+  }
+
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {
     this.listeners.add(listener);
     if (this.lastSnapshot) listener(clone(this.lastSnapshot));
@@ -692,6 +759,8 @@ export class SupabaseRepository implements AppRepository {
       invitesResult,
       expenseRows,
       commentRows,
+      commentReactionRows,
+      notificationRows,
       exceptionRows,
       approvalRows,
       preferencesResult,
@@ -723,6 +792,8 @@ export class SupabaseRepository implements AppRepository {
       this.client.from('invite_codes').select('room_id,code,is_active').eq('is_active', true),
       this.fetchExpenseRows(),
       this.fetchCommentRows(),
+      this.fetchCommentReactionRows(),
+      this.fetchNotificationRows(),
       this.fetchExceptionRows(),
       this.fetchExceptionApprovalRows(),
       this.client.from('user_room_preferences').select('room_id,is_hidden'),
@@ -787,6 +858,7 @@ export class SupabaseRepository implements AppRepository {
     const visibleExpenseRows = filterVisibleExpenseRows(expenseRows, visiblePeriodIds);
     const visibleExpenseIds = new Set(visibleExpenseRows.map((row) => row.id));
     const visibleCommentRows = filterVisibleCommentRows(commentRows, visibleExpenseIds);
+    const visibleCommentIds = new Set(visibleCommentRows.map((row) => row.id));
     const visibleExceptionRows = exceptionRows.filter((row) =>
       visibleExpenseIds.has(row.expense_id),
     );
@@ -813,6 +885,10 @@ export class SupabaseRepository implements AppRepository {
         .map(mapStats),
       expenses: visibleExpenseRows.map((row) => mapExpense(row, expenseSignedUrls)),
       comments: visibleCommentRows.map(mapComment),
+      commentReactions: commentReactionRows
+        .filter((row) => visibleCommentIds.has(row.comment_id))
+        .map(mapCommentReaction),
+      notifications: notificationRows.map(mapNotification),
       expenseExceptions: visibleExceptionRows.map(mapExpenseException),
       expenseExceptionApprovals: visibleApprovalRows.map(mapExpenseExceptionApproval),
       processedRequestIds: collectProcessedRequestIds(expenseRows, commentRows, userId),
@@ -839,6 +915,28 @@ export class SupabaseRepository implements AppRepository {
       throw translateError(result.error, '댓글 데이터를 갱신하지 못했어요.');
     }
     return rows<CommentRow>(result.data);
+  }
+
+  private async fetchCommentReactionRows(): Promise<CommentReactionRow[]> {
+    const result = await this.client
+      .from('comment_reactions')
+      .select('comment_id,user_id,emoji,created_at');
+    if (result.error) {
+      throw translateError(result.error, '댓글 반응을 갱신하지 못했어요.');
+    }
+    return rows<CommentReactionRow>(result.data);
+  }
+
+  private async fetchNotificationRows(): Promise<NotificationRow[]> {
+    const result = await this.client
+      .from('notifications')
+      .select(NOTIFICATION_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (result.error) {
+      throw translateError(result.error, '소식 데이터를 갱신하지 못했어요.');
+    }
+    return rows<NotificationRow>(result.data);
   }
 
   private async fetchExceptionRows(): Promise<ExpenseExceptionRow[]> {
@@ -1035,6 +1133,7 @@ export class SupabaseRepository implements AppRepository {
       (table) =>
         table === 'expenses' ||
         table === 'comments' ||
+        table === 'comment_reactions' ||
         table === 'expense_exceptions' ||
         table === 'expense_exception_approvals',
     );
@@ -1046,14 +1145,18 @@ export class SupabaseRepository implements AppRepository {
     const userId = await this.requireUserId();
     const shouldFetchExpenses = tables.has('expenses');
     const shouldFetchComments = tables.has('comments');
+    const shouldFetchCommentReactions = tables.has('comment_reactions');
     const shouldFetchExceptions = tables.has('expense_exceptions');
     const shouldFetchApprovals = tables.has('expense_exception_approvals');
-    const [expenseRows, commentRows, exceptionRows, approvalRows] = await Promise.all([
+    const [expenseRows, commentRows, commentReactionRows, exceptionRows, approvalRows] = await Promise.all([
       shouldFetchExpenses
         ? this.fetchExpenseRows()
         : Promise.resolve(null),
       shouldFetchComments
         ? this.fetchCommentRows()
+        : Promise.resolve(null),
+      shouldFetchCommentReactions
+        ? this.fetchCommentReactionRows()
         : Promise.resolve(null),
       shouldFetchExceptions
         ? this.fetchExceptionRows()
@@ -1093,6 +1196,16 @@ export class SupabaseRepository implements AppRepository {
       : expensesChanged
         ? previous.comments.filter((comment) => visibleExpenseIds.has(comment.expenseId))
         : previous.comments;
+    const visibleCommentIds = new Set(comments.map((comment) => comment.id));
+    const commentReactions = commentReactionRows
+      ? commentReactionRows
+          .filter((row) => visibleCommentIds.has(row.comment_id))
+          .map(mapCommentReaction)
+      : comments !== previous.comments
+        ? previous.commentReactions.filter((reaction) =>
+            visibleCommentIds.has(reaction.commentId),
+          )
+        : previous.commentReactions;
     // Exceptions/approvals live in their own arrays keyed by expense_id, so a
     // patch either refetches the touched table or re-filters the carried-over
     // rows against the (possibly shrunk) visible expense set.
@@ -1121,6 +1234,7 @@ export class SupabaseRepository implements AppRepository {
       currentUserId: userId,
       expenses,
       comments,
+      commentReactions,
       expenseExceptions,
       expenseExceptionApprovals,
       processedRequestIds: [...processedRequestIds],
@@ -1325,6 +1439,22 @@ function mapStats(row: RoomMemberStatsRow): RoomMemberStats {
   };
 }
 
+function mapNotification(row: NotificationRow): AppNotification {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    kind: row.kind,
+    actorId: row.actor_id ?? undefined,
+    roomId: row.room_id ?? undefined,
+    periodId: row.period_id ?? undefined,
+    expenseId: row.expense_id ?? undefined,
+    commentId: row.comment_id ?? undefined,
+    route: row.route,
+    readAt: row.read_at ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
 function mapExpense(row: ExpenseRow, signedUrls: Map<string, string>): Expense {
   const photoPath = row.photo_path ?? undefined;
   return {
@@ -1360,6 +1490,15 @@ function mapComment(row: CommentRow): Comment {
     deletedAt: row.deleted_at ?? undefined,
     syncStatus: 'SYNCED',
     version: row.version,
+  };
+}
+
+function mapCommentReaction(row: CommentReactionRow): CommentReaction {
+  return {
+    commentId: row.comment_id,
+    userId: row.user_id,
+    emoji: row.emoji,
+    createdAt: row.created_at,
   };
 }
 

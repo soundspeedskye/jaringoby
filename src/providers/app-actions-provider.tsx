@@ -6,6 +6,7 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   Comment,
+  CommentReactionEmoji,
   CreateRoomInput,
   Expense,
   InvitePreview,
@@ -35,6 +36,9 @@ export type AppActionsContextValue = {
   addComment: (input: AddCommentInput) => Promise<Comment>;
   updateComment: (commentId: string, body: string) => Promise<Comment>;
   deleteComment: (commentId: string) => Promise<void>;
+  toggleCommentReaction: (commentId: string, emoji: CommentReactionEmoji) => Promise<void>;
+  markNotificationsRead: (notificationIds: readonly string[]) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
 };
 
 const AppActionsContext = createContext<AppActionsContextValue | null>(null);
@@ -119,6 +123,20 @@ export function AppActionsProvider({
     (commentId: string) => execute(() => repository.deleteComment(commentId)),
     [execute, repository],
   );
+  const toggleCommentReaction = useCallback(
+    (commentId: string, emoji: CommentReactionEmoji) =>
+      execute(() => repository.toggleCommentReaction(commentId, emoji)),
+    [execute, repository],
+  );
+  const markNotificationsRead = useCallback(
+    (notificationIds: readonly string[]) =>
+      execute(() => repository.markNotificationsRead(notificationIds)),
+    [execute, repository],
+  );
+  const markAllNotificationsRead = useCallback(
+    () => execute(() => repository.markAllNotificationsRead()),
+    [execute, repository],
+  );
 
   const value = useMemo<AppActionsContextValue>(() => ({
     updateNickname,
@@ -139,6 +157,9 @@ export function AppActionsProvider({
     addComment,
     updateComment,
     deleteComment,
+    toggleCommentReaction,
+    markNotificationsRead,
+    markAllNotificationsRead,
   }), [
     addComment,
     addExpense,
@@ -148,6 +169,7 @@ export function AppActionsProvider({
     closeRoom,
     createRoom,
     deleteComment,
+    toggleCommentReaction,
     deleteArchivedPeriod,
     deleteExpense,
     joinRoom,
@@ -158,6 +180,8 @@ export function AppActionsProvider({
     updateNickname,
     updateComment,
     updateExpense,
+    markAllNotificationsRead,
+    markNotificationsRead,
   ]);
 
   return <AppActionsContext.Provider value={value}>{children}</AppActionsContext.Provider>;

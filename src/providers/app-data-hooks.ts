@@ -2,6 +2,8 @@ import { useCallback, useMemo } from 'react';
 
 import type {
   Comment,
+  CommentReaction,
+  AppNotification,
   Expense,
   Period,
   PeriodMember,
@@ -21,6 +23,8 @@ import type { AppStoreState } from '@/store/app-store';
 const EMPTY_MEMBERS: PeriodMember[] = [];
 const EMPTY_EXPENSES: Expense[] = [];
 const EMPTY_COMMENTS: Comment[] = [];
+const EMPTY_REACTIONS_BY_COMMENT: ReadonlyMap<string, CommentReaction[]> = new Map();
+const EMPTY_NOTIFICATIONS: AppNotification[] = [];
 const EMPTY_RESULTS: PeriodResult[] = [];
 const EMPTY_IDS: string[] = [];
 const EMPTY_ROOM_MEMBERS: RoomMemberSummary[] = [];
@@ -37,6 +41,17 @@ export type RoomMemberSummary = {
   isCurrentUser: boolean;
 };
 const selectCurrentUser = (state: AppStoreState) => state.currentUser;
+const selectNotifications = (state: AppStoreState) =>
+  state.snapshot?.notifications ?? EMPTY_NOTIFICATIONS;
+const selectUnreadNotificationCount = (state: AppStoreState) => {
+  const notifications = state.snapshot?.notifications;
+  if (!notifications) return 0;
+  let unread = 0;
+  for (const notification of notifications) {
+    if (!notification.readAt) unread += 1;
+  }
+  return unread;
+};
 const selectActiveRoom = (state: AppStoreState) => state.activeRoom;
 const selectCurrentRoom = (state: AppStoreState) => ({
   currentUser: state.currentUser,
@@ -50,6 +65,15 @@ const historyEqual = (left: { pastPeriods: Period[] }, right: { pastPeriods: Per
 
 export function useCurrentUser(): Profile | null {
   return useAppStoreSelector(selectCurrentUser);
+}
+
+/** 최신 100건의 사용자별 소식. 서버가 읽음 상태의 권위다. */
+export function useNotifications(): AppNotification[] {
+  return useAppStoreSelector(selectNotifications, shallowArrayEqual);
+}
+
+export function useUnreadNotificationCount(): number {
+  return useAppStoreSelector(selectUnreadNotificationCount);
 }
 
 export function useActiveRoom(): Room | null {
@@ -157,6 +181,39 @@ export function usePeriodExpenses(periodId: string | undefined): Expense[] {
   );
 }
 
+/** 현재 방에서 볼 수 있는 모든 주차 지출을 게시 시각 최신순으로 가져온다. */
+export function useRoomFeedExpenses(roomId: string | undefined): Expense[] {
+  return useIndexedArray(
+    useCallback(
+      (state: AppStoreState) => (
+        roomId
+          ? state.indexes.feedExpensesByRoomId.get(roomId) ?? EMPTY_EXPENSES
+          : EMPTY_EXPENSES
+      ),
+      [roomId],
+    ),
+  );
+}
+
+export function useMemberRoomFeedExpenses(
+  roomId: string | undefined,
+  userId: string | undefined,
+): Expense[] {
+  return useIndexedArray(
+    useCallback(
+      (state: AppStoreState) => {
+        if (!roomId || !userId) return EMPTY_EXPENSES;
+        // 방 피드는 이미 삭제 제외·최신순 정렬돼 있어 작성자 필터만 하면 된다.
+        const feed = state.indexes.feedExpensesByRoomId.get(roomId);
+        if (!feed) return EMPTY_EXPENSES;
+        const mine = feed.filter((expense) => expense.userId === userId);
+        return mine.length ? mine : EMPTY_EXPENSES;
+      },
+      [roomId, userId],
+    ),
+  );
+}
+
 export function useUserExpenses(userId: string | undefined, periodId?: string): Expense[] {
   return useIndexedArray(
     useCallback(
@@ -259,6 +316,27 @@ export function useCommentCounts(expenses: readonly Expense[]): ReadonlyMap<stri
     return counts;
   }, [expenses]);
   return useAppStoreSelector(selector, shallowMapEqual);
+}
+
+/**
+ * 현재 상세 화면에 보이는 댓글의 반응을 comment별로 구독한다.
+ * 스토어가 이미 comment별로 그룹해 둔 인덱스 배열 참조를 그대로 노출하므로
+ * (평평화→재그룹핑 왕복이 없고) 안 바뀐 댓글의 배열은 참조가 안정적이다.
+ */
+export function useReactionsByCommentId(
+  commentIds: readonly string[],
+): ReadonlyMap<string, CommentReaction[]> {
+  const normalizedIds = useStableIds(commentIds);
+  const selector = useCallback((state: AppStoreState) => {
+    if (normalizedIds.length === 0) return EMPTY_REACTIONS_BY_COMMENT;
+    const grouped = new Map<string, CommentReaction[]>();
+    normalizedIds.forEach((commentId) => {
+      const reactions = state.indexes.reactionsByCommentId.get(commentId);
+      if (reactions) grouped.set(commentId, reactions);
+    });
+    return grouped.size ? grouped : EMPTY_REACTIONS_BY_COMMENT;
+  }, [normalizedIds]);
+  return useAppStoreSelector(selector, shallowArrayMapEqual);
 }
 
 export function useCrownIds(periodId: string | undefined): string[] {
@@ -511,6 +589,11 @@ function shallowArrayMapEqual<K, V>(
 }
 
 function useStableIds(ids: readonly string[]): readonly string[] {
-  const key = [...new Set(ids)].sort().join('\u0000');
-  return useMemo(() => key ? key.split('\u0000') : [], [key]);
+  // 원본 join(정렬 없음)만 매 렌더 계산하고, 비싼 dedup+sort는 내용이
+  // 바뀔 때만 useMemo 안에서 수행한다.
+  const key = ids.join('\u0000');
+  return useMemo(
+    () => (key ? [...new Set(key.split('\u0000'))].sort() : []),
+    [key],
+  );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Comment, Expense } from '@/data/types';
+import type { AppNotification, Comment, Expense } from '@/data/types';
 import { createAppStore } from '@/store/app-store';
 import { createTestSnapshot } from '@/test/app-snapshot-fixture';
 
@@ -122,6 +122,25 @@ describe('createAppStore', () => {
     expect(after.resultsByPeriodId).toBe(before.resultsByPeriodId);
     expect(after.statsByRoomId).toBe(before.statsByRoomId);
   });
+
+  it('emits a new snapshot when only the notification inbox changes', () => {
+    const store = createStore();
+    const snapshot = createTestSnapshot();
+    store.setSnapshot(snapshot);
+    const before = store.getState().snapshot;
+    if (!before) throw new Error('snapshot missing');
+
+    const incoming = clone(snapshot);
+    incoming.notifications.push(newNotification());
+    store.setSnapshot(incoming);
+    const after = store.getState().snapshot;
+    if (!after) throw new Error('snapshot missing');
+
+    expect(after).not.toBe(before);
+    expect(after.notifications).not.toBe(before.notifications);
+    expect(after.expenses).toBe(before.expenses);
+    expect(after.comments).toBe(before.comments);
+  });
 });
 
 function createStore() {
@@ -148,6 +167,18 @@ function newExpense(base: Expense): Expense {
     clientRequestId: 'expense-request-new',
     createdAt: '2026-07-23T00:00:00.000Z',
     updatedAt: '2026-07-23T00:00:00.000Z',
+  };
+}
+
+function newNotification(): AppNotification {
+  return {
+    id: 'notification-new',
+    userId: 'user-me',
+    kind: 'expense_created',
+    actorId: 'user-other',
+    expenseId: 'expense-test',
+    route: '/expense/expense-test',
+    createdAt: '2026-08-12T10:00:00.000Z',
   };
 }
 

@@ -145,6 +145,32 @@ export type Comment = {
   version?: number;
 };
 
+export const COMMENT_REACTION_EMOJIS = ["❤️", "👍", "👏"] as const;
+export type CommentReactionEmoji = (typeof COMMENT_REACTION_EMOJIS)[number];
+
+/** 한 사용자가 댓글에 남긴 이모지 반응. 같은 이모지는 댓글당 한 번만 가능하다. */
+export type CommentReaction = {
+  commentId: string;
+  userId: string;
+  emoji: CommentReactionEmoji;
+  createdAt: string;
+};
+
+/** 앱 안 소식함에 표시하는 사용자별 이벤트. 본문은 저장하지 않는다. */
+export type AppNotification = {
+  id: string;
+  userId: string;
+  kind: string;
+  actorId?: string;
+  roomId?: string;
+  periodId?: string;
+  expenseId?: string;
+  commentId?: string;
+  route: string;
+  readAt?: string;
+  createdAt: string;
+};
+
 /** 지출에 붙은 예외 제안. 활성 멤버 전원 승인 시 정산에서 제외된다. */
 export type ExpenseException = {
   expenseId: string;
@@ -172,6 +198,8 @@ export type AppSnapshot = {
   memberStats: RoomMemberStats[];
   expenses: Expense[];
   comments: Comment[];
+  commentReactions: CommentReaction[];
+  notifications: AppNotification[];
   expenseExceptions: ExpenseException[];
   expenseExceptionApprovals: ExpenseExceptionApproval[];
   processedRequestIds: string[];

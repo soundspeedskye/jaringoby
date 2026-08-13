@@ -18,6 +18,7 @@ import type {
   AddExpenseInput,
   AppSnapshot,
   Comment,
+  CommentReactionEmoji,
   CreateRoomInput,
   Expense,
   InvitePreview,
@@ -699,6 +700,41 @@ class FakeRepository implements AppRepository {
     if (current) current.deletedAt = '2099-01-03T00:00:00.000Z';
   }
 
+  async toggleCommentReaction(
+    commentId: string,
+    emoji: CommentReactionEmoji,
+  ): Promise<void> {
+    const existingIndex = this.snapshot.commentReactions.findIndex(
+      (reaction) =>
+        reaction.commentId === commentId &&
+        reaction.userId === this.userId &&
+        reaction.emoji === emoji,
+    );
+    if (existingIndex >= 0) this.snapshot.commentReactions.splice(existingIndex, 1);
+    else {
+      this.snapshot.commentReactions.push({
+        commentId,
+        userId: this.userId,
+        emoji,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
+    const readAt = new Date().toISOString();
+    this.snapshot.notifications.forEach((notification) => {
+      if (notificationIds.includes(notification.id)) notification.readAt = readAt;
+    });
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    const readAt = new Date().toISOString();
+    this.snapshot.notifications.forEach((notification) => {
+      notification.readAt = readAt;
+    });
+  }
+
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -740,7 +776,9 @@ function snapshotFixture(userId: string, period: Period): AppSnapshot {
     periodResults: [],
     memberStats: [],
     expenses: [],
-    comments: [],
+  comments: [],
+  commentReactions: [],
+  notifications: [],
     expenseExceptions: [],
     expenseExceptionApprovals: [],
     processedRequestIds: [],

@@ -3,6 +3,7 @@ import type {
   AddExpenseInput,
   AppSnapshot,
   Comment,
+  CommentReactionEmoji,
   CreateRoomInput,
   Expense,
   InvitePreview,
@@ -43,6 +44,9 @@ export interface AppRepository {
   addComment(input: AddCommentInput): Promise<Comment>;
   updateComment(commentId: string, body: string): Promise<Comment>;
   deleteComment(commentId: string): Promise<void>;
+  toggleCommentReaction(commentId: string, emoji: CommentReactionEmoji): Promise<void>;
+  markNotificationsRead(notificationIds: readonly string[]): Promise<void>;
+  markAllNotificationsRead(): Promise<void>;
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe;
 }
 
