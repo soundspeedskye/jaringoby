@@ -31,22 +31,46 @@ export function SessionProvider({ children }: PropsWithChildren) {
     let bootstrapComplete = false;
     const client = getSupabaseClient();
     runtime.setActiveUserId(null);
-    const applyAuthUrl = async (url: string | null) => {
-      if (!url) return;
-      const params = authUrlParameters(url);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      if (!accessToken || !refreshToken) return;
-      if (params.get('type') === 'recovery') setRecoveryMode(true);
-      await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    };
-
     const applySession = (event: string, nextSession: Session | null) => {
       if (cancelled) return;
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
       runtime.setActiveUserId(nextSession?.user.id ?? null);
       setSession(nextSession);
       setLoading(false);
+    };
+    const signOutForUnexpectedAuthLink = async () => {
+      // 인증 링크의 계정이 현재 계정과 다르면 링크 세션을 적용하지 않는다.
+      // 사용자가 원하지 않은 계정 전환보다 로그인 화면으로 돌아가는 편이 안전하다.
+      try {
+        await client.auth.signOut({ scope: 'local' });
+      } finally {
+        // 로컬 저장소 정리가 실패해도 UI와 오프라인 데이터 계층은 즉시 비인증
+        // 상태로 전환해 다른 계정의 기록을 계속 보이지 않게 한다.
+        applySession('AUTH_LINK_ACCOUNT_MISMATCH', null);
+        setRecoveryMode(false);
+      }
+    };
+    const applyAuthUrl = async (url: string | null) => {
+      const link = parseRecoveryAuthLink(url);
+      if (!link) return;
+
+      // setSession 전에 서버에서 토큰의 실제 사용자 ID를 확인한다. URL fragment는
+      // 어떤 앱 링크에도 붙을 수 있으므로, 토큰 존재만으로 세션을 바꾸면 안 된다.
+      const { data, error } = await client.auth.getUser(link.accessToken);
+      if (error || !data.user) return;
+      const currentResult = await client.auth.getSession();
+      if (currentResult.error) throw currentResult.error;
+      const currentUserId = currentResult.data.session?.user.id;
+      if (currentUserId && currentUserId !== data.user.id) {
+        await signOutForUnexpectedAuthLink();
+        return;
+      }
+
+      setRecoveryMode(true);
+      await client.auth.setSession({
+        access_token: link.accessToken,
+        refresh_token: link.refreshToken,
+      });
     };
     const authSubscription = client.auth.onAuthStateChange((event, nextSession) => {
       // The initial URL may replace the persisted session. During bootstrap we
@@ -153,6 +177,27 @@ function authUrlParameters(url: string): URLSearchParams {
   const [, fragment = ''] = url.split('#', 2);
   const query = url.includes('?') ? url.slice(url.indexOf('?') + 1).split('#', 1)[0] : '';
   return new URLSearchParams(fragment || query);
+}
+
+function parseRecoveryAuthLink(url: string | null): {
+  accessToken: string;
+  refreshToken: string;
+} | null {
+  if (!url) return null;
+  const parsed = Linking.parse(url);
+  // createURL('/reset-password') can become either the host or the path,
+  // depending on the native scheme form (jaringoby://reset-password vs ///).
+  const route = [parsed.hostname, parsed.path]
+    .filter((part): part is string => Boolean(part))
+    .join('/')
+    .replace(/^\/+|\/+$/gu, '');
+  const params = authUrlParameters(url);
+  if (route !== 'reset-password' || params.get('type') !== 'recovery') {
+    return null;
+  }
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  return accessToken && refreshToken ? { accessToken, refreshToken } : null;
 }
 
 function validateEmail(value: string): void {
