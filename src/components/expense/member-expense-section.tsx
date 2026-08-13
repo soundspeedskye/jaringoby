@@ -1,6 +1,5 @@
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import { ExpenseCard } from "@/components/expense/expense-card";
@@ -16,18 +15,14 @@ import type { Expense } from "@/data/types";
 import { formatDateLabel, formatWon } from "@/utils/format";
 
 type MemberExpenseSectionHeaderProps = {
-  expanded: boolean;
   expenses: Expense[];
   member: MemberListItem;
-  onToggle: (memberId: string) => void;
 };
 
 export const MemberExpenseSectionHeader = memo(
   function MemberExpenseSectionHeader({
-    expanded,
     expenses,
     member,
-    onToggle,
   }: MemberExpenseSectionHeaderProps) {
     const total = expenses.reduce(
       (sum, expense) => sum + expenseOfficialAmount(expense),
@@ -45,17 +40,10 @@ export const MemberExpenseSectionHeader = memo(
     const displayName = member.isCurrentUser ? "나" : member.nickname;
 
     return (
-      <Pressable
-        accessibilityHint={`누르면 ${displayName}님의 지출 목록을 ${expanded ? "접습니다" : "펼칩니다"}`}
+      <View
+        accessible
         accessibilityLabel={`${member.isCrowned ? "현재 1위, " : ""}${displayName}, 지출 ${expenses.length}건, 공식 합계 ${formatWon(total)}${hasPending ? `, ${pendingSummary}` : ""}`}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        onPress={() => onToggle(member.id)}
-        style={({ pressed }) => [
-          styles.header,
-          expanded && styles.headerExpanded,
-          pressed && styles.headerPressed,
-        ]}
+        style={styles.header}
       >
         <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={44} style={styles.avatar} />
 
@@ -73,14 +61,7 @@ export const MemberExpenseSectionHeader = memo(
           </Text>
         </View>
 
-        <View style={[styles.chevron, expanded && styles.chevronExpanded]}>
-          <MaterialCommunityIcons
-            color={expanded ? palette.cream : palette.green}
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={22}
-          />
-        </View>
-      </Pressable>
+      </View>
     );
   },
   areHeaderPropsEqual,
@@ -126,15 +107,12 @@ export const MemberExpenseRow = memo(function MemberExpenseRow({
 });
 
 export function MemberExpenseSectionFooter({
-  expanded,
   member,
   hasExpenses,
 }: {
-  expanded: boolean;
   member: MemberListItem;
   hasExpenses: boolean;
 }) {
-  if (!expanded) return <View style={styles.sectionGap} />;
   if (hasExpenses) {
     return (
       <>
@@ -169,9 +147,7 @@ function areHeaderPropsEqual(
   const previousMember = previous.member;
   const nextMember = next.member;
   return (
-    previous.expanded === next.expanded &&
     previous.expenses === next.expenses &&
-    previous.onToggle === next.onToggle &&
     previousMember.id === nextMember.id &&
     previousMember.nickname === nextMember.nickname &&
     previousMember.avatar === nextMember.avatar &&
@@ -193,16 +169,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: palette.line,
-    borderRadius: radii.md,
+    borderTopLeftRadius: radii.md,
+    borderTopRightRadius: radii.md,
     backgroundColor: palette.paper,
   },
-  headerExpanded: {
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    borderColor: "rgba(47,113,93,0.24)",
-    backgroundColor: palette.paper,
-  },
-  headerPressed: { backgroundColor: "rgba(47,113,93,0.06)" },
   avatar: {
     borderWidth: 1,
     borderColor: palette.line,
@@ -217,15 +187,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   summary: { color: palette.muted, fontFamily: fonts.hand, fontSize: 12, marginTop: 5, ...tabularNums },
-  chevron: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 17,
-    backgroundColor: "rgba(47,113,93,0.09)",
-  },
-  chevronExpanded: { backgroundColor: palette.green },
   expenseBody: {
     paddingHorizontal: spacing.md,
     backgroundColor: palette.paper,
