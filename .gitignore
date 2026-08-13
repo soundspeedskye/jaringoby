@@ -52,6 +52,9 @@ yarn-error.log*
 # Local screenshots and QA artifacts
 /artifacts/
 
+# Personal reference notes (not tracked)
+*.local.md
+
 # Supabase local state
 supabase/.branches/
 supabase/.temp/
