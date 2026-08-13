@@ -334,7 +334,7 @@ const ExpenseSummary = memo(function ExpenseSummary({
       </View>
       <Image
         accessibilityLabel={`${expense.category} 지출 사진`}
-        contentFit="cover"
+        contentFit="contain"
         source={{ uri: expense.photoUri }}
         style={styles.expensePhoto}
       />
@@ -634,7 +634,7 @@ function ExpenseEditor({
       />
       <Image
         accessibilityLabel="수정할 지출 사진"
-        contentFit="cover"
+        contentFit="contain"
         source={{ uri: draftPhoto }}
         style={styles.editPhoto}
       />

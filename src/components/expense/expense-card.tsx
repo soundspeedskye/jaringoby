@@ -53,7 +53,7 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
           ) : null}
         </View>
       </View>
-      <Image accessibilityLabel={`${props.category} 지출 사진`} contentFit="cover" source={{ uri: props.photoUri }} style={styles.photo} />
+      <Image accessibilityLabel={`${props.category} 지출 사진`} contentFit="contain" source={{ uri: props.photoUri }} style={styles.photo} />
       <View style={styles.footer}>
         {props.memo ? <Text numberOfLines={2} style={styles.memo}>{props.memo}</Text> : null}
         <Text style={styles.comments}>댓글 {props.commentCount}개</Text>

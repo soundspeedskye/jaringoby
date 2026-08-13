@@ -255,7 +255,7 @@ export default function NewExpenseScreen() {
           <View style={styles.photoFrame}>
             <Image
               accessibilityLabel="선택한 지출 사진"
-              contentFit="cover"
+              contentFit="contain"
               source={{ uri: photoUri }}
               style={styles.photo}
             />
