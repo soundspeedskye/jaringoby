@@ -4,7 +4,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { fonts, palette, radii, spacing } from '@/constants/design';
 
 type FieldProps = ComponentProps<typeof TextInput> & {
-  label: string;
+  label?: string;
   error?: string;
   hint?: string;
 };
@@ -13,9 +13,9 @@ export function Field({ label, error, hint, style, ...props }: FieldProps) {
   const accessibilityHint = error ?? props.accessibilityHint ?? hint;
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
-        accessibilityLabel={label}
+        accessibilityLabel={label ?? props.accessibilityLabel}
         accessibilityHint={accessibilityHint}
         placeholderTextColor={palette.muted}
         style={[styles.input, error && styles.inputError, style]}

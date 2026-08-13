@@ -194,15 +194,13 @@ export default function EditProfileScreen() {
               />
             </View>
           </Pressable>
-          <Text style={styles.photoHelp}>사진을 누르면 변경할 수 있어요.</Text>
+          <Text style={styles.photoHelp}>
+            원하는 사진으로도 변경할 수 있어요.
+          </Text>
         </View>
       </FormSection>
 
-      <FormSection
-        hint="사진을 삭제했을 때 표시될 기본 아바타예요."
-        style={styles.section}
-        title="기본 아바타"
-      >
+      <FormSection style={styles.section} title="기본 아바타">
         <View style={styles.avatarGrid}>
           {ANIMAL_AVATARS.map((key) => {
             const selected = avatarKey === key;
@@ -227,13 +225,13 @@ export default function EditProfileScreen() {
 
       <FormSection style={styles.section} title="닉네임">
         <Field
+          accessibilityLabel="닉네임"
           autoCapitalize="none"
           error={cooldownActive ? nicknameHint : undefined}
           hint={cooldownActive ? undefined : nicknameHint}
           maxLength={20}
           onChangeText={setNickname}
           value={nickname}
-          label="닉네임"
         />
       </FormSection>
       <FormMessage message={message} style={styles.message} />

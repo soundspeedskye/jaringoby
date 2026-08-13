@@ -26,13 +26,19 @@ export function ModalFormScreen({
   children,
 }: ModalFormScreenProps) {
   return (
-    <Screen scroll={!loading} testID={testID}>
-      <PageHeader
-        bottomSpacing={headerBottomSpacing}
-        modal
-        onBack={onBack}
-        title={title}
-      />
+    <Screen
+      fixedHeader={
+        <PageHeader
+          bottomSpacing={headerBottomSpacing}
+          modal
+          onBack={onBack}
+          title={title}
+        />
+      }
+      keyboardAvoiding
+      scroll={!loading}
+      testID={testID}
+    >
       {loading ? (
         <View
           accessible
