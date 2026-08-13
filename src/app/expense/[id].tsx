@@ -47,11 +47,14 @@ import type {
   AddCommentInput,
   AddExpenseInput,
   Comment,
+  CommentReaction,
+  CommentReactionEmoji,
   Expense,
   Period,
   Profile,
   Room,
 } from "@/data/types";
+import { COMMENT_REACTION_EMOJIS } from "@/data/types";
 import {
   COMMENT_EDIT_WINDOW_MS,
   COMMENT_MAX_CHARACTERS,
@@ -76,6 +79,7 @@ import {
   useExpenseExceptionSummary,
   usePeriod,
   useProfiles,
+  useReactionsByCommentId,
   useRoom,
 } from "@/providers/app-data-hooks";
 import { useAppDialog } from "@/providers/app-dialog-provider";
@@ -96,6 +100,7 @@ export default function ExpenseDetailScreen() {
     addComment,
     deleteComment,
     deleteExpense,
+    toggleCommentReaction,
     updateComment,
     updateExpense,
   } = useAppActions();
@@ -123,6 +128,11 @@ export default function ExpenseDetailScreen() {
         : [],
     [expense, expenseComments],
   );
+  const commentIds = useMemo(
+    () => comments.map((comment) => comment.id),
+    [comments],
+  );
+  const reactionsByCommentId = useReactionsByCommentId(commentIds);
   const profileUserIds = useMemo(
     () => [
       ...(expense ? [expense.userId] : []),
@@ -214,6 +224,7 @@ export default function ExpenseDetailScreen() {
         canMutate={canMutateComments}
         comments={comments}
         currentUserId={currentUser?.id}
+        reactionsByCommentId={reactionsByCommentId}
         deleteComment={deleteComment}
         expenseId={expense.id}
         header={
@@ -286,6 +297,7 @@ export default function ExpenseDetailScreen() {
         }
         phase={phase}
         profilesById={profilesById}
+        toggleCommentReaction={toggleCommentReaction}
         updateComment={updateComment}
       />
     </ScreenFrame>
@@ -682,6 +694,8 @@ type CommentActionProps = {
   updateComment: (commentId: string, body: string) => Promise<Comment>;
 };
 
+const EMPTY_COMMENT_REACTIONS: CommentReaction[] = [];
+
 function CommentSection({
   addComment,
   canMutate,
@@ -692,15 +706,22 @@ function CommentSection({
   header,
   phase,
   profilesById,
+  reactionsByCommentId,
+  toggleCommentReaction,
   updateComment,
 }: CommentActionProps & {
   canMutate: boolean;
   comments: Comment[];
   currentUserId?: string;
+  reactionsByCommentId: ReadonlyMap<string, CommentReaction[]>;
   expenseId: string;
   header: ReactNode;
   phase: PeriodPhase | null;
   profilesById: ReadonlyMap<string, Profile>;
+  toggleCommentReaction: (
+    commentId: string,
+    emoji: CommentReactionEmoji,
+  ) => Promise<void>;
 }) {
   const composerRef = useRef<TextInput>(null);
   const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
@@ -773,10 +794,14 @@ function CommentSection({
           onFinishEdit={finishEdit}
           onReply={selectReply}
           profile={profilesById.get(comment.userId)}
+          reactions={
+            reactionsByCommentId.get(comment.id) ?? EMPTY_COMMENT_REACTIONS
+          }
           replied={replied}
           repliedProfile={
             replied ? profilesById.get(replied.userId) : undefined
           }
+          toggleCommentReaction={toggleCommentReaction}
           updateComment={updateComment}
         />
       );
@@ -790,8 +815,10 @@ function CommentSection({
       editingCommentId,
       finishEdit,
       profilesById,
+      reactionsByCommentId,
       renderedAt,
       selectReply,
+      toggleCommentReaction,
       updateComment,
     ],
   );
@@ -968,8 +995,10 @@ const CommentItem = memo(function CommentItem({
   onFinishEdit,
   onReply,
   profile,
+  reactions,
   replied,
   repliedProfile,
+  toggleCommentReaction,
   updateComment,
 }: Omit<CommentActionProps, "addComment"> & {
   canEdit: boolean;
@@ -983,12 +1012,32 @@ const CommentItem = memo(function CommentItem({
   onFinishEdit: () => void;
   onReply: (comment: Comment) => void;
   profile?: Profile;
+  reactions: CommentReaction[];
   replied?: Comment;
   repliedProfile?: Profile;
+  toggleCommentReaction: (
+    commentId: string,
+    emoji: CommentReactionEmoji,
+  ) => Promise<void>;
 }) {
   const { showDialog } = useAppDialog();
   const [editingBody, setEditingBody] = useState(comment.body);
+  const [reactingEmoji, setReactingEmoji] =
+    useState<CommentReactionEmoji | null>(null);
   const mine = comment.userId === currentUserId;
+  const reactionSummary = useMemo(() => {
+    const summary = new Map<string, { count: number; selected: boolean }>();
+    reactions.forEach((reaction) => {
+      const entry = summary.get(reaction.emoji) ?? {
+        count: 0,
+        selected: false,
+      };
+      entry.count += 1;
+      if (reaction.userId === currentUserId) entry.selected = true;
+      summary.set(reaction.emoji, entry);
+    });
+    return summary;
+  }, [reactions, currentUserId]);
 
   const copyMessage = useCallback(async () => {
     if (comment.deletedAt) return;
@@ -1050,6 +1099,21 @@ const CommentItem = memo(function CommentItem({
       ],
     );
   };
+  const toggleReaction = async (emoji: CommentReactionEmoji) => {
+    if (!canMutate || comment.deletedAt || reactingEmoji) return;
+    setReactingEmoji(emoji);
+    try {
+      await toggleCommentReaction(comment.id, emoji);
+    } catch (reason) {
+      onError(
+        reason instanceof Error
+          ? reason.message
+          : "댓글 반응을 변경하지 못했어요.",
+      );
+    } finally {
+      setReactingEmoji(null);
+    }
+  };
 
   return (
     <View style={[styles.messageRow, mine && styles.messageRowMine]}>
@@ -1110,6 +1174,34 @@ const CommentItem = memo(function CommentItem({
             </Text>
           )}
         </Pressable>
+        {!comment.deletedAt ? (
+          <View style={[styles.reactionRow, mine && styles.reactionRowMine]}>
+            {COMMENT_REACTION_EMOJIS.map((emoji) => {
+              const { count = 0, selected = false } =
+                reactionSummary.get(emoji) ?? {};
+              return (
+                <Pressable
+                  accessibilityLabel={`${emoji} 반응${count ? ` ${count}개` : ""}${selected ? ", 선택됨" : ""}`}
+                  accessibilityRole="button"
+                  disabled={!canMutate || Boolean(reactingEmoji)}
+                  key={emoji}
+                  onPress={() => void toggleReaction(emoji)}
+                  style={[
+                    styles.reactionButton,
+                    selected && styles.reactionButtonSelected,
+                    (!canMutate || Boolean(reactingEmoji)) &&
+                      styles.reactionButtonDisabled,
+                  ]}
+                >
+                  <Text style={styles.reactionText}>
+                    {emoji}
+                    {count ? ` ${count}` : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         <View
           style={[styles.messageMetaRow, mine && styles.messageMetaRowMine]}
         >
@@ -1581,6 +1673,34 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     padding: 0,
   },
+  reactionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 6,
+    marginLeft: 2,
+  },
+  reactionRowMine: {
+    justifyContent: "flex-end",
+    marginLeft: 0,
+    marginRight: 2,
+  },
+  reactionButton: {
+    minHeight: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 7,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.paper,
+  },
+  reactionButtonSelected: {
+    borderColor: palette.coral,
+    backgroundColor: "rgba(233,135,98,0.14)",
+  },
+  reactionButtonDisabled: { opacity: 0.62 },
+  reactionText: { color: palette.ink, fontFamily: fonts.hand, fontSize: 12 },
   messageMetaRow: { flexDirection: "row", gap: 5, marginTop: 3, marginLeft: 4 },
   messageMetaRowMine: {
     justifyContent: "flex-end",
