@@ -37,6 +37,7 @@
 
 ## 프로젝트 문서
 
+- [아키텍처 & 개발자 가이드](docs/ARCHITECTURE.md)
 - [제품 기획서](docs/01-product-plan.md)
 - [서비스 운영 정책](docs/02-product-policy.md)
 - [구현 체크리스트](docs/03-implementation-checklist.md)
