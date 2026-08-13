@@ -5,7 +5,6 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { palette } from '@/constants/design';
 import { AppProvider } from '@/providers/app-provider';
@@ -27,11 +26,9 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <KeyboardProvider>
-      <SessionProvider>
-        <AuthenticatedApp />
-      </SessionProvider>
-    </KeyboardProvider>
+    <SessionProvider>
+      <AuthenticatedApp />
+    </SessionProvider>
   );
 }
 
