@@ -25,6 +25,7 @@ import type {
   RoomMember,
   RoomMemberStats,
   SwitchRoomInput,
+  UpdateRoomSettingsInput,
 } from '@/data/types';
 import type { ExpenseCategory, LocalDate, MemberStatus, PeriodPhase } from '@/domain/types';
 
@@ -418,6 +419,18 @@ export class SupabaseRepository implements AppRepository {
     const id = requiredString(roomPayload?.id, '생성된 방 ID');
     const snapshot = await this.reloadAndNotify();
     return clone(requireRoom(snapshot, id));
+  }
+
+  async updateRoomSettings(input: UpdateRoomSettingsInput): Promise<Room> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('update_room_settings', {
+      p_room_id: input.roomId,
+      p_name: input.name.trim(),
+      p_capacity: input.capacity,
+    });
+    if (error) throw translateError(error, '방 설정을 저장하지 못했어요.');
+    const snapshot = await this.reloadAndNotify();
+    return clone(requireRoom(snapshot, input.roomId));
   }
 
   async previewInvite(inviteCode: string): Promise<InvitePreview> {

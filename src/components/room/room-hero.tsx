@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 import { AnimalAvatar } from "@/components/avatar/animal-avatar";
@@ -36,6 +37,7 @@ type RoomHeroProps = {
     avatar: string;
     avatarUri?: string;
   }[];
+  onPressSettings?: () => void;
 };
 
 const ringSize = 132;
@@ -55,6 +57,7 @@ export function RoomHero({
   weekDays,
   weekRangeLabel,
   participants,
+  onPressSettings,
 }: RoomHeroProps) {
   const safeLimit = Math.max(appliedLimit, 1);
   const hasPending = pendingDelta !== 0 || pendingCount > 0;
@@ -63,7 +66,7 @@ export function RoomHero({
 
   return (
     <View
-      accessible
+      accessible={!onPressSettings}
       accessibilityLabel={`${title} ${weekIndex}주차, ${weekRangeLabel}, 적용한도 ${formatWon(appliedLimit)}, 함께하는 멤버 ${participants.length}명, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}${hasPending ? `, ${pendingDelta === 0 ? "금액 외 변경" : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ""}`}
       style={styles.container}
     >
@@ -73,7 +76,29 @@ export function RoomHero({
           {daysRemaining <= 0 ? "오늘 종료" : `D-${daysRemaining}`} | {weekMonthLabel}
         </Text>
       </View>
-      <Text style={styles.title}>{title}</Text>
+      <View style={styles.titleRow}>
+        <Text numberOfLines={1} style={styles.title}>
+          {title}
+        </Text>
+        {onPressSettings ? (
+          <Pressable
+            accessibilityLabel="방 설정"
+            accessibilityRole="button"
+            hitSlop={6}
+            onPress={onPressSettings}
+            style={({ pressed }) => [
+              styles.settingsButton,
+              pressed && styles.settingsButtonPressed,
+            ]}
+          >
+            <MaterialCommunityIcons
+              color={palette.cream}
+              name="cog-outline"
+              size={20}
+            />
+          </Pressable>
+        ) : null}
+      </View>
       <View style={styles.summary}>
         <View style={styles.ringWrap}>
           <Svg
@@ -202,10 +227,16 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   title: {
+    flex: 1,
     color: palette.cream,
     fontFamily: fonts.hand,
     fontSize: 26,
     fontWeight: "600",
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
     marginTop: 12,
     marginBottom: 22,
   },
@@ -292,6 +323,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     ...tabularNums,
   },
+  settingsButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(253,246,227,0.32)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  settingsButtonPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
   pendingText: {
     color: palette.cream,
     fontFamily: fonts.hand,

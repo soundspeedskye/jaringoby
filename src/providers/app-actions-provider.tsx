@@ -14,6 +14,7 @@ import type {
   RoomMember,
   Profile,
   SwitchRoomInput,
+  UpdateRoomSettingsInput,
 } from '@/data/types';
 import { useAppExecution } from '@/providers/app-status-provider';
 
@@ -21,6 +22,7 @@ export type AppActionsContextValue = {
   updateNickname: (nickname: string) => Promise<Profile>;
   updateAvatar: (input: { avatarKey?: string; photoUri?: string | null }) => Promise<Profile>;
   createRoom: (input: CreateRoomInput) => Promise<Room>;
+  updateRoomSettings: (input: UpdateRoomSettingsInput) => Promise<Room>;
   previewInvite: (inviteCode: string) => Promise<InvitePreview>;
   joinRoom: (inviteCode: string) => Promise<RoomMember>;
   leaveRoom: (roomId: string, successorId?: string) => Promise<void>;
@@ -59,6 +61,11 @@ export function AppActionsProvider({
   );
   const createRoom = useCallback(
     (input: CreateRoomInput) => execute(() => repository.createRoom(input)),
+    [execute, repository],
+  );
+  const updateRoomSettings = useCallback(
+    (input: UpdateRoomSettingsInput) =>
+      execute(() => repository.updateRoomSettings(input)),
     [execute, repository],
   );
   const previewInvite = useCallback(
@@ -142,6 +149,7 @@ export function AppActionsProvider({
     updateNickname,
     updateAvatar,
     createRoom,
+    updateRoomSettings,
     previewInvite,
     joinRoom,
     leaveRoom,
@@ -168,6 +176,7 @@ export function AppActionsProvider({
     withdrawExpenseException,
     closeRoom,
     createRoom,
+    updateRoomSettings,
     deleteComment,
     toggleCommentReaction,
     deleteArchivedPeriod,

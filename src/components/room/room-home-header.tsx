@@ -53,6 +53,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
     weekRangeLabel,
   } = data;
   const { addExpense, clearError, createRoom, joinRoom, onOpenExpense, onOpenMemberFeed } = actions;
+  const isRoomOwner = activeRoom.ownerId === currentUser.id;
   const openRoomActions = () => {
     showDialog("방", "원하는 작업을 선택해 주세요.", [
       { text: "취소", style: "cancel" },
@@ -127,6 +128,9 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         weekMonthLabel={weekMonthLabel}
         weekRangeLabel={weekRangeLabel}
         participants={memberRows}
+        onPressSettings={
+          isRoomOwner ? () => router.push("/room/edit") : undefined
+        }
       />
 
       <RecentExpenseCarousel

@@ -27,6 +27,7 @@ import type {
   Room,
   RoomMember,
   SwitchRoomInput,
+  UpdateRoomSettingsInput,
 } from '@/data/types';
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -576,6 +577,10 @@ class FakeRepository implements AppRepository {
   }
 
   async createRoom(_input: CreateRoomInput): Promise<Room> {
+    throw new Error('not implemented');
+  }
+
+  async updateRoomSettings(_input: UpdateRoomSettingsInput): Promise<Room> {
     throw new Error('not implemented');
   }
 

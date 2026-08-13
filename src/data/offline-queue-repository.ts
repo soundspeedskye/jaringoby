@@ -20,6 +20,7 @@ import type {
   RoomMember,
   Profile,
   SwitchRoomInput,
+  UpdateRoomSettingsInput,
 } from '@/data/types';
 import { createPeriodTimeline } from '@/domain';
 
@@ -287,6 +288,14 @@ export class OfflineQueueRepository implements AppRepository {
   async createRoom(input: CreateRoomInput): Promise<Room> {
     const result = await this.base.createRoom(input);
     void this.refreshBase().catch(() => undefined);
+    return result;
+  }
+
+  // 방 설정은 모든 멤버에게 즉시 보이고 서버가 정원·권한을 판정하므로
+  // 오프라인 큐에 넣지 않는다.
+  async updateRoomSettings(input: UpdateRoomSettingsInput): Promise<Room> {
+    const result = await this.base.updateRoomSettings(input);
+    await this.refreshBase();
     return result;
   }
 

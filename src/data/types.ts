@@ -241,6 +241,13 @@ export type CreateRoomInput = {
   clientRequestId?: string;
 };
 
+/** 방장이 바꿀 수 있는 방의 고정 설정. 기준금액은 생성 뒤 변경되지 않는다. */
+export type UpdateRoomSettingsInput = {
+  roomId: string;
+  name: string;
+  capacity: number;
+};
+
 export type SwitchRoomInput = {
   /** 지금 참여 중이라 떠나야 하는 방. */
   leaveRoomId: string;

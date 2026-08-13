@@ -11,6 +11,7 @@ import type {
   RoomMember,
   Profile,
   SwitchRoomInput,
+  UpdateRoomSettingsInput,
 } from '@/data/types';
 
 export type Unsubscribe = () => void;
@@ -25,6 +26,7 @@ export interface AppRepository {
   updateNickname(nickname: string): Promise<Profile>;
   updateAvatar(input: { avatarKey?: string; photoUri?: string | null }): Promise<Profile>;
   createRoom(input: CreateRoomInput): Promise<Room>;
+  updateRoomSettings(input: UpdateRoomSettingsInput): Promise<Room>;
   previewInvite(inviteCode: string): Promise<InvitePreview>;
   joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember>;
   leaveRoom(roomId: string, successorId?: string): Promise<void>;
