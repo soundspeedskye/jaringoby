@@ -1,12 +1,12 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useRouter } from "expo-router";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ExceptionApprovalInbox } from "@/components/room/exception-approval-inbox";
-import { MemberList } from "@/components/room/member-list";
+import { RecentExpenseCarousel } from "@/components/room/recent-expense-carousel";
 import { RoomHero } from "@/components/room/room-hero";
 import { NoticeBanner } from "@/components/ui/notice-banner";
-import { SectionHeader } from "@/components/ui/section-header";
 import {
   fonts,
   palette,
@@ -17,6 +17,8 @@ import {
 } from "@/constants/design";
 import { isExpenseMutationPhase, type PeriodPhase } from "@/domain";
 import type { RoomHomeActions, RoomHomeData } from "@/hooks/use-room-home";
+import { useAppDialog } from "@/providers/app-dialog-provider";
+import { useUnreadNotificationCount } from "@/providers/app-data-hooks";
 import { formatDateLabel } from "@/utils/format";
 
 export const RoomHomeHeader = memo(function RoomHomeHeader({
@@ -26,9 +28,13 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
   actions: RoomHomeActions;
   data: RoomHomeData;
 }) {
+  const router = useRouter();
+  const { showDialog } = useAppDialog();
+  const unreadNotificationCount = useUnreadNotificationCount();
   const {
     activeRoom,
     appliedLimit,
+    commentCounts,
     currentMember,
     currentPeriod,
     currentUser,
@@ -39,12 +45,21 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
     myPendingDelta,
     mySpent,
     phase,
+    profilesById,
+    recentExpenses,
     timeline,
     weekMonthLabel,
     weekDays,
     weekRangeLabel,
   } = data;
-  const { addExpense, clearError, createRoom, joinRoom } = actions;
+  const { addExpense, clearError, createRoom, joinRoom, onOpenExpense, onOpenMemberFeed } = actions;
+  const openRoomActions = () => {
+    showDialog("방", "원하는 작업을 선택해 주세요.", [
+      { text: "취소", style: "cancel" },
+      { text: "코드로 참여", onPress: joinRoom },
+      { text: "새 챌린지 만들기", onPress: createRoom },
+    ]);
+  };
   return (
     <>
       <ExceptionApprovalInbox />
@@ -54,19 +69,26 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         </Text>
         <View style={styles.actionButtons}>
           <Pressable
-            accessibilityLabel="코드로 참여"
-            onPress={joinRoom}
+            accessibilityLabel={unreadNotificationCount ? `소식함, 읽지 않은 소식 ${unreadNotificationCount}개` : "소식함"}
+            onPress={() => router.push("/notifications")}
             style={styles.circleButton}
           >
             <MaterialCommunityIcons
               color={palette.green}
-              name="ticket-confirmation-outline"
+              name={unreadNotificationCount ? "bell" : "bell-outline"}
               size={21}
             />
+            {unreadNotificationCount ? (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+                </Text>
+              </View>
+            ) : null}
           </Pressable>
           <Pressable
-            accessibilityLabel="새 챌린지 만들기"
-            onPress={createRoom}
+            accessibilityLabel="방 만들기 또는 코드로 참여"
+            onPress={openRoomActions}
             style={styles.circleButton}
           >
             <MaterialCommunityIcons
@@ -104,34 +126,53 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         weekIndex={currentPeriod.weekIndex}
         weekMonthLabel={weekMonthLabel}
         weekRangeLabel={weekRangeLabel}
+        participants={memberRows}
       />
 
-      <View style={styles.memberSection} testID="member-list-section">
-        <MemberList members={memberRows} />
-        <View style={styles.memberFooter}>
-          <View style={styles.inviteCopy}>
-            <Text style={styles.codeLabel}>같이 도전하기</Text>
-            <Text style={styles.codeHint}>참여 코드를 공유하세요</Text>
-          </View>
-          <View
-            accessible
-            accessibilityLabel={`참여 코드 ${activeRoom.inviteCode}, 현재 ${memberRows.length}명, 최대 ${activeRoom.capacity}명`}
-            style={styles.codePill}
+      <RecentExpenseCarousel
+        commentCounts={commentCounts}
+        expenses={recentExpenses}
+        onOpenExpense={onOpenExpense}
+        onOpenMemberFeed={onOpenMemberFeed}
+        profilesById={profilesById}
+      />
+
+      <View style={styles.inviteSection}>
+        <View
+          accessible
+          accessibilityLabel={`참여 코드 ${activeRoom.inviteCode}, 현재 ${memberRows.length}명, 최대 ${activeRoom.capacity}명`}
+          style={styles.codePill}
+        >
+          <MaterialCommunityIcons
+            color={palette.green}
+            name="link-variant"
+            size={16}
+          />
+          <Text selectable style={styles.code}>
+            {activeRoom.inviteCode}
+          </Text>
+          <View style={styles.codeDivider} />
+          <Text style={styles.capacity}>
+            {memberRows.length}/{activeRoom.capacity}명
+          </Text>
+        </View>
+        {!currentPeriod.isRestWeek &&
+        currentMember &&
+        isExpenseMutationPhase(phase) ? (
+          <Pressable
+            accessibilityLabel="지출 등록"
+            accessibilityRole="button"
+            onPress={addExpense}
+            style={styles.addExpenseButton}
           >
             <MaterialCommunityIcons
-              color={palette.green}
-              name="link-variant"
-              size={16}
+              color={palette.cream}
+              name="camera-plus-outline"
+              size={18}
             />
-            <Text selectable style={styles.code}>
-              {activeRoom.inviteCode}
-            </Text>
-            <View style={styles.codeDivider} />
-            <Text style={styles.capacity}>
-              {memberRows.length}/{activeRoom.capacity}명
-            </Text>
-          </View>
-        </View>
+            <Text style={styles.addButtonText}>지출 등록</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {currentPeriod.isRestWeek ? (
@@ -143,28 +184,6 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         <PhaseBanner phase={phase} timeline={timeline} />
       )}
 
-      <SectionHeader
-        right={
-          !currentPeriod.isRestWeek &&
-          currentMember &&
-          isExpenseMutationPhase(phase) ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={addExpense}
-              style={styles.addButton}
-            >
-              <MaterialCommunityIcons
-                color={palette.cream}
-                name="camera-plus-outline"
-                size={18}
-              />
-              <Text style={styles.addButtonText}>지출</Text>
-            </Pressable>
-          ) : null
-        }
-        style={styles.feedHeader}
-        title="멤버별 최근 지출"
-      />
     </>
   );
 });
@@ -215,6 +234,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.line,
   },
+  notificationBadge: {
+    position: "absolute",
+    top: -1,
+    right: -3,
+    minWidth: 17,
+    height: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+    borderRadius: 9,
+    backgroundColor: palette.coral,
+    borderWidth: 1,
+    borderColor: palette.cream,
+  },
+  notificationBadgeText: {
+    color: palette.cream,
+    fontFamily: fonts.number,
+    fontSize: 9,
+    fontWeight: "800",
+    ...tabularNums,
+  },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -230,31 +270,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.hand,
     fontSize: 13,
   },
-  memberSection: {
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.xs,
-  },
-  memberFooter: {
+  inviteSection: {
     minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    justifyContent: "space-between",
     paddingVertical: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(52,49,40,0.12)",
-  },
-  inviteCopy: { flex: 1, minWidth: 0 },
-  codeLabel: {
-    color: palette.ink,
-    fontFamily: fonts.handBold,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  codeHint: {
-    color: palette.muted,
-    fontFamily: fonts.hand,
-    fontSize: 10,
-    marginTop: 3,
+    paddingHorizontal: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(52,49,40,0.12)",
   },
   codePill: {
     minHeight: 38,
@@ -290,11 +314,7 @@ const styles = StyleSheet.create({
   phaseBanner: {
     marginTop: spacing.lg,
   },
-  feedHeader: {
-    marginTop: spacing.xxl,
-    marginBottom: spacing.md,
-  },
-  addButton: {
+  addExpenseButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,

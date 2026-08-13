@@ -72,6 +72,8 @@ function AuthenticatedApp() {
             <Stack.Screen name="profile/edit" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="expense/[id]" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="room/member/[userId]" />
             <Stack.Screen name="history/index" />
             <Stack.Screen name="history/[id]" />
           </Stack>

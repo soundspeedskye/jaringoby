@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AnimalAvatar } from '@/components/avatar/animal-avatar';
 import { fonts, palette, spacing, tabularNums } from '@/constants/design';
@@ -16,7 +16,13 @@ export type MemberListItem = {
   isCurrentUser?: boolean;
 };
 
-export function MemberList({ members }: { members: MemberListItem[] }) {
+export function MemberList({
+  members,
+  onPressAvatar,
+}: {
+  members: MemberListItem[];
+  onPressAvatar?: (userId: string) => void;
+}) {
   return (
     <View accessibilityLabel={`함께하는 멤버 ${members.length}명`} accessibilityRole="list">
       <View style={styles.header}>
@@ -38,7 +44,18 @@ export function MemberList({ members }: { members: MemberListItem[] }) {
               member.isCurrentUser && styles.currentUserRow,
               index === members.length - 1 && styles.lastRow,
             ]}>
-            <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={46} style={styles.avatar} />
+            {onPressAvatar ? (
+              <Pressable
+                accessibilityLabel={`${displayName}님의 피드 보기`}
+                accessibilityRole="button"
+                hitSlop={6}
+                onPress={() => onPressAvatar(member.id)}
+              >
+                <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={46} style={styles.avatar} />
+              </Pressable>
+            ) : (
+              <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={46} style={styles.avatar} />
+            )}
             <View style={styles.copy}>
               <View style={styles.nameRow}>
                 <Text numberOfLines={1} style={styles.name}>

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
+import { AnimalAvatar } from "@/components/avatar/animal-avatar";
 import {
   fonts,
   palette,
@@ -30,6 +31,11 @@ type RoomHeroProps = {
   weekMonthLabel: string;
   weekDays: WeekDay[];
   weekRangeLabel: string;
+  participants: readonly {
+    id: string;
+    avatar: string;
+    avatarUri?: string;
+  }[];
 };
 
 const ringSize = 132;
@@ -48,6 +54,7 @@ export function RoomHero({
   weekMonthLabel,
   weekDays,
   weekRangeLabel,
+  participants,
 }: RoomHeroProps) {
   const safeLimit = Math.max(appliedLimit, 1);
   const hasPending = pendingDelta !== 0 || pendingCount > 0;
@@ -57,7 +64,7 @@ export function RoomHero({
   return (
     <View
       accessible
-      accessibilityLabel={`${title} ${weekIndex}주차, ${weekRangeLabel}, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}, 적용한도 ${formatWon(appliedLimit)}${hasPending ? `, ${pendingDelta === 0 ? "금액 외 변경" : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ""}`}
+      accessibilityLabel={`${title} ${weekIndex}주차, ${weekRangeLabel}, 적용한도 ${formatWon(appliedLimit)}, 함께하는 멤버 ${participants.length}명, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}${hasPending ? `, ${pendingDelta === 0 ? "금액 외 변경" : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ""}`}
       style={styles.container}
     >
       <View style={styles.header}>
@@ -105,6 +112,13 @@ export function RoomHero({
           </View>
         </View>
         <View style={styles.limitCopy}>
+          <Text
+            adjustsFontSizeToFit
+            numberOfLines={1}
+            style={styles.limitValue}
+          >
+            {formatWon(appliedLimit)}
+          </Text>
           <View accessibilityLabel={weekRangeLabel} style={styles.weekStrip}>
             {weekDays.map((weekDay) => (
               <View
@@ -128,14 +142,6 @@ export function RoomHero({
               </View>
             ))}
           </View>
-          <View style={styles.limitDivider} />
-          <Text
-            adjustsFontSizeToFit
-            numberOfLines={1}
-            style={styles.limitValue}
-          >
-            {formatWon(appliedLimit)}
-          </Text>
           {hasPending ? (
             <Text style={styles.pendingText}>
               임시 합계 {formatWon(spent + pendingDelta)} ·{" "}
@@ -145,6 +151,25 @@ export function RoomHero({
             </Text>
           ) : null}
         </View>
+      </View>
+      <View
+        accessibilityLabel={`함께하는 멤버 ${participants.length}명`}
+        style={styles.avatarStack}
+      >
+        {participants.slice(0, 5).map((participant, index) => (
+          <AnimalAvatar
+            key={participant.id}
+            photoUri={participant.avatarUri}
+            size={26}
+            style={[styles.memberAvatar, index > 0 && styles.memberAvatarOverlap]}
+            value={participant.avatar}
+          />
+        ))}
+        {participants.length > 5 ? (
+          <View style={[styles.moreMembers, styles.memberAvatarOverlap]}>
+            <Text style={styles.moreMembersText}>+{participants.length - 5}</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -156,6 +181,7 @@ function formatSignedWon(value: number): string {
 
 const styles = StyleSheet.create({
   container: {
+    position: "relative",
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
     paddingBottom: 42,
@@ -211,12 +237,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   limitCopy: { flex: 1, minWidth: 0 },
-  weekStrip: { flexDirection: "row", gap: 4, marginBottom: spacing.sm },
-  limitDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    marginBottom: spacing.md,
-  },
+  weekStrip: { flexDirection: "row", gap: 4, marginTop: spacing.sm },
   weekCell: {
     flex: 1,
     alignItems: "center",
@@ -240,6 +261,35 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     textAlign: "right",
+    ...tabularNums,
+  },
+  avatarStack: {
+    position: "absolute",
+    right: spacing.xl,
+    bottom: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  memberAvatar: {
+    borderWidth: 1.5,
+    borderColor: palette.green,
+  },
+  memberAvatarOverlap: { marginLeft: -7 },
+  moreMembers: {
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderColor: palette.green,
+    backgroundColor: palette.cream,
+  },
+  moreMembersText: {
+    color: palette.green,
+    fontFamily: fonts.number,
+    fontSize: 9,
+    fontWeight: "700",
     ...tabularNums,
   },
   pendingText: {

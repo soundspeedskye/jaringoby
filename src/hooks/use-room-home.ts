@@ -32,6 +32,7 @@ import {
   usePeriodExpenses,
   usePeriodMembers,
   useProfiles,
+  useRoomFeedExpenses,
   useSettlementExcludedExpenseIds,
 } from "@/providers/app-data-hooks";
 import { useAppStatus, useAppStatusActions } from "@/providers/app-status-provider";
@@ -60,6 +61,8 @@ export type RoomHomeData = {
   memberRows: MemberListItem[];
   expensesByUserId: ReadonlyMap<string, Expense[]>;
   commentCounts: ReadonlyMap<string, number>;
+  recentExpenses: Expense[];
+  profilesById: ReadonlyMap<string, Profile>;
   error: string | null;
 };
 
@@ -71,6 +74,7 @@ export type RoomHomeActions = {
   clearError: () => void;
   retry: () => void;
   onOpenExpense: (expenseId: string) => void;
+  onOpenMemberFeed: (userId: string) => void;
 };
 
 export type RoomHomeState =
@@ -85,18 +89,23 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
   const { clearError, refresh } = useAppStatusActions();
   const members = usePeriodMembers(currentPeriod?.id);
   const periodExpenses = usePeriodExpenses(currentPeriod?.id);
+  const roomFeedExpenses = useRoomFeedExpenses(activeRoom?.id);
   const memberUserIds = useMemo(
-    () => members.map((member) => member.userId),
-    [members],
+    () => [
+      ...members.map((member) => member.userId),
+      ...roomFeedExpenses.map((expense) => expense.userId),
+    ],
+    [members, roomFeedExpenses],
   );
   const profilesById = useProfiles(memberUserIds);
   const expenses = useMemo(
+    // createdAt은 ISO(UTC)라 사전식 비교가 시간순과 같다.
     () => [...periodExpenses].sort(
-      (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+      (a, b) => b.createdAt.localeCompare(a.createdAt),
     ),
     [periodExpenses],
   );
-  const commentCounts = useCommentCounts(expenses);
+  const commentCounts = useCommentCounts(roomFeedExpenses);
   const crownIds = useCrownIds(currentPeriod?.id);
   const excludedExpenseIds = useSettlementExcludedExpenseIds();
   const expensesByUserId = useMemo(() => {
@@ -111,14 +120,11 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
   const sectionExpensesByUserId = useMemo(() => {
     const sorted = new Map<string, Expense[]>();
     expensesByUserId.forEach((memberExpenses, userId) => {
-      sorted.set(userId, [...memberExpenses].sort((a, b) => {
-        const occurredAtDifference =
-          Date.parse(b.occurredAt) - Date.parse(a.occurredAt);
-        return (
-          occurredAtDifference ||
-          Date.parse(b.createdAt) - Date.parse(a.createdAt)
-        );
-      }));
+      sorted.set(userId, [...memberExpenses].sort((a, b) => (
+        // occurredAt·createdAt 모두 ISO라 사전식 비교로 충분하다.
+        b.occurredAt.localeCompare(a.occurredAt) ||
+        b.createdAt.localeCompare(a.createdAt)
+      )));
     });
     return sorted;
   }, [expensesByUserId]);
@@ -183,6 +189,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
       clearError,
       retry: () => void refresh(),
       onOpenExpense: (expenseId: string) => router.push(`/expense/${expenseId}`),
+      onOpenMemberFeed: (userId: string) => router.push(`/room/member/${userId}`),
     }),
     [clearError, refresh, router],
   );
@@ -265,6 +272,8 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
         memberRows,
         expensesByUserId: sectionExpensesByUserId,
         commentCounts,
+        recentExpenses: roomFeedExpenses.slice(0, 10),
+        profilesById,
         error,
       },
     };
@@ -280,8 +289,10 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     memberRows,
     members,
     now,
+    profilesById,
     sectionExpensesByUserId,
     timeline,
+    roomFeedExpenses,
   ]);
 
   return { state, actions };
