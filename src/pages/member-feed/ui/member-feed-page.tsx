@@ -6,12 +6,10 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ScreenFrame } from "@/shared/ui/screen";
 import { fonts, palette, spacing } from "@/shared/config/design";
-import {
-  useCommentCounts,
-  useCurrentRoom,
-  useMemberRoomFeedExpenses,
-  useProfiles,
-} from "@/shared/providers/app-data-hooks";
+import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
+import { useMemberRoomFeedExpenses } from "@/entities/expense/api/use-expenses";
+import { useProfiles } from "@/entities/member/api/use-members";
+import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { formatDateLabel } from "@/shared/lib/format";
 
 export function MemberFeedPage() {

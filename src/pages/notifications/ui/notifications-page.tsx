@@ -10,7 +10,8 @@ import { ScreenFrame } from "@/shared/ui/screen";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import type { AppNotification } from "@/shared/api/types";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
-import { useNotifications, useProfiles } from "@/shared/providers/app-data-hooks";
+import { useProfiles } from "@/entities/member/api/use-members";
+import { useNotifications } from "@/entities/notification/api/use-notifications";
 import { formatDateLabel } from "@/shared/lib/format";
 
 export function NotificationsPage() {

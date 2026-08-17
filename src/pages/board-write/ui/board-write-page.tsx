@@ -8,7 +8,8 @@ import { FormMessage } from "@/shared/ui/form-message";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
-import { useActiveRoom, useCurrentUser } from "@/shared/providers/app-data-hooks";
+import { useCurrentUser } from "@/entities/member/api/use-members";
+import { useActiveRoom } from "@/entities/room/api/use-rooms";
 import { createUuid } from "@/shared/lib/uuid";
 
 export function BoardWritePage() {

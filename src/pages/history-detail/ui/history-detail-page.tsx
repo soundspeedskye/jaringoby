@@ -22,16 +22,15 @@ import {
 } from "@/shared/config/design";
 import type { Expense } from "@/shared/api/types";
 import { createPeriodTimeline } from "@/shared/lib/domain/period";
+import { useExpenseComments } from "@/entities/expense/api/use-expense-comments";
+import { usePeriodExpenses } from "@/entities/expense/api/use-expenses";
+import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
 import {
-  useCurrentUser,
-  useExpenseComments,
   usePeriod,
-  usePeriodExpenses,
   usePeriodMembers,
   usePeriodResults,
-  useProfiles,
-  useRoom,
-} from "@/shared/providers/app-data-hooks";
+} from "@/entities/period/api/use-periods";
+import { useRoom } from "@/entities/room/api/use-rooms";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { formatDateLabel, formatWon } from "@/shared/lib/format";

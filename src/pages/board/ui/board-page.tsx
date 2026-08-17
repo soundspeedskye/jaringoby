@@ -11,15 +11,14 @@ import { ScreenFrame } from '@/shared/ui/screen';
 import { fonts, palette, radii, spacing } from '@/shared/config/design';
 import type { RoomPost } from '@/shared/api/types';
 import { useAppActions } from '@/shared/providers/app-actions-provider';
+import { useCurrentUser, useProfiles } from '@/entities/member/api/use-members';
 import {
-  useActiveRoom,
-  useCurrentUser,
   useLatestRoomNotice,
-  useProfiles,
   useReactionsByPostId,
   useRoomPostCommentCounts,
   useRoomPosts,
-} from '@/shared/providers/app-data-hooks';
+} from '@/entities/post/api/use-posts';
+import { useActiveRoom } from '@/entities/room/api/use-rooms';
 
 type BoardRow = { type: 'week'; label: string; id: string } | { type: 'post'; post: RoomPost };
 

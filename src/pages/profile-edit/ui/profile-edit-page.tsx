@@ -12,7 +12,7 @@ import { PrimaryButton } from "@/shared/ui/primary-button";
 import { ANIMAL_AVATARS } from "@/shared/config/animals";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
-import { useCurrentUser } from "@/shared/providers/app-data-hooks";
+import { useCurrentUser } from "@/entities/member/api/use-members";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { pickSanitizedProfilePhoto } from "@/shared/services/profile-photo-picker";
 

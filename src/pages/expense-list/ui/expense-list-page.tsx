@@ -27,11 +27,9 @@ import {
   EXPENSE_CATEGORIES,
   type ExpenseCategory,
 } from "@/shared/model/types";
-import {
-  useCommentCounts,
-  useCurrentRoom,
-  useUserExpenses,
-} from "@/shared/providers/app-data-hooks";
+import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
+import { useUserExpenses } from "@/entities/expense/api/use-expenses";
+import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import type { Expense } from "@/shared/api/types";
 import { formatDateLabel, formatWon } from "@/shared/lib/format";
 

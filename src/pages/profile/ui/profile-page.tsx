@@ -17,12 +17,9 @@ import { ScreenFrame } from "@/shared/ui/screen";
 import { SectionHeader } from "@/shared/ui/section-header";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import type { OfflineMutationSummary } from "@/shared/api/offline-queue-repository";
-import {
-  useActiveRoom,
-  useClosedRooms,
-  useCurrentUser,
-  useHistory,
-} from "@/shared/providers/app-data-hooks";
+import { useCurrentUser } from "@/entities/member/api/use-members";
+import { useHistory } from "@/entities/period/api/use-periods";
+import { useActiveRoom, useClosedRooms } from "@/entities/room/api/use-rooms";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { useSession } from "@/shared/providers/session-provider";
 import { useSyncQueue } from "@/shared/providers/sync-provider";

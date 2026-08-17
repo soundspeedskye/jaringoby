@@ -36,7 +36,8 @@ import {
 } from "@/shared/model/types";
 import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
-import { useCurrentRoom, usePeriodMembers } from "@/shared/providers/app-data-hooks";
+import { usePeriodMembers } from "@/entities/period/api/use-periods";
+import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import {
   pickSanitizedExpensePhoto,
   type ExpensePhotoSource,

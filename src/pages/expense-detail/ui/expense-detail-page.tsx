@@ -15,14 +15,13 @@ import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import {
-  useCurrentUser,
-  useExpense,
   useExpenseComments,
-  usePeriod,
-  useProfiles,
   useReactionsByCommentId,
-  useRoom,
-} from "@/shared/providers/app-data-hooks";
+} from "@/entities/expense/api/use-expense-comments";
+import { useExpense } from "@/entities/expense/api/use-expenses";
+import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
+import { usePeriod } from "@/entities/period/api/use-periods";
+import { useRoom } from "@/entities/room/api/use-rooms";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { FormMessage } from "@/shared/ui/form-message";

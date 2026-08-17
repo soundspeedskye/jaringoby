@@ -17,11 +17,9 @@ import {
   isValidRoomName,
   ROOM_NAME_MAX_CHARACTERS,
 } from "@/shared/lib/domain/invites";
-import {
-  useActiveRoom,
-  useActiveRoomMembers,
-  useCurrentUser,
-} from "@/shared/providers/app-data-hooks";
+import { useCurrentUser } from "@/entities/member/api/use-members";
+import { useActiveRoom } from "@/entities/room/api/use-rooms";
+import { useActiveRoomMembers } from "@/shared/providers/app-data-hooks";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { formatWon } from "@/shared/lib/format";
 import type { Room } from "@/shared/api/types";

@@ -19,7 +19,9 @@ import {
 import { isExpenseMutationPhase } from "@/shared/lib/domain/permissions";
 import type { PeriodPhase } from "@/shared/model/types";
 import type { RoomHomeActions, RoomHomeData } from "../model/types";
-import { useUnreadNotificationCount } from "@/shared/providers/app-data-hooks";
+import {
+  useUnreadNotificationCount,
+} from "@/entities/notification/api/use-notifications";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { formatDateLabel } from "@/shared/lib/format";
 

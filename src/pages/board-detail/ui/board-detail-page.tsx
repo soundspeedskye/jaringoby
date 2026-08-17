@@ -11,13 +11,12 @@ import { PrimaryButton } from '@/shared/ui/primary-button';
 import { ScreenFrame } from '@/shared/ui/screen';
 import { fonts, palette, radii, spacing } from '@/shared/config/design';
 import { useAppActions } from '@/shared/providers/app-actions-provider';
+import { useCurrentUser, useProfiles } from '@/entities/member/api/use-members';
 import {
-  useCurrentUser,
-  useProfiles,
   useReactionsByPostId,
   useRoomPost,
   useRoomPostComments,
-} from '@/shared/providers/app-data-hooks';
+} from '@/entities/post/api/use-posts';
 import { createUuid } from '@/shared/lib/uuid';
 
 export function BoardDetailPage() {

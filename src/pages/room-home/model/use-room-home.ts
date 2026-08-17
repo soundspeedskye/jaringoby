@@ -21,16 +21,15 @@ import {
 } from "@/shared/lib/domain/date-time";
 import { formatMonthDay, formatWon } from "@/shared/lib/format";
 import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
+import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
 import {
-  useCommentCounts,
-  useCrownIds,
-  useCurrentRoom,
   usePeriodExpenses,
-  usePeriodMembers,
-  useProfiles,
   useRoomFeedExpenses,
   useSettlementExcludedExpenseIds,
-} from "@/shared/providers/app-data-hooks";
+} from "@/entities/expense/api/use-expenses";
+import { useProfiles } from "@/entities/member/api/use-members";
+import { usePeriodMembers } from "@/entities/period/api/use-periods";
+import { useCrownIds, useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { useAppStatus, useAppStatusActions } from "@/shared/providers/app-status-provider";
 import type { RoomHomeActions, RoomHomeState } from "@/widgets/room-home";
 

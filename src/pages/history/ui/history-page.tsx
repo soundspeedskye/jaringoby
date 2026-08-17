@@ -24,14 +24,16 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { ScreenFrame } from "@/shared/ui/screen";
 import { fonts, palette, radii, spacing, tabularNums } from "@/shared/config/design";
 import type { Period, PeriodResult, Room } from "@/shared/api/types";
+import { useCurrentUser } from "@/entities/member/api/use-members";
 import {
-  useActiveRoom,
-  useCurrentUser,
   useHistory,
   useResultsForPeriods,
-  useRooms,
+} from "@/entities/period/api/use-periods";
+import {
+  useActiveRoom,
   useRoomStats,
-} from "@/shared/providers/app-data-hooks";
+  useRooms,
+} from "@/entities/room/api/use-rooms";
 import { formatWon } from "@/shared/lib/format";
 
 type ResultFilter = "전체" | "달성" | "초과";

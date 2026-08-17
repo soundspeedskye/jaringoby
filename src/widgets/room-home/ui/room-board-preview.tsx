@@ -6,12 +6,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AnimalAvatar } from '@/shared/ui/animal-avatar';
 import { fonts, palette, radii, spacing } from '@/shared/config/design';
 import type { RoomPost } from '@/shared/api/types';
+import { useProfiles } from '@/entities/member/api/use-members';
 import {
   useLatestRoomNotice,
-  useProfiles,
   useRoomPostCommentCounts,
   useRoomPosts,
-} from '@/shared/providers/app-data-hooks';
+} from '@/entities/post/api/use-posts';
 
 const BOARD_NAME = '냥냥톡톡';
 

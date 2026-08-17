@@ -12,11 +12,9 @@ import { NoticeBanner } from "@/shared/ui/notice-banner";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
-import {
-  useActiveRoom,
-  useActiveRoomMembers,
-  useCurrentUser,
-} from "@/shared/providers/app-data-hooks";
+import { useCurrentUser } from "@/entities/member/api/use-members";
+import { useActiveRoom } from "@/entities/room/api/use-rooms";
+import { useActiveRoomMembers } from "@/shared/providers/app-data-hooks";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 
 type LeaveMode = "leave" | "switch";

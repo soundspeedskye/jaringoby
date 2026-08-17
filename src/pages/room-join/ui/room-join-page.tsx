@@ -30,7 +30,7 @@ import { createPeriodTimeline, getPeriodPhase } from "@/shared/lib/domain/period
 import { isValidInviteCodeFormat, normalizeInviteCode } from "@/shared/lib/domain/invites";
 import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
-import { useActiveRoom } from "@/shared/providers/app-data-hooks";
+import { useActiveRoom } from "@/entities/room/api/use-rooms";
 import { useAppStatus } from "@/shared/providers/app-status-provider";
 import { formatWon } from "@/shared/lib/format";
 
