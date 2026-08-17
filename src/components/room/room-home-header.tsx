@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ExceptionApprovalInbox } from "@/components/room/exception-approval-inbox";
 import { RecentExpenseCarousel } from "@/components/room/recent-expense-carousel";
+import { RoomBoardPreview } from "@/components/room/room-board-preview";
 import { RoomHero } from "@/components/room/room-hero";
 import { NoticeBanner } from "@/components/ui/notice-banner";
 import {
@@ -132,6 +133,8 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
           isRoomOwner ? () => router.push("/room/edit") : undefined
         }
       />
+
+      <RoomBoardPreview roomId={activeRoom.id} />
 
       <RecentExpenseCarousel
         commentCounts={commentCounts}

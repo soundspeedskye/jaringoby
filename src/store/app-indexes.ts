@@ -11,6 +11,9 @@ import type {
   Profile,
   Room,
   RoomMemberStats,
+  RoomPost,
+  RoomPostComment,
+  RoomPostReaction,
 } from '@/data/types';
 import { collectSettlementExcludedExpenseIds, selectCrownHolders } from '@/domain';
 
@@ -28,6 +31,11 @@ export type AppIndexes = {
   commentsByExpenseId: Map<string, Comment[]>;
   commentCountByExpenseId: Map<string, number>;
   reactionsByCommentId: Map<string, CommentReaction[]>;
+  postById: Map<string, RoomPost>;
+  postsByRoomId: Map<string, RoomPost[]>;
+  commentsByPostId: Map<string, RoomPostComment[]>;
+  commentCountByPostId: Map<string, number>;
+  reactionsByPostId: Map<string, RoomPostReaction[]>;
   resultsByPeriodId: Map<string, PeriodResult[]>;
   statsByRoomId: Map<string, RoomMemberStats[]>;
   crownIdsByPeriodId: Map<string, string[]>;
@@ -78,6 +86,16 @@ export function buildAppIndexes(
     canReuse && snapshot.commentReactions === previousSnapshot.commentReactions
       ? previousIndexes.reactionsByCommentId
       : groupValues(snapshot.commentReactions, (reaction) => reaction.commentId);
+  const postIndexes = canReuse && snapshot.roomPosts === previousSnapshot.roomPosts
+    ? pickPostIndexes(previousIndexes)
+    : buildPostIndexes(snapshot.roomPosts);
+  const postCommentIndexes = canReuse && snapshot.roomPostComments === previousSnapshot.roomPostComments
+    ? pickPostCommentIndexes(previousIndexes)
+    : buildPostCommentIndexes(snapshot.roomPostComments);
+  const reactionsByPostId =
+    canReuse && snapshot.roomPostReactions === previousSnapshot.roomPostReactions
+      ? previousIndexes.reactionsByPostId
+      : groupValues(snapshot.roomPostReactions, (reaction) => reaction.postId);
   const exceptionIndexes = canReuse && exceptionInputsAreShared(snapshot, previousSnapshot)
     ? pickExceptionIndexes(previousIndexes)
     : buildExceptionIndexes(snapshot, membersByPeriodId, expenseIndexes.expenseById);
@@ -114,6 +132,9 @@ export function buildAppIndexes(
     feedExpensesByRoomId,
     ...commentIndexes,
     reactionsByCommentId,
+    ...postIndexes,
+    ...postCommentIndexes,
+    reactionsByPostId,
     ...exceptionIndexes,
     resultsByPeriodId,
     statsByRoomId,
@@ -135,6 +156,11 @@ function createEmptyIndexes(): AppIndexes {
     commentsByExpenseId: new Map(),
     commentCountByExpenseId: new Map(),
     reactionsByCommentId: new Map(),
+    postById: new Map(),
+    postsByRoomId: new Map(),
+    commentsByPostId: new Map(),
+    commentCountByPostId: new Map(),
+    reactionsByPostId: new Map(),
     resultsByPeriodId: new Map(),
     statsByRoomId: new Map(),
     crownIdsByPeriodId: new Map(),
@@ -216,6 +242,37 @@ function buildCommentIndexes(comments: Comment[]): Pick<
   });
 
   return { commentsByExpenseId, commentCountByExpenseId };
+}
+
+function buildPostIndexes(posts: RoomPost[]): Pick<AppIndexes, 'postById' | 'postsByRoomId'> {
+  const postById = new Map<string, RoomPost>();
+  const postsByRoomId = new Map<string, RoomPost[]>();
+  posts.forEach((post) => {
+    postById.set(post.id, post);
+    if (!post.deletedAt) appendIndexValue(postsByRoomId, post.roomId, post);
+  });
+  postsByRoomId.forEach((roomPosts) => {
+    roomPosts.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  });
+  return { postById, postsByRoomId };
+}
+
+function buildPostCommentIndexes(comments: RoomPostComment[]): Pick<
+  AppIndexes,
+  'commentsByPostId' | 'commentCountByPostId'
+> {
+  const commentsByPostId = new Map<string, RoomPostComment[]>();
+  const commentCountByPostId = new Map<string, number>();
+  comments.forEach((comment) => {
+    appendIndexValue(commentsByPostId, comment.postId, comment);
+    if (!comment.deletedAt) {
+      commentCountByPostId.set(
+        comment.postId,
+        (commentCountByPostId.get(comment.postId) ?? 0) + 1,
+      );
+    }
+  });
+  return { commentsByPostId, commentCountByPostId };
 }
 
 function buildExceptionIndexes(
@@ -362,6 +419,20 @@ function pickCommentIndexes(indexes: AppIndexes): Pick<
   return {
     commentsByExpenseId: indexes.commentsByExpenseId,
     commentCountByExpenseId: indexes.commentCountByExpenseId,
+  };
+}
+
+function pickPostIndexes(indexes: AppIndexes): Pick<AppIndexes, 'postById' | 'postsByRoomId'> {
+  return { postById: indexes.postById, postsByRoomId: indexes.postsByRoomId };
+}
+
+function pickPostCommentIndexes(indexes: AppIndexes): Pick<
+  AppIndexes,
+  'commentsByPostId' | 'commentCountByPostId'
+> {
+  return {
+    commentsByPostId: indexes.commentsByPostId,
+    commentCountByPostId: indexes.commentCountByPostId,
   };
 }
 

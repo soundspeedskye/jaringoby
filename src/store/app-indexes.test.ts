@@ -89,6 +89,9 @@ function snapshotWith(input: {
     expenses: [expense()],
   comments: [],
   commentReactions: [],
+  roomPosts: [],
+  roomPostComments: [],
+  roomPostReactions: [],
   notifications: [],
     expenseExceptions: [exception()],
     expenseExceptionApprovals: input.approvals,
@@ -134,5 +137,45 @@ describe('settlementExcludedExpenseIds', () => {
       }),
     );
     expect(indexes.settlementExcludedExpenseIds.has('expense-1')).toBe(false);
+  });
+});
+
+describe('room post indexes', () => {
+  it('keeps visible posts newest-first and counts only visible comments', () => {
+    const snapshot = snapshotWith({ members: [member('user-a')], approvals: [] });
+    snapshot.roomPosts = [
+      {
+        id: 'post-old', clientRequestId: 'post-old-request', roomId: 'room-1', kind: 'POST',
+        authorId: 'user-a', body: '먼저 쓴 글', createdAt: '2026-08-03T01:00:00.000Z',
+        updatedAt: '2026-08-03T01:00:00.000Z', version: 1,
+      },
+      {
+        id: 'post-new', clientRequestId: 'post-new-request', roomId: 'room-1', kind: 'NOTICE',
+        authorId: 'user-a', body: '최근 공지', createdAt: '2026-08-04T01:00:00.000Z',
+        updatedAt: '2026-08-04T01:00:00.000Z', version: 1,
+      },
+      {
+        id: 'post-deleted', clientRequestId: 'post-deleted-request', roomId: 'room-1', kind: 'POST',
+        authorId: 'user-a', body: '지운 글', createdAt: '2026-08-05T01:00:00.000Z',
+        updatedAt: '2026-08-05T01:00:00.000Z', deletedAt: '2026-08-05T02:00:00.000Z', version: 2,
+      },
+    ];
+    snapshot.roomPostComments = [
+      {
+        id: 'comment-visible', clientRequestId: 'comment-visible-request', postId: 'post-new',
+        authorId: 'user-a', body: '좋아요', createdAt: '2026-08-04T02:00:00.000Z',
+        updatedAt: '2026-08-04T02:00:00.000Z', version: 1,
+      },
+      {
+        id: 'comment-deleted', clientRequestId: 'comment-deleted-request', postId: 'post-new',
+        authorId: 'user-a', body: '삭제', createdAt: '2026-08-04T03:00:00.000Z',
+        updatedAt: '2026-08-04T03:00:00.000Z', deletedAt: '2026-08-04T04:00:00.000Z', version: 2,
+      },
+    ];
+
+    const indexes = buildAppIndexes(snapshot);
+    expect(indexes.postsByRoomId.get('room-1')?.map((post) => post.id))
+      .toEqual(['post-new', 'post-old']);
+    expect(indexes.commentCountByPostId.get('post-new')).toBe(1);
   });
 });

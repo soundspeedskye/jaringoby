@@ -1,5 +1,7 @@
 import type {
   AddCommentInput,
+  AddRoomPostCommentInput,
+  AddRoomPostInput,
   AddExpenseInput,
   AppSnapshot,
   Comment,
@@ -10,6 +12,9 @@ import type {
   Room,
   RoomMember,
   Profile,
+  RoomPost,
+  RoomPostComment,
+  RoomPostReactionEmoji,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/data/types';
@@ -47,6 +52,13 @@ export interface AppRepository {
   updateComment(commentId: string, body: string): Promise<Comment>;
   deleteComment(commentId: string): Promise<void>;
   toggleCommentReaction(commentId: string, emoji: CommentReactionEmoji): Promise<void>;
+  addRoomPost(input: AddRoomPostInput): Promise<RoomPost>;
+  updateRoomPost(postId: string, body: string): Promise<RoomPost>;
+  deleteRoomPost(postId: string): Promise<void>;
+  addRoomPostComment(input: AddRoomPostCommentInput): Promise<RoomPostComment>;
+  updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment>;
+  deleteRoomPostComment(commentId: string): Promise<void>;
+  toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void>;
   markNotificationsRead(notificationIds: readonly string[]): Promise<void>;
   markAllNotificationsRead(): Promise<void>;
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe;

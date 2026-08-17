@@ -31,6 +31,7 @@ export default function NotificationsScreen() {
     void (async () => {
       if (!notification.readAt) await markNotificationsRead([notification.id]);
       if (notification.expenseId) router.push(`/expense/${notification.expenseId}`);
+      else if (notification.kind === "room_notice") router.push("/room/board");
       else router.replace("/");
     })();
   };
@@ -123,6 +124,8 @@ function notificationCopy(notification: AppNotification, actorName?: string) {
       return "내 댓글에 새 답글이 달렸어요.";
     case "member_joined":
       return `${actor}님이 방에 참여했어요.`;
+    case "room_notice":
+      return `${actor}님이 새 공지를 올렸어요.`;
     default:
       return "새 소식이 도착했어요.";
   }

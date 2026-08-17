@@ -15,6 +15,8 @@ import {
 import type { AppRepository, Unsubscribe, UpdateExpenseOptions } from '@/data/repository';
 import type {
   AddCommentInput,
+  AddRoomPostCommentInput,
+  AddRoomPostInput,
   AddExpenseInput,
   AppSnapshot,
   Comment,
@@ -24,6 +26,9 @@ import type {
   InvitePreview,
   Period,
   Profile,
+  RoomPost,
+  RoomPostComment,
+  RoomPostReactionEmoji,
   Room,
   RoomMember,
   SwitchRoomInput,
@@ -726,6 +731,71 @@ class FakeRepository implements AppRepository {
     }
   }
 
+  async addRoomPost(input: AddRoomPostInput): Promise<RoomPost> {
+    const post: RoomPost = {
+      id: `post-${input.clientRequestId}`,
+      clientRequestId: input.clientRequestId,
+      roomId: input.roomId,
+      kind: input.kind,
+      authorId: this.userId,
+      body: input.body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+    };
+    this.snapshot.roomPosts.push(post);
+    return clone(post);
+  }
+
+  async updateRoomPost(postId: string, body: string): Promise<RoomPost> {
+    const post = this.snapshot.roomPosts.find((item) => item.id === postId);
+    if (!post) throw new Error('NOT_FOUND');
+    post.body = body;
+    post.version = (post.version ?? 0) + 1;
+    return clone(post);
+  }
+
+  async deleteRoomPost(postId: string): Promise<void> {
+    const post = this.snapshot.roomPosts.find((item) => item.id === postId);
+    if (post) post.deletedAt = new Date().toISOString();
+  }
+
+  async addRoomPostComment(input: AddRoomPostCommentInput): Promise<RoomPostComment> {
+    const comment: RoomPostComment = {
+      id: `post-comment-${input.clientRequestId}`,
+      clientRequestId: input.clientRequestId,
+      postId: input.postId,
+      authorId: this.userId,
+      body: input.body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+    };
+    this.snapshot.roomPostComments.push(comment);
+    return clone(comment);
+  }
+
+  async updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment> {
+    const comment = this.snapshot.roomPostComments.find((item) => item.id === commentId);
+    if (!comment) throw new Error('NOT_FOUND');
+    comment.body = body;
+    comment.version = (comment.version ?? 0) + 1;
+    return clone(comment);
+  }
+
+  async deleteRoomPostComment(commentId: string): Promise<void> {
+    const comment = this.snapshot.roomPostComments.find((item) => item.id === commentId);
+    if (comment) comment.deletedAt = new Date().toISOString();
+  }
+
+  async toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void> {
+    const index = this.snapshot.roomPostReactions.findIndex(
+      (reaction) => reaction.postId === postId && reaction.userId === this.userId && reaction.emoji === emoji,
+    );
+    if (index >= 0) this.snapshot.roomPostReactions.splice(index, 1);
+    else this.snapshot.roomPostReactions.push({ postId, userId: this.userId, emoji, createdAt: new Date().toISOString() });
+  }
+
   async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
     const readAt = new Date().toISOString();
     this.snapshot.notifications.forEach((notification) => {
@@ -782,7 +852,10 @@ function snapshotFixture(userId: string, period: Period): AppSnapshot {
     memberStats: [],
     expenses: [],
   comments: [],
-  commentReactions: [],
+    commentReactions: [],
+    roomPosts: [],
+    roomPostComments: [],
+    roomPostReactions: [],
   notifications: [],
     expenseExceptions: [],
     expenseExceptionApprovals: [],

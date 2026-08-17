@@ -9,6 +9,8 @@ import {
 } from '@/data/repository';
 import type {
   AddCommentInput,
+  AddRoomPostCommentInput,
+  AddRoomPostInput,
   AddExpenseInput,
   AppSnapshot,
   Comment,
@@ -19,6 +21,9 @@ import type {
   Room,
   RoomMember,
   Profile,
+  RoomPost,
+  RoomPostComment,
+  RoomPostReactionEmoji,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/data/types';
@@ -629,6 +634,47 @@ export class OfflineQueueRepository implements AppRepository {
     emoji: CommentReactionEmoji,
   ): Promise<void> {
     await this.base.toggleCommentReaction(commentId, emoji);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  // 냥냥톡톡은 사진·마감 의존이 없는 저빈도 상호작용이라 오프라인 큐에 쌓지 않는다.
+  // 서버의 최신 권한과 순서를 바로 반영한 뒤 스냅샷만 갱신한다.
+  async addRoomPost(input: AddRoomPostInput): Promise<RoomPost> {
+    const post = await this.base.addRoomPost(input);
+    void this.refreshBase().catch(() => undefined);
+    return post;
+  }
+
+  async updateRoomPost(postId: string, body: string): Promise<RoomPost> {
+    const post = await this.base.updateRoomPost(postId, body);
+    void this.refreshBase().catch(() => undefined);
+    return post;
+  }
+
+  async deleteRoomPost(postId: string): Promise<void> {
+    await this.base.deleteRoomPost(postId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async addRoomPostComment(input: AddRoomPostCommentInput): Promise<RoomPostComment> {
+    const comment = await this.base.addRoomPostComment(input);
+    void this.refreshBase().catch(() => undefined);
+    return comment;
+  }
+
+  async updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment> {
+    const comment = await this.base.updateRoomPostComment(commentId, body);
+    void this.refreshBase().catch(() => undefined);
+    return comment;
+  }
+
+  async deleteRoomPostComment(commentId: string): Promise<void> {
+    await this.base.deleteRoomPostComment(commentId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void> {
+    await this.base.toggleRoomPostReaction(postId, emoji);
     void this.refreshBase().catch(() => undefined);
   }
 

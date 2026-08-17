@@ -16,6 +16,7 @@ export const palette = {
   ink: '#2A2620', // 본문 먹색 (약간 따뜻한 near-black)
   muted: '#8A7F63', // 보조 텍스트 (바랜 잉크)
   line: '#D8C9A0', // 기본 테두리·괘선 (진한 선)
+  lineStrong: '#C6B58B', // 공지처럼 흐름에서 한 단계 도드라져야 하는 카드 테두리
   rule: '#E7DBBB', // 항목 구분용 얇은 괘선 (연한 선)
   stamp: '#C0392B', // 도장 붉은색 (초과·1위 인장 강조)
   danger: '#B65348',

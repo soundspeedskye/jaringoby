@@ -156,6 +156,46 @@ export type CommentReaction = {
   createdAt: string;
 };
 
+export type RoomPostKind = "NOTICE" | "POST";
+
+/** 방의 이야기. 작성 당시 진행 중인 주차는 기록용 도장으로만 남긴다. */
+export type RoomPost = {
+  id: string;
+  clientRequestId: string;
+  roomId: string;
+  periodId?: string;
+  kind: RoomPostKind;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  version?: number;
+};
+
+/** 냥냥톡톡 글에 붙는 평면 댓글. 지출 댓글과 달리 답글은 없다. */
+export type RoomPostComment = {
+  id: string;
+  clientRequestId: string;
+  postId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  version?: number;
+};
+
+export const ROOM_POST_REACTION_EMOJIS = ["❤️", "👍", "👏"] as const;
+export type RoomPostReactionEmoji = (typeof ROOM_POST_REACTION_EMOJIS)[number];
+
+export type RoomPostReaction = {
+  postId: string;
+  userId: string;
+  emoji: RoomPostReactionEmoji;
+  createdAt: string;
+};
+
 /** 앱 안 소식함에 표시하는 사용자별 이벤트. 본문은 저장하지 않는다. */
 export type AppNotification = {
   id: string;
@@ -166,6 +206,7 @@ export type AppNotification = {
   periodId?: string;
   expenseId?: string;
   commentId?: string;
+  postId?: string;
   route: string;
   readAt?: string;
   createdAt: string;
@@ -199,6 +240,9 @@ export type AppSnapshot = {
   expenses: Expense[];
   comments: Comment[];
   commentReactions: CommentReaction[];
+  roomPosts: RoomPost[];
+  roomPostComments: RoomPostComment[];
+  roomPostReactions: RoomPostReaction[];
   notifications: AppNotification[];
   expenseExceptions: ExpenseException[];
   expenseExceptionApprovals: ExpenseExceptionApproval[];
@@ -270,5 +314,18 @@ export type AddCommentInput = Pick<
   Comment,
   "expenseId" | "body" | "replyToId"
 > & {
+  clientRequestId: string;
+};
+
+export type AddRoomPostInput = {
+  roomId: string;
+  kind: RoomPostKind;
+  body: string;
+  clientRequestId: string;
+};
+
+export type AddRoomPostCommentInput = {
+  postId: string;
+  body: string;
   clientRequestId: string;
 };

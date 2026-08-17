@@ -6,6 +6,8 @@ import type { AppRepository, Unsubscribe, UpdateExpenseOptions } from '@/data/re
 import { createSupabaseClientForAccessToken } from '@/data/supabase-client';
 import type {
   AddCommentInput,
+  AddRoomPostCommentInput,
+  AddRoomPostInput,
   AddExpenseInput,
   AppNotification,
   AppSnapshot,
@@ -24,6 +26,10 @@ import type {
   Room,
   RoomMember,
   RoomMemberStats,
+  RoomPost,
+  RoomPostComment,
+  RoomPostReaction,
+  RoomPostReactionEmoji,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/data/types';
@@ -38,7 +44,11 @@ const EXPENSE_COLUMNS =
 const COMMENT_COLUMNS =
   'id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version';
 const NOTIFICATION_COLUMNS =
-  'id,user_id,kind,actor_id,room_id,period_id,expense_id,comment_id,route,read_at,created_at';
+  'id,user_id,kind,actor_id,room_id,period_id,expense_id,comment_id,post_id,route,read_at,created_at';
+const ROOM_POST_COLUMNS =
+  'id,client_request_id,room_id,period_id,kind,author_id,body,created_at,updated_at,deleted_at,version';
+const ROOM_POST_COMMENT_COLUMNS =
+  'id,client_request_id,post_id,author_id,body,created_at,updated_at,deleted_at,version';
 const REALTIME_TABLES = [
   'profiles',
   'rooms',
@@ -49,6 +59,9 @@ const REALTIME_TABLES = [
   'expenses',
   'comments',
   'comment_reactions',
+  'room_posts',
+  'room_post_comments',
+  'room_post_reactions',
   'notifications',
   'expense_exceptions',
   'expense_exception_approvals',
@@ -208,8 +221,42 @@ type NotificationRow = {
   period_id: string | null;
   expense_id: string | null;
   comment_id: string | null;
+  post_id: string | null;
   route: string;
   read_at: string | null;
+  created_at: string;
+};
+
+type RoomPostRow = {
+  id: string;
+  client_request_id: string;
+  room_id: string;
+  period_id: string | null;
+  kind: 'notice' | 'post';
+  author_id: string;
+  body: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  version: number;
+};
+
+type RoomPostCommentRow = {
+  id: string;
+  client_request_id: string;
+  post_id: string;
+  author_id: string;
+  body: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  version: number;
+};
+
+type RoomPostReactionRow = {
+  post_id: string;
+  user_id: string;
+  emoji: RoomPostReactionEmoji;
   created_at: string;
 };
 
@@ -720,6 +767,101 @@ export class SupabaseRepository implements AppRepository {
     );
   }
 
+  async addRoomPost(input: AddRoomPostInput): Promise<RoomPost> {
+    await this.requireUserId();
+    const { data, error } = await this.client.rpc('add_room_post', {
+      p_room_id: input.roomId,
+      p_kind: input.kind === 'NOTICE' ? 'notice' : 'post',
+      p_body: input.body,
+      p_client_request_id: toRequestUuid(input.clientRequestId),
+    });
+    if (error) throw translateError(error, '냥톡을 남기지 못했어요.');
+    const id = requiredString(firstObject(data)?.id, '생성된 냥톡 ID');
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['room_posts']),
+    );
+    return clone(requireRoomPost(snapshot, id));
+  }
+
+  async updateRoomPost(postId: string, body: string): Promise<RoomPost> {
+    await this.requireUserId();
+    const current = await this.findCurrentRoomPost(postId);
+    const { error } = await this.client.rpc('update_room_post', {
+      p_post_id: postId,
+      p_body: body,
+      p_expected_version: requireVersion(current.version, '냥톡'),
+    });
+    if (error) throw translateError(error, '냥톡을 수정하지 못했어요.');
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['room_posts']),
+    );
+    return clone(requireRoomPost(snapshot, postId));
+  }
+
+  async deleteRoomPost(postId: string): Promise<void> {
+    await this.requireUserId();
+    const current = await this.findCurrentRoomPost(postId);
+    const { error } = await this.client.rpc('delete_room_post', {
+      p_post_id: postId,
+      p_expected_version: requireVersion(current.version, '냥톡'),
+    });
+    if (error) throw translateError(error, '냥톡을 삭제하지 못했어요.');
+    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['room_posts']));
+  }
+
+  async addRoomPostComment(input: AddRoomPostCommentInput): Promise<RoomPostComment> {
+    await this.requireUserId();
+    const { data, error } = await this.client.rpc('add_room_post_comment', {
+      p_post_id: input.postId,
+      p_body: input.body,
+      p_client_request_id: toRequestUuid(input.clientRequestId),
+    });
+    if (error) throw translateError(error, '댓글을 남기지 못했어요.');
+    const id = requiredString(firstObject(data)?.id, '생성된 댓글 ID');
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['room_post_comments']),
+    );
+    return clone(requireRoomPostComment(snapshot, id));
+  }
+
+  async updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment> {
+    await this.requireUserId();
+    const current = await this.findCurrentRoomPostComment(commentId);
+    const { error } = await this.client.rpc('update_room_post_comment', {
+      p_comment_id: commentId,
+      p_body: body,
+      p_expected_version: requireVersion(current.version, '댓글'),
+    });
+    if (error) throw translateError(error, '댓글을 수정하지 못했어요.');
+    const snapshot = await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['room_post_comments']),
+    );
+    return clone(requireRoomPostComment(snapshot, commentId));
+  }
+
+  async deleteRoomPostComment(commentId: string): Promise<void> {
+    await this.requireUserId();
+    const current = await this.findCurrentRoomPostComment(commentId);
+    const { error } = await this.client.rpc('delete_room_post_comment', {
+      p_comment_id: commentId,
+      p_expected_version: requireVersion(current.version, '댓글'),
+    });
+    if (error) throw translateError(error, '댓글을 삭제하지 못했어요.');
+    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['room_post_comments']));
+  }
+
+  async toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('toggle_room_post_reaction', {
+      p_post_id: postId,
+      p_emoji: emoji,
+    });
+    if (error) throw translateError(error, '반응을 변경하지 못했어요.');
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['room_post_reactions']),
+    );
+  }
+
   async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
     await this.requireUserId();
     const ids = [...new Set(notificationIds)].filter((id) => id.length > 0);
@@ -773,6 +915,9 @@ export class SupabaseRepository implements AppRepository {
       expenseRows,
       commentRows,
       commentReactionRows,
+      roomPostRows,
+      roomPostCommentRows,
+      roomPostReactionRows,
       notificationRows,
       exceptionRows,
       approvalRows,
@@ -806,6 +951,9 @@ export class SupabaseRepository implements AppRepository {
       this.fetchExpenseRows(),
       this.fetchCommentRows(),
       this.fetchCommentReactionRows(),
+      this.fetchRoomPostRows(),
+      this.fetchRoomPostCommentRows(),
+      this.fetchRoomPostReactionRows(),
       this.fetchNotificationRows(),
       this.fetchExceptionRows(),
       this.fetchExceptionApprovalRows(),
@@ -872,6 +1020,11 @@ export class SupabaseRepository implements AppRepository {
     const visibleExpenseIds = new Set(visibleExpenseRows.map((row) => row.id));
     const visibleCommentRows = filterVisibleCommentRows(commentRows, visibleExpenseIds);
     const visibleCommentIds = new Set(visibleCommentRows.map((row) => row.id));
+    const visibleRoomPostRows = roomPostRows.filter((row) => visibleRoomIds.has(row.room_id));
+    const visibleRoomPostIds = new Set(visibleRoomPostRows.map((row) => row.id));
+    const visibleRoomPostCommentRows = roomPostCommentRows.filter((row) =>
+      visibleRoomPostIds.has(row.post_id),
+    );
     const visibleExceptionRows = exceptionRows.filter((row) =>
       visibleExpenseIds.has(row.expense_id),
     );
@@ -901,6 +1054,11 @@ export class SupabaseRepository implements AppRepository {
       commentReactions: commentReactionRows
         .filter((row) => visibleCommentIds.has(row.comment_id))
         .map(mapCommentReaction),
+      roomPosts: visibleRoomPostRows.map(mapRoomPost),
+      roomPostComments: visibleRoomPostCommentRows.map(mapRoomPostComment),
+      roomPostReactions: roomPostReactionRows
+        .filter((row) => visibleRoomPostIds.has(row.post_id))
+        .map(mapRoomPostReaction),
       notifications: notificationRows.map(mapNotification),
       expenseExceptions: visibleExceptionRows.map(mapExpenseException),
       expenseExceptionApprovals: visibleApprovalRows.map(mapExpenseExceptionApproval),
@@ -938,6 +1096,33 @@ export class SupabaseRepository implements AppRepository {
       throw translateError(result.error, '댓글 반응을 갱신하지 못했어요.');
     }
     return rows<CommentReactionRow>(result.data);
+  }
+
+  private async fetchRoomPostRows(): Promise<RoomPostRow[]> {
+    const result = await this.client
+      .from('room_posts')
+      .select(ROOM_POST_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (result.error) throw translateError(result.error, '냥톡을 갱신하지 못했어요.');
+    return rows<RoomPostRow>(result.data);
+  }
+
+  private async fetchRoomPostCommentRows(): Promise<RoomPostCommentRow[]> {
+    const result = await this.client
+      .from('room_post_comments')
+      .select(ROOM_POST_COMMENT_COLUMNS)
+      .order('created_at', { ascending: true });
+    if (result.error) throw translateError(result.error, '냥톡 댓글을 갱신하지 못했어요.');
+    return rows<RoomPostCommentRow>(result.data);
+  }
+
+  private async fetchRoomPostReactionRows(): Promise<RoomPostReactionRow[]> {
+    const result = await this.client
+      .from('room_post_reactions')
+      .select('post_id,user_id,emoji,created_at');
+    if (result.error) throw translateError(result.error, '냥톡 반응을 갱신하지 못했어요.');
+    return rows<RoomPostReactionRow>(result.data);
   }
 
   private async fetchNotificationRows(): Promise<NotificationRow[]> {
@@ -1277,6 +1462,16 @@ export class SupabaseRepository implements AppRepository {
     return requireComment(snapshot, commentId);
   }
 
+  private async findCurrentRoomPost(postId: string): Promise<RoomPost> {
+    const snapshot = this.lastSnapshot ?? (await this.load());
+    return requireRoomPost(snapshot, postId);
+  }
+
+  private async findCurrentRoomPostComment(commentId: string): Promise<RoomPostComment> {
+    const snapshot = this.lastSnapshot ?? (await this.load());
+    return requireRoomPostComment(snapshot, commentId);
+  }
+
   private async uploadExpensePhoto(
     uri: string,
     periodId: string | undefined,
@@ -1462,6 +1657,7 @@ function mapNotification(row: NotificationRow): AppNotification {
     periodId: row.period_id ?? undefined,
     expenseId: row.expense_id ?? undefined,
     commentId: row.comment_id ?? undefined,
+    postId: row.post_id ?? undefined,
     route: row.route,
     readAt: row.read_at ?? undefined,
     createdAt: row.created_at,
@@ -1509,6 +1705,45 @@ function mapComment(row: CommentRow): Comment {
 function mapCommentReaction(row: CommentReactionRow): CommentReaction {
   return {
     commentId: row.comment_id,
+    userId: row.user_id,
+    emoji: row.emoji,
+    createdAt: row.created_at,
+  };
+}
+
+function mapRoomPost(row: RoomPostRow): RoomPost {
+  return {
+    id: row.id,
+    clientRequestId: row.client_request_id,
+    roomId: row.room_id,
+    periodId: row.period_id ?? undefined,
+    kind: row.kind === 'notice' ? 'NOTICE' : 'POST',
+    authorId: row.author_id,
+    body: row.deleted_at ? '삭제된 냥톡입니다.' : row.body ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at ?? undefined,
+    version: row.version,
+  };
+}
+
+function mapRoomPostComment(row: RoomPostCommentRow): RoomPostComment {
+  return {
+    id: row.id,
+    clientRequestId: row.client_request_id,
+    postId: row.post_id,
+    authorId: row.author_id,
+    body: row.deleted_at ? '삭제된 댓글입니다.' : row.body ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at ?? undefined,
+    version: row.version,
+  };
+}
+
+function mapRoomPostReaction(row: RoomPostReactionRow): RoomPostReaction {
+  return {
+    postId: row.post_id,
     userId: row.user_id,
     emoji: row.emoji,
     createdAt: row.created_at,
@@ -1771,6 +2006,18 @@ function requireExpense(snapshot: AppSnapshot, id: string): Expense {
 
 function requireComment(snapshot: AppSnapshot, id: string): Comment {
   const comment = snapshot.comments.find((item) => item.id === id);
+  if (!comment) throw new RepositoryError('NOT_FOUND', '댓글을 찾을 수 없어요.');
+  return comment;
+}
+
+function requireRoomPost(snapshot: AppSnapshot, id: string): RoomPost {
+  const post = snapshot.roomPosts.find((item) => item.id === id);
+  if (!post) throw new RepositoryError('NOT_FOUND', '냥톡을 찾을 수 없어요.');
+  return post;
+}
+
+function requireRoomPostComment(snapshot: AppSnapshot, id: string): RoomPostComment {
+  const comment = snapshot.roomPostComments.find((item) => item.id === id);
   if (!comment) throw new RepositoryError('NOT_FOUND', '댓글을 찾을 수 없어요.');
   return comment;
 }

@@ -4,6 +4,8 @@ import { createContext, useCallback, useContext, useMemo } from 'react';
 import type { AppRepository } from '@/data/repository';
 import type {
   AddCommentInput,
+  AddRoomPostCommentInput,
+  AddRoomPostInput,
   AddExpenseInput,
   Comment,
   CommentReactionEmoji,
@@ -13,6 +15,9 @@ import type {
   Room,
   RoomMember,
   Profile,
+  RoomPost,
+  RoomPostComment,
+  RoomPostReactionEmoji,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/data/types';
@@ -39,6 +44,13 @@ export type AppActionsContextValue = {
   updateComment: (commentId: string, body: string) => Promise<Comment>;
   deleteComment: (commentId: string) => Promise<void>;
   toggleCommentReaction: (commentId: string, emoji: CommentReactionEmoji) => Promise<void>;
+  addRoomPost: (input: AddRoomPostInput) => Promise<RoomPost>;
+  updateRoomPost: (postId: string, body: string) => Promise<RoomPost>;
+  deleteRoomPost: (postId: string) => Promise<void>;
+  addRoomPostComment: (input: AddRoomPostCommentInput) => Promise<RoomPostComment>;
+  updateRoomPostComment: (commentId: string, body: string) => Promise<RoomPostComment>;
+  deleteRoomPostComment: (commentId: string) => Promise<void>;
+  toggleRoomPostReaction: (postId: string, emoji: RoomPostReactionEmoji) => Promise<void>;
   markNotificationsRead: (notificationIds: readonly string[]) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
 };
@@ -135,6 +147,35 @@ export function AppActionsProvider({
       execute(() => repository.toggleCommentReaction(commentId, emoji)),
     [execute, repository],
   );
+  const addRoomPost = useCallback(
+    (input: AddRoomPostInput) => execute(() => repository.addRoomPost(input)),
+    [execute, repository],
+  );
+  const updateRoomPost = useCallback(
+    (postId: string, body: string) => execute(() => repository.updateRoomPost(postId, body)),
+    [execute, repository],
+  );
+  const deleteRoomPost = useCallback(
+    (postId: string) => execute(() => repository.deleteRoomPost(postId)),
+    [execute, repository],
+  );
+  const addRoomPostComment = useCallback(
+    (input: AddRoomPostCommentInput) => execute(() => repository.addRoomPostComment(input)),
+    [execute, repository],
+  );
+  const updateRoomPostComment = useCallback(
+    (commentId: string, body: string) => execute(() => repository.updateRoomPostComment(commentId, body)),
+    [execute, repository],
+  );
+  const deleteRoomPostComment = useCallback(
+    (commentId: string) => execute(() => repository.deleteRoomPostComment(commentId)),
+    [execute, repository],
+  );
+  const toggleRoomPostReaction = useCallback(
+    (postId: string, emoji: RoomPostReactionEmoji) =>
+      execute(() => repository.toggleRoomPostReaction(postId, emoji)),
+    [execute, repository],
+  );
   const markNotificationsRead = useCallback(
     (notificationIds: readonly string[]) =>
       execute(() => repository.markNotificationsRead(notificationIds)),
@@ -166,6 +207,13 @@ export function AppActionsProvider({
     updateComment,
     deleteComment,
     toggleCommentReaction,
+    addRoomPost,
+    updateRoomPost,
+    deleteRoomPost,
+    addRoomPostComment,
+    updateRoomPostComment,
+    deleteRoomPostComment,
+    toggleRoomPostReaction,
     markNotificationsRead,
     markAllNotificationsRead,
   }), [
@@ -179,6 +227,13 @@ export function AppActionsProvider({
     updateRoomSettings,
     deleteComment,
     toggleCommentReaction,
+    addRoomPost,
+    updateRoomPost,
+    deleteRoomPost,
+    addRoomPostComment,
+    updateRoomPostComment,
+    deleteRoomPostComment,
+    toggleRoomPostReaction,
     deleteArchivedPeriod,
     deleteExpense,
     joinRoom,
