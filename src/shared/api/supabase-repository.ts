@@ -1,7 +1,6 @@
 import { File as ExpoFile } from 'expo-file-system';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
-import { ANIMAL_AVATARS } from '@/shared/config/animals';
 import type { AppRepository, Unsubscribe, UpdateExpenseOptions } from '@/shared/api/repository';
 import { createSupabaseClientForAccessToken } from '@/shared/api/supabase-client';
 import type {
@@ -9,31 +8,67 @@ import type {
   AddRoomPostCommentInput,
   AddRoomPostInput,
   AddExpenseInput,
-  AppNotification,
   AppSnapshot,
   Comment,
-  CommentReaction,
   CommentReactionEmoji,
   CreateRoomInput,
   Expense,
-  ExpenseException,
-  ExpenseExceptionApproval,
   InvitePreview,
-  Period,
-  PeriodMember,
-  PeriodResult,
   Profile,
   Room,
   RoomMember,
-  RoomMemberStats,
   RoomPost,
   RoomPostComment,
-  RoomPostReaction,
   RoomPostReactionEmoji,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/shared/api/types';
-import type { ExpenseCategory, LocalDate, MemberStatus, PeriodPhase } from '@/shared/model/types';
+import type {
+  CommentReactionRow,
+  CommentRow,
+  ExpenseExceptionApprovalRow,
+  ExpenseExceptionRow,
+  ExpenseRow,
+  InviteCodeRow,
+  JsonObject,
+  NotificationRow,
+  PeriodDayRow,
+  PeriodMemberRow,
+  PeriodResultRow,
+  PeriodStatusRow,
+  PreferenceRow,
+  ProfileRow,
+  RoomMemberRow,
+  RoomMemberStatsRow,
+  RoomPostCommentRow,
+  RoomPostReactionRow,
+  RoomPostRow,
+  RoomRow,
+} from './supabase/rows';
+import { CATEGORY_TO_DATABASE } from './supabase/rows';
+import {
+  asObject,
+  hash32,
+  mapComment,
+  mapCommentReaction,
+  mapExpense,
+  mapExpenseException,
+  mapExpenseExceptionApproval,
+  mapInvitePreview,
+  mapNotification,
+  mapPeriod,
+  mapPeriodMember,
+  mapPeriodResult,
+  mapProfile,
+  mapRoom,
+  mapRoomMember,
+  mapRoomPost,
+  mapRoomPostComment,
+  mapRoomPostReaction,
+  mapStats,
+  requiredString,
+} from './supabase/mappers';
+import { RepositoryError } from './supabase/errors';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
@@ -67,227 +102,6 @@ const REALTIME_TABLES = [
   'expense_exception_approvals',
 ] as const;
 type RealtimeTable = (typeof REALTIME_TABLES)[number];
-
-const CATEGORY_TO_DATABASE: Record<ExpenseCategory, DatabaseExpenseCategory> = {
-  점심: 'lunch',
-  커피: 'coffee',
-  간식: 'snack',
-  저녁: 'dinner',
-  필수품: 'essential',
-  사치품: 'luxury',
-};
-
-const CATEGORY_FROM_DATABASE: Record<DatabaseExpenseCategory, ExpenseCategory> = {
-  lunch: '점심',
-  coffee: '커피',
-  snack: '간식',
-  dinner: '저녁',
-  essential: '필수품',
-  luxury: '사치품',
-};
-
-type DatabaseExpenseCategory = 'lunch' | 'coffee' | 'snack' | 'dinner' | 'essential' | 'luxury';
-type JsonObject = Record<string, unknown>;
-
-type ProfileRow = {
-  id: string;
-  nickname: string;
-  avatar_key: string | null;
-  avatar_path: string | null;
-  nickname_changed_at: string | null;
-};
-
-type RoomRow = {
-  id: string;
-  name: string;
-  owner_id: string;
-  base_amount: number | string;
-  capacity: number;
-  status: 'open' | 'closed';
-  created_at: string;
-  closed_at: string | null;
-};
-
-type RoomMemberRow = {
-  room_id: string;
-  user_id: string;
-  role: 'owner' | 'member';
-  status: 'active' | 'left' | 'removed' | 'account_deleted';
-  joined_at: string;
-};
-
-type PeriodStatusRow = {
-  id: string;
-  room_id: string;
-  week_index: number;
-  week_start: string;
-  week_end: string;
-  selected_day_count: number;
-  valid_day_count: number;
-  holiday_version_id: string;
-  finalized_at: string | null;
-  created_at: string;
-  state: 'waiting' | 'active' | 'adjustment' | 'settling' | 'archived';
-};
-
-type PeriodDayRow = {
-  period_id: string;
-  day_on: string;
-  is_holiday: boolean;
-};
-
-type PeriodMemberRow = {
-  period_id: string;
-  user_id: string;
-  status: 'active' | 'left' | 'removed' | 'account_deleted';
-  joined_at: string;
-  joined_on: string;
-  is_late_join: boolean;
-  eligible_day_count: number;
-  applied_limit: number | string;
-};
-
-type PeriodResultRow = {
-  period_id: string;
-  room_id: string;
-  user_id: string;
-  nickname_snapshot: string;
-  applied_limit: number | string;
-  spent_amount: number | string;
-  remaining_amount: number | string;
-  achieved: boolean;
-  is_crown: boolean;
-  finalized_at: string;
-};
-
-type RoomMemberStatsRow = {
-  room_id: string;
-  user_id: string;
-  participated_week_count: number;
-  achieved_week_count: number;
-  crown_count: number;
-  current_streak: number;
-};
-
-type InviteCodeRow = {
-  room_id: string;
-  code: string;
-  is_active: boolean;
-};
-
-type ExpenseRow = {
-  id: string;
-  client_request_id: string;
-  period_id: string | null;
-  user_id: string;
-  amount: number | string;
-  point_amount: number | string;
-  category: DatabaseExpenseCategory;
-  memo: string | null;
-  photo_path: string | null;
-  occurred_at: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  version: number;
-};
-
-type CommentRow = {
-  id: string;
-  client_request_id: string;
-  expense_id: string;
-  user_id: string;
-  body: string | null;
-  reply_to_comment_id: string | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  version: number;
-};
-
-type CommentReactionRow = {
-  comment_id: string;
-  user_id: string;
-  emoji: CommentReactionEmoji;
-  created_at: string;
-};
-
-type NotificationRow = {
-  id: string;
-  user_id: string;
-  kind: string;
-  actor_id: string | null;
-  room_id: string | null;
-  period_id: string | null;
-  expense_id: string | null;
-  comment_id: string | null;
-  post_id: string | null;
-  route: string;
-  read_at: string | null;
-  created_at: string;
-};
-
-type RoomPostRow = {
-  id: string;
-  client_request_id: string;
-  room_id: string;
-  period_id: string | null;
-  kind: 'notice' | 'post';
-  author_id: string;
-  body: string | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  version: number;
-};
-
-type RoomPostCommentRow = {
-  id: string;
-  client_request_id: string;
-  post_id: string;
-  author_id: string;
-  body: string | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  version: number;
-};
-
-type RoomPostReactionRow = {
-  post_id: string;
-  user_id: string;
-  emoji: RoomPostReactionEmoji;
-  created_at: string;
-};
-
-type PreferenceRow = {
-  room_id: string;
-  is_hidden: boolean;
-};
-
-type ExpenseExceptionRow = {
-  expense_id: string;
-  reason: string;
-  requested_by: string;
-  requested_at: string;
-};
-
-type ExpenseExceptionApprovalRow = {
-  expense_id: string;
-  user_id: string;
-  created_at: string;
-};
-
-export class RepositoryError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-    options?: ErrorOptions,
-  ) {
-    super(`${code}: ${message}`, options);
-    this.name = 'RepositoryError';
-  }
-}
 
 type SupabaseRepositoryOptions = {
   fixedUserId?: string;
@@ -1549,270 +1363,6 @@ export class SupabaseRepository implements AppRepository {
   }
 }
 
-function mapProfile(row: ProfileRow, signedUrls: Map<string, string>): Profile {
-  const avatarPath = row.avatar_path ?? undefined;
-  const avatarKey = row.avatar_key ?? undefined;
-  return {
-    id: row.id,
-    nickname: row.nickname,
-    avatarKey,
-    avatar: avatarKey ?? defaultAvatar(row.id),
-    avatarPath,
-    avatarUri: avatarPath ? signedUrls.get(avatarPath) : undefined,
-    nicknameChangeAvailableAt: row.nickname_changed_at
-      ? new Date(Date.parse(row.nickname_changed_at) + 7 * 24 * 60 * 60 * 1_000).toISOString()
-      : undefined,
-  };
-}
-
-function mapRoom(row: RoomRow, inviteCode?: string): Room {
-  return {
-    id: row.id,
-    ownerId: row.owner_id,
-    name: row.name,
-    inviteCode: inviteCode ?? '',
-    baseAmount: safeNumber(row.base_amount, '기준 금액'),
-    capacity: row.capacity,
-    status: row.status === 'closed' ? 'CLOSED' : 'OPEN',
-    createdAt: row.created_at,
-    closedAt: row.closed_at ?? undefined,
-  };
-}
-
-function mapRoomMember(row: RoomMemberRow): RoomMember {
-  return {
-    roomId: row.room_id,
-    userId: row.user_id,
-    role: row.role === 'owner' ? 'OWNER' : 'MEMBER',
-    status: mapMemberStatus(row.status),
-    joinedAt: row.joined_at,
-  };
-}
-
-function mapPeriod(row: PeriodStatusRow, days: PeriodDayRow[]): Period {
-  const sortedDays = [...days].sort((left, right) => left.day_on.localeCompare(right.day_on));
-  return {
-    id: row.id,
-    roomId: row.room_id,
-    weekIndex: row.week_index,
-    weekStart: asLocalDate(row.week_start),
-    weekEnd: asLocalDate(row.week_end),
-    selectedDayCount: row.selected_day_count,
-    validDayCount: row.valid_day_count,
-    holidayDates: sortedDays.filter((day) => day.is_holiday).map((day) => asLocalDate(day.day_on)),
-    holidayVersionId: row.holiday_version_id,
-    phase: mapPhase(row.state),
-    isRestWeek: row.valid_day_count === 0,
-    finalizedAt: row.finalized_at ?? undefined,
-    createdAt: row.created_at,
-  };
-}
-
-function mapPeriodMember(row: PeriodMemberRow): PeriodMember {
-  return {
-    periodId: row.period_id,
-    userId: row.user_id,
-    joinedAt: row.joined_at,
-    joinedDate: asLocalDate(row.joined_on),
-    eligibleDayCount: row.eligible_day_count,
-    appliedLimit: safeNumber(row.applied_limit, '적용 한도'),
-    status: mapMemberStatus(row.status),
-    isLateJoiner: row.is_late_join,
-  };
-}
-
-function mapPeriodResult(row: PeriodResultRow): PeriodResult {
-  return {
-    periodId: row.period_id,
-    roomId: row.room_id,
-    userId: row.user_id,
-    nickname: row.nickname_snapshot,
-    appliedLimit: safeNumber(row.applied_limit, '적용 한도'),
-    spentAmount: safeNumber(row.spent_amount, '지출 합계'),
-    remainingAmount: safeSignedNumber(row.remaining_amount, '잔액'),
-    achieved: row.achieved,
-    isCrown: row.is_crown,
-    finalizedAt: row.finalized_at,
-  };
-}
-
-function mapStats(row: RoomMemberStatsRow): RoomMemberStats {
-  return {
-    roomId: row.room_id,
-    userId: row.user_id,
-    participatedWeekCount: row.participated_week_count,
-    achievedWeekCount: row.achieved_week_count,
-    crownCount: row.crown_count,
-    currentStreak: row.current_streak,
-  };
-}
-
-function mapNotification(row: NotificationRow): AppNotification {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    kind: row.kind,
-    actorId: row.actor_id ?? undefined,
-    roomId: row.room_id ?? undefined,
-    periodId: row.period_id ?? undefined,
-    expenseId: row.expense_id ?? undefined,
-    commentId: row.comment_id ?? undefined,
-    postId: row.post_id ?? undefined,
-    route: row.route,
-    readAt: row.read_at ?? undefined,
-    createdAt: row.created_at,
-  };
-}
-
-function mapExpense(row: ExpenseRow, signedUrls: Map<string, string>): Expense {
-  const photoPath = row.photo_path ?? undefined;
-  return {
-    id: row.id,
-    clientRequestId: row.client_request_id,
-    periodId: row.period_id ?? undefined,
-    userId: row.user_id,
-    amount: safeNumber(row.amount, '지출 금액'),
-    pointAmount: safeNumber(row.point_amount, '포인트 사용 금액'),
-    category: CATEGORY_FROM_DATABASE[row.category],
-    memo: row.memo ?? '',
-    photoPath,
-    photoUri: photoPath ? signedUrls.get(photoPath) : undefined,
-    occurredAt: row.occurred_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at ?? undefined,
-    syncStatus: 'SYNCED',
-    version: row.version,
-  };
-}
-
-function mapComment(row: CommentRow): Comment {
-  return {
-    id: row.id,
-    clientRequestId: row.client_request_id,
-    expenseId: row.expense_id,
-    userId: row.user_id,
-    body: row.deleted_at ? '삭제된 메시지입니다.' : row.body ?? '',
-    replyToId: row.reply_to_comment_id ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at ?? undefined,
-    syncStatus: 'SYNCED',
-    version: row.version,
-  };
-}
-
-function mapCommentReaction(row: CommentReactionRow): CommentReaction {
-  return {
-    commentId: row.comment_id,
-    userId: row.user_id,
-    emoji: row.emoji,
-    createdAt: row.created_at,
-  };
-}
-
-function mapRoomPost(row: RoomPostRow): RoomPost {
-  return {
-    id: row.id,
-    clientRequestId: row.client_request_id,
-    roomId: row.room_id,
-    periodId: row.period_id ?? undefined,
-    kind: row.kind === 'notice' ? 'NOTICE' : 'POST',
-    authorId: row.author_id,
-    body: row.deleted_at ? '삭제된 냥톡입니다.' : row.body ?? '',
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at ?? undefined,
-    version: row.version,
-  };
-}
-
-function mapRoomPostComment(row: RoomPostCommentRow): RoomPostComment {
-  return {
-    id: row.id,
-    clientRequestId: row.client_request_id,
-    postId: row.post_id,
-    authorId: row.author_id,
-    body: row.deleted_at ? '삭제된 댓글입니다.' : row.body ?? '',
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at ?? undefined,
-    version: row.version,
-  };
-}
-
-function mapRoomPostReaction(row: RoomPostReactionRow): RoomPostReaction {
-  return {
-    postId: row.post_id,
-    userId: row.user_id,
-    emoji: row.emoji,
-    createdAt: row.created_at,
-  };
-}
-
-function mapExpenseException(row: ExpenseExceptionRow): ExpenseException {
-  return {
-    expenseId: row.expense_id,
-    reason: row.reason,
-    requestedBy: row.requested_by,
-    requestedAt: row.requested_at,
-  };
-}
-
-function mapExpenseExceptionApproval(
-  row: ExpenseExceptionApprovalRow,
-): ExpenseExceptionApproval {
-  return {
-    expenseId: row.expense_id,
-    userId: row.user_id,
-    createdAt: row.created_at,
-  };
-}
-
-function mapInvitePreview(code: string, payload: JsonObject): InvitePreview {
-  const room = asObject(payload.room);
-  const join = asObject(payload.join);
-  if (!room || !join) throw new RepositoryError('INVALID_RESPONSE', '초대 정보 형식이 올바르지 않아요.');
-  const period = asObject(payload.current_period);
-  const holidays = Array.isArray(period?.holidays) ? period.holidays : [];
-  return {
-    code,
-    roomId: requiredString(room.id, '방 ID'),
-    name: requiredString(room.name, '방 이름'),
-    baseAmount: safeNumber(room.base_amount, '기준 금액'),
-    capacity: safeNumber(room.capacity, '정원'),
-    memberCount: safeNumber(room.member_count, '현재 인원'),
-    currentPeriod: period
-      ? {
-          id: requiredString(period.id, '주차 ID'),
-          weekStart: asLocalDate(requiredString(period.week_start, '주차 시작일')),
-          weekEnd: asLocalDate(requiredString(period.week_end, '주차 종료일')),
-          selectedDayCount: safeNumber(period.selected_day_count, '선택 일수'),
-          validDayCount: safeNumber(period.valid_day_count, '유효 일수'),
-          holidayDates: holidays
-            .map(asObject)
-            .filter((holiday): holiday is JsonObject => Boolean(holiday))
-            .map((holiday) => asLocalDate(requiredString(holiday.date, '공휴일'))),
-        }
-      : undefined,
-    joinedDate: asLocalDate(requiredString(join.joined_on, '합류일')),
-    eligibleDayCount: safeNumber(join.eligible_day_count, '남은 유효 일수'),
-    appliedLimit: safeNumber(join.applied_limit, '적용 한도'),
-    isLateJoiner: join.is_late_join === true,
-    participatesThisWeek: join.participates_this_week === true,
-    canJoin: join.can_join === true,
-  };
-}
-
-function mapPhase(state: PeriodStatusRow['state']): PeriodPhase {
-  if (state === 'settling') return 'SETTLEMENT';
-  return state.toUpperCase() as PeriodPhase;
-}
-
-function mapMemberStatus(status: RoomMemberRow['status']): MemberStatus {
-  return status.toUpperCase() as MemberStatus;
-}
-
 async function readPhoto(uri: string): Promise<{
   buffer: ArrayBuffer;
   contentType: string;
@@ -1960,15 +1510,6 @@ function toRequestUuid(value: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-function hash32(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
 function makeUuid(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
   const seed = `${Date.now()}:${Math.random()}:${Math.random()}`;
@@ -2062,43 +1603,6 @@ function firstObject(value: unknown): JsonObject | null {
   return asObject(value);
 }
 
-function asObject(value: unknown): JsonObject | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as JsonObject)
-    : null;
-}
-
-function requiredString(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new RepositoryError('INVALID_RESPONSE', `${label} 응답이 올바르지 않아요.`);
-  }
-  return value;
-}
-
-function safeNumber(value: unknown, label: string): number {
-  const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
-  if (!Number.isSafeInteger(number)) {
-    throw new RepositoryError('INVALID_RESPONSE', `${label} 응답이 올바르지 않아요.`);
-  }
-  return number;
-}
-
-/** remaining_amount can legitimately be negative when a member overspends. */
-function safeSignedNumber(value: unknown, label: string): number {
-  const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
-  if (!Number.isSafeInteger(number)) {
-    throw new RepositoryError('INVALID_RESPONSE', `${label} 응답이 올바르지 않아요.`);
-  }
-  return number;
-}
-
-function asLocalDate(value: string): LocalDate {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
-    throw new RepositoryError('INVALID_RESPONSE', '날짜 응답 형식이 올바르지 않아요.');
-  }
-  return value as LocalDate;
-}
-
 function isString(value: string | null): value is string {
   return typeof value === 'string' && value.length > 0;
 }
@@ -2112,11 +1616,6 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
     result.set(itemKey, group);
   }
   return result;
-}
-
-function defaultAvatar(id: string): string {
-  // 사용자 UUID 해시로 동물 아이콘 10종 중 하나를 결정론적(≈랜덤)으로 배정한다.
-  return ANIMAL_AVATARS[hash32(id) % ANIMAL_AVATARS.length];
 }
 
 function clone<T>(value: T): T {
