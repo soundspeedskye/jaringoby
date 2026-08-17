@@ -45,7 +45,7 @@ export function NotificationsPage() {
         keyExtractor={(notification) => notification.id}
         ListEmptyComponent={
           <EmptyState
-            description="새 지출과 내 게시물의 댓글·답글이 이곳에 도착해요."
+            description="새 지출과 방 공지, 내 지출에 달린 댓글·답글이 이곳에 도착해요."
             icon="bell-outline"
             title="아직 새 소식이 없어요."
           />
@@ -120,7 +120,7 @@ function notificationCopy(notification: AppNotification, actorName?: string) {
     case "expense_created":
       return `${actor}님이 새 지출을 기록했어요.`;
     case "expense_comment":
-      return "내 게시글에 새 댓글이 달렸어요.";
+      return "내 지출에 새 댓글이 달렸어요.";
     case "comment_reply":
       return "내 댓글에 새 답글이 달렸어요.";
     case "member_joined":
