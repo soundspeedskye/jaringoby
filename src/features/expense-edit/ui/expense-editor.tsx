@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { AddExpenseInput, Expense } from "@/shared/api/types";
+import { useInputFocus } from "@/shared/lib/input-focus-context";
 import {
   fonts,
   palette,
@@ -36,6 +37,9 @@ export function ExpenseEditor({
     patch: Partial<AddExpenseInput>,
   ) => Promise<Expense>;
 }) {
+  // 편집 폼은 댓글 스레드 스크롤 안에 렌더된다. 메모처럼 아래쪽에 있는
+  // 입력에 포커스가 가면 키보드에 가리므로 스레드 쪽에 스크롤을 요청한다.
+  const onInputFocus = useInputFocus();
   const [draftAmount, setDraftAmount] = useState(() =>
     formatKrwInput(String(expense.amount)),
   );
@@ -179,6 +183,7 @@ export function ExpenseEditor({
         maxLength={200}
         multiline
         onChangeText={setDraftMemo}
+        onFocus={onInputFocus}
         style={styles.editMemo}
         value={draftMemo}
       />

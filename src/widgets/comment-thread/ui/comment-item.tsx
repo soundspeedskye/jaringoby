@@ -1,5 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import { memo, useCallback, useMemo, useState } from "react";
+import type { FocusEvent } from "react-native";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { formatCommentTime } from "../lib/format-comment-time";
@@ -32,6 +33,7 @@ export const CommentItem = memo(function CommentItem({
   onBeginEdit,
   onError,
   onFeedback,
+  onFocusEdit,
   onFinishEdit,
   onReply,
   profile,
@@ -49,6 +51,7 @@ export const CommentItem = memo(function CommentItem({
   onBeginEdit: (comment: Comment) => void;
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
+  onFocusEdit: (commentId: string, event: FocusEvent) => void;
   onFinishEdit: () => void;
   onReply: (comment: Comment) => void;
   profile?: Profile;
@@ -200,6 +203,7 @@ export const CommentItem = memo(function CommentItem({
               maxLength={COMMENT_MAX_CHARACTERS}
               multiline
               onChangeText={setEditingBody}
+              onFocus={(event) => onFocusEdit(comment.id, event)}
               style={styles.editCommentInput}
               value={editingBody}
             />
