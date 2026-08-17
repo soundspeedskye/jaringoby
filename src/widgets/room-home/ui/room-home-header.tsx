@@ -3,10 +3,10 @@ import { useRouter } from "expo-router";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { ExceptionApprovalInbox } from "@/components/room/exception-approval-inbox";
-import { RecentExpenseCarousel } from "@/components/room/recent-expense-carousel";
-import { RoomBoardPreview } from "@/components/room/room-board-preview";
-import { RoomHero } from "@/components/room/room-hero";
+import { ExceptionApprovalInbox } from "@/features/exception-approval";
+import { RecentExpenseCarousel } from "@/entities/expense/ui/recent-expense-carousel";
+import { RoomBoardPreview } from "./room-board-preview";
+import { RoomHero } from "@/entities/room/ui/room-hero";
 import { NoticeBanner } from "@/shared/ui/notice-banner";
 import {
   fonts,
@@ -18,7 +18,7 @@ import {
 } from "@/shared/config/design";
 import { isExpenseMutationPhase } from "@/entities/period";
 import type { PeriodPhase } from "@/shared/model/types";
-import type { RoomHomeActions, RoomHomeData } from "@/hooks/use-room-home";
+import type { RoomHomeActions, RoomHomeData } from "../model/types";
 import { useUnreadNotificationCount } from "@/shared/providers/app-data-hooks";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { formatDateLabel } from "@/shared/lib/format";

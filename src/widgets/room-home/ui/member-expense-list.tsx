@@ -1,10 +1,10 @@
 import { memo } from "react";
 import { ScrollView, StyleSheet } from "react-native";
 
-import { MemberList } from "@/components/room/member-list";
-import { RoomHomeHeader } from "@/components/room/room-home-header";
+import { MemberList } from "@/entities/member/ui/member-list";
+import { RoomHomeHeader } from "./room-home-header";
 import { spacing } from "@/shared/config/design";
-import type { RoomHomeActions, RoomHomeData } from "@/hooks/use-room-home";
+import type { RoomHomeActions, RoomHomeData } from "../model/types";
 
 export const MemberExpenseList = memo(function MemberExpenseList({
   actions,

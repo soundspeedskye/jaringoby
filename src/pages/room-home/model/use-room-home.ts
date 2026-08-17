@@ -1,31 +1,26 @@
 import { useRouter } from "expo-router";
 import { useMemo } from "react";
 
-import type { MemberListItem } from "@/components/room/member-list";
-import type { WeekDay } from "@/components/room/room-hero";
-import {
-  expenseOfficialAmount,
-  expensePendingDelta,
-  hasPendingExpenseProjection,
-} from "@/shared/api/expense-sync";
-import type {
-  Expense,
-  Period,
-  PeriodMember,
-  Profile,
-  Room,
-} from "@/shared/api/types";
+import type { MemberListItem } from "@/entities/member/ui/member-list";
 import {
   createPeriodTimeline,
   createWeekdayCalendarFromPeriod,
   getPeriodPhase,
 } from "@/entities/period";
+import type { WeekDay } from "@/entities/room/ui/room-hero";
+import {
+  expenseOfficialAmount,
+  expensePendingDelta,
+  hasPendingExpenseProjection,
+} from "@/shared/api/expense-sync";
+import type { Expense } from "@/shared/api/types";
 import {
   addLocalDays,
   startOfSeoulDate,
   toSeoulLocalDate,
 } from "@/shared/lib/date-time";
-import type { PeriodPhase, PeriodTimeline } from "@/shared/model/types";
+import { formatMonthDay, formatWon } from "@/shared/lib/format";
+import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
 import {
   useCommentCounts,
   useCrownIds,
@@ -37,51 +32,10 @@ import {
   useSettlementExcludedExpenseIds,
 } from "@/shared/providers/app-data-hooks";
 import { useAppStatus, useAppStatusActions } from "@/shared/providers/app-status-provider";
-import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
-import { formatMonthDay, formatWon } from "@/shared/lib/format";
+import type { RoomHomeActions, RoomHomeState } from "@/widgets/room-home";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EMPTY_EXPENSES: Expense[] = [];
-
-/** Everything the loaded home view renders, derived from the current room state. */
-export type RoomHomeData = {
-  activeRoom: Room;
-  currentPeriod: Period;
-  currentUser: Profile;
-  currentMember: PeriodMember | undefined;
-  appliedLimit: number;
-  daysRemaining: number;
-  mySpent: number;
-  myPendingDelta: number;
-  myPendingCount: number;
-  phase: PeriodPhase;
-  timeline: PeriodTimeline;
-  weekMonthLabel: string;
-  weekDays: WeekDay[];
-  weekRangeLabel: string;
-  memberRows: MemberListItem[];
-  expensesByUserId: ReadonlyMap<string, Expense[]>;
-  commentCounts: ReadonlyMap<string, number>;
-  recentExpenses: Expense[];
-  profilesById: ReadonlyMap<string, Profile>;
-  error: string | null;
-};
-
-/** Navigation and status callbacks shared across every home view state. */
-export type RoomHomeActions = {
-  addExpense: () => void;
-  joinRoom: () => void;
-  createRoom: () => void;
-  clearError: () => void;
-  retry: () => void;
-  onOpenExpense: (expenseId: string) => void;
-  onOpenMemberFeed: (userId: string) => void;
-};
-
-export type RoomHomeState =
-  | { status: "loading" }
-  | { status: "empty"; error: string | null }
-  | { status: "ready"; data: RoomHomeData };
 
 export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions } {
   const router = useRouter();

@@ -20,3 +20,12 @@ export function formatDateLabel(value: string | Date): string {
     timeZone: 'Asia/Seoul',
   }).format(date);
 }
+
+export function formatFullDate(value: Date): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  }).format(value);
+}
