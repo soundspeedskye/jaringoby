@@ -1,8 +1,5 @@
-import { toInstantMs } from './date-time';
 import { getPeriodPhase } from './period';
 import type { InstantInput, MemberStatus, PeriodTimeline } from './types';
-
-export const COMMENT_EDIT_WINDOW_MS = 5 * 60 * 1_000;
 
 export type ExpenseMutationAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'PHOTO_REUPLOAD';
 export type CommentMutationAction = 'CREATE' | 'EDIT' | 'DELETE';
@@ -17,8 +14,7 @@ export type CommentPermissionReason =
   | 'ALLOWED'
   | 'MEMBER_NOT_ACTIVE'
   | 'COMMENTS_LOCKED_FOR_PHASE'
-  | 'NOT_COMMENT_AUTHOR'
-  | 'EDIT_WINDOW_EXPIRED';
+  | 'NOT_COMMENT_AUTHOR';
 
 export interface PolicyDecision<Reason extends string> {
   readonly allowed: boolean;
@@ -67,7 +63,6 @@ export function evaluateCommentMutationPermission(input: {
   readonly actorMemberStatus: MemberStatus;
   readonly actorId: string;
   readonly commentAuthorId?: string;
-  readonly commentCreatedAt?: InstantInput;
 }): PolicyDecision<CommentPermissionReason> {
   if (input.actorMemberStatus !== 'ACTIVE') {
     return denied('MEMBER_NOT_ACTIVE');
@@ -78,20 +73,11 @@ export function evaluateCommentMutationPermission(input: {
     return denied('COMMENTS_LOCKED_FOR_PHASE');
   }
 
+  // 편집 시간 제한은 두지 않는다. 작성자 본인이면 phase가 허용하는 동안 언제든
+  // 고칠 수 있고, 보관된 주차(ARCHIVED)의 동결은 isCommentMutationPhase가 맡는다.
   if (input.action !== 'CREATE') {
     if (input.commentAuthorId == null || input.commentAuthorId !== input.actorId) {
       return denied('NOT_COMMENT_AUTHOR');
-    }
-  }
-
-  if (input.action === 'EDIT') {
-    if (input.commentCreatedAt == null) {
-      return denied('EDIT_WINDOW_EXPIRED');
-    }
-    const now = toInstantMs(input.now);
-    const createdAt = toInstantMs(input.commentCreatedAt);
-    if (now < createdAt || now >= createdAt + COMMENT_EDIT_WINDOW_MS) {
-      return denied('EDIT_WINDOW_EXPIRED');
     }
   }
 

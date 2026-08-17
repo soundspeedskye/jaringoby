@@ -56,7 +56,6 @@ import type {
 } from "@/data/types";
 import { COMMENT_REACTION_EMOJIS } from "@/data/types";
 import {
-  COMMENT_EDIT_WINDOW_MS,
   COMMENT_MAX_CHARACTERS,
   createCommentCommand,
   createPeriodTimeline,
@@ -741,18 +740,6 @@ function CommentSection({
     () => new Map(comments.map((comment) => [comment.id, comment])),
     [comments],
   );
-  const editDeadlines = useMemo(
-    () =>
-      comments
-        .filter(
-          (comment) => comment.userId === currentUserId && !comment.deletedAt,
-        )
-        .map(
-          (comment) => Date.parse(comment.createdAt) + COMMENT_EDIT_WINDOW_MS,
-        ),
-    [comments, currentUserId],
-  );
-  const renderedAt = useDeadlineNow(editDeadlines, canMutate);
   const commentCount = useMemo(
     () => comments.filter((comment) => !comment.deletedAt).length,
     [comments],
@@ -785,10 +772,7 @@ function CommentSection({
       const replied = comment.replyToId
         ? commentsById.get(comment.replyToId)
         : undefined;
-      const canEdit =
-        comment.userId === currentUserId &&
-        !comment.deletedAt &&
-        renderedAt < Date.parse(comment.createdAt) + COMMENT_EDIT_WINDOW_MS;
+      const canEdit = comment.userId === currentUserId && !comment.deletedAt;
       return (
         <CommentItem
           canEdit={canEdit}
@@ -825,7 +809,6 @@ function CommentSection({
       finishEdit,
       profilesById,
       reactionsByCommentId,
-      renderedAt,
       selectReply,
       toggleCommentReaction,
       updateComment,
