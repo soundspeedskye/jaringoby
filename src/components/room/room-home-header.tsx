@@ -18,8 +18,8 @@ import {
 } from "@/constants/design";
 import { isExpenseMutationPhase, type PeriodPhase } from "@/domain";
 import type { RoomHomeActions, RoomHomeData } from "@/hooks/use-room-home";
-import { useAppDialog } from "@/providers/app-dialog-provider";
 import { useUnreadNotificationCount } from "@/providers/app-data-hooks";
+import { useAppDialog } from "@/providers/app-dialog-provider";
 import { formatDateLabel } from "@/utils/format";
 
 export const RoomHomeHeader = memo(function RoomHomeHeader({
@@ -53,12 +53,20 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
     weekDays,
     weekRangeLabel,
   } = data;
-  const { addExpense, clearError, createRoom, joinRoom, onOpenExpense, onOpenMemberFeed } = actions;
+  const {
+    addExpense,
+    clearError,
+    createRoom,
+    joinRoom,
+    onOpenExpense,
+    onOpenMemberFeed,
+  } = actions;
   const isRoomOwner = activeRoom.ownerId === currentUser.id;
+  // 제목·본문 없이 항목만 보여준다. 다이얼로그가 떴다는 것 자체가 "고르세요"라는 뜻이다.
   const openRoomActions = () => {
-    showDialog("방", "원하는 작업을 선택해 주세요.", [
+    showDialog(undefined, undefined, [
       { text: "취소", style: "cancel" },
-      { text: "코드로 참여", onPress: joinRoom },
+      { text: "참여 코드로 참여", onPress: joinRoom },
       { text: "새 챌린지 만들기", onPress: createRoom },
     ]);
   };
@@ -71,7 +79,11 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         </Text>
         <View style={styles.actionButtons}>
           <Pressable
-            accessibilityLabel={unreadNotificationCount ? `소식함, 읽지 않은 소식 ${unreadNotificationCount}개` : "소식함"}
+            accessibilityLabel={
+              unreadNotificationCount
+                ? `소식함, 읽지 않은 소식 ${unreadNotificationCount}개`
+                : "소식함"
+            }
             onPress={() => router.push("/notifications")}
             style={styles.circleButton}
           >
@@ -190,7 +202,6 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
       ) : (
         <PhaseBanner phase={phase} timeline={timeline} />
       )}
-
     </>
   );
 });

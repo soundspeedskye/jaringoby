@@ -111,12 +111,14 @@ function EditRoomForm({
   return (
     <ModalFormScreen
       footer={
-        <PrimaryButton
-          disabled={!hasChanges || Boolean(validationError)}
-          label="저장하기"
-          loading={submitting}
-          onPress={() => void submit()}
-        />
+        <View style={styles.footer}>
+          <PrimaryButton
+            disabled={!hasChanges || Boolean(validationError)}
+            label="저장하기"
+            loading={submitting}
+            onPress={() => void submit()}
+          />
+        </View>
       }
       onBack={() => router.back()}
       testID="edit-room-screen"
@@ -204,4 +206,5 @@ const styles = StyleSheet.create({
   },
   notice: { marginTop: spacing.xl },
   formMessage: { marginTop: spacing.md },
+  footer: { marginTop: spacing.xl },
 });

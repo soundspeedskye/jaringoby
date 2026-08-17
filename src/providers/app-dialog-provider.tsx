@@ -1,7 +1,5 @@
 import {
-  Alert,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -16,7 +14,7 @@ import {
   useState,
 } from 'react';
 
-import { palette, radii, shadow, spacing } from '@/constants/design';
+import { fonts, palette, radii, shadow, spacing } from '@/constants/design';
 
 export type AppDialogAction = {
   text: string;
@@ -25,14 +23,16 @@ export type AppDialogAction = {
 };
 
 type AppDialogRequest = {
-  title: string;
+  /** 비우면 항목만 보여준다. 갈래를 고르는 메뉴에는 설명이 필요 없다. */
+  title?: string;
   message?: string;
   actions: readonly AppDialogAction[];
 };
 
 type AppDialogContextValue = {
+  /** 가운데 다이얼로그. 제목·본문은 비울 수 있고, 그러면 항목만 보여준다. */
   showDialog: (
-    title: string,
+    title?: string,
     message?: string,
     actions?: readonly AppDialogAction[],
   ) => void;
@@ -46,12 +46,8 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
 
   const showDialog = useCallback<AppDialogContextValue['showDialog']>(
     (title, message, actions = DEFAULT_ACTIONS) => {
-      const normalizedActions = actions.length ? actions : DEFAULT_ACTIONS;
-      if (Platform.OS !== 'web') {
-        Alert.alert(title, message, [...normalizedActions]);
-        return;
-      }
-      setRequest({ title, message, actions: normalizedActions });
+      const requested = actions.length ? actions : DEFAULT_ACTIONS;
+      setRequest({ title, message, actions: withCancelLast(requested) });
     },
     [],
   );
@@ -72,63 +68,80 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
   return (
     <AppDialogContext.Provider value={value}>
       {children}
-      {Platform.OS === 'web' ? (
-        <Modal
-          accessibilityViewIsModal
-          animationType="fade"
-          onRequestClose={dismiss}
-          transparent
-          visible={Boolean(request)}>
-          {request ? (
-            <View style={styles.backdrop} testID="app-dialog-backdrop">
-              <View
-                accessibilityLabel={`${request.title}${request.message ? `. ${request.message}` : ''}`}
-                accessibilityRole="alert"
-                style={styles.dialog}
-                testID="app-dialog">
+      <Modal
+        accessibilityViewIsModal
+        animationType="fade"
+        onRequestClose={dismiss}
+        statusBarTranslucent
+        transparent
+        visible={Boolean(request)}>
+        {request ? (
+          <View style={styles.backdrop} testID="app-dialog-backdrop">
+            <View
+              accessibilityLabel={
+                [request.title, request.message].filter(Boolean).join('. ') || undefined
+              }
+              accessibilityRole="alert"
+              style={styles.dialog}
+              testID="app-dialog">
+              {request.title ? (
                 <Text style={styles.title} testID="app-dialog-title">
                   {request.title}
                 </Text>
-                {request.message ? <Text style={styles.message}>{request.message}</Text> : null}
-                <View style={styles.actions}>
-                  {request.actions.map((action, index) => (
-                    <Pressable
-                      accessibilityRole="button"
-                      key={`${action.text}:${index}`}
-                      onPress={() => choose(action)}
-                      style={({ pressed }) => [
-                        styles.action,
-                        action.style === 'cancel' && styles.cancelAction,
-                        action.style === 'destructive' && styles.destructiveAction,
-                        pressed && styles.pressed,
-                      ]}
-                      testID={`app-dialog-action-${index}`}>
-                      <Text
-                        style={[
-                          styles.actionLabel,
-                          action.style === 'cancel' && styles.cancelLabel,
-                        ]}>
-                        {action.text}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+              ) : null}
+              {request.message ? <Text style={styles.message}>{request.message}</Text> : null}
+              <View
+                style={[
+                  styles.actions,
+                  !request.title && !request.message && styles.actionsOnly,
+                ]}>
+                {request.actions.map((action, index) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={`${action.text}:${index}`}
+                    onPress={() => choose(action)}
+                    style={({ pressed }) => [
+                      styles.action,
+                      action.style === 'cancel' && styles.cancelAction,
+                      action.style === 'destructive' && styles.destructiveAction,
+                      pressed && styles.pressed,
+                    ]}
+                    testID={`app-dialog-action-${index}`}>
+                    <Text
+                      style={[
+                        styles.actionLabel,
+                        action.style === 'cancel' && styles.cancelLabel,
+                      ]}>
+                      {action.text}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
-              <Pressable
-                aria-hidden
-                accessible={false}
-                focusable={false}
-                onPress={dismiss}
-                style={styles.dismissLayer}
-                tabIndex={-1}
-                testID="app-dialog-dismiss"
-              />
             </View>
-          ) : null}
-        </Modal>
-      ) : null}
+            <Pressable
+              aria-hidden
+              accessible={false}
+              focusable={false}
+              onPress={dismiss}
+              style={styles.dismissLayer}
+              tabIndex={-1}
+              testID="app-dialog-dismiss"
+            />
+          </View>
+        ) : null}
+      </Modal>
     </AppDialogContext.Provider>
   );
+}
+
+/** 세로로 쌓이는 버튼에서는 취소가 맨 아래여야 한다. 호출처는 OS Alert 관례대로 먼저 넘긴다. */
+function withCancelLast(
+  actions: readonly AppDialogAction[],
+): readonly AppDialogAction[] {
+  return [
+    ...actions.filter((action) => action.style !== 'cancel'),
+    ...actions.filter((action) => action.style === 'cancel'),
+  ];
 }
 
 export function useAppDialog(): AppDialogContextValue {
@@ -152,6 +165,8 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     padding: spacing.xl,
     borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: palette.line,
     backgroundColor: palette.paper,
     ...shadow,
   },
@@ -165,19 +180,23 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.ink,
-    fontSize: 20,
+    fontFamily: fonts.handBold,
+    fontSize: 19,
     fontWeight: '700',
   },
   message: {
     marginTop: spacing.sm,
     color: palette.muted,
-    fontSize: 15,
-    lineHeight: 22,
+    fontFamily: fonts.hand,
+    fontSize: 14,
+    lineHeight: 21,
   },
   actions: {
     marginTop: spacing.xl,
     gap: spacing.sm,
   },
+  // 제목·본문이 없으면 위쪽 여백이 붕 뜬다.
+  actionsOnly: { marginTop: 0 },
   action: {
     minHeight: 48,
     alignItems: 'center',
@@ -196,7 +215,8 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     color: palette.cream,
-    fontSize: 15,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
     fontWeight: '700',
   },
   cancelLabel: {
