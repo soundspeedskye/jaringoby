@@ -21,14 +21,14 @@ import {
   tabularNums,
 } from "@/shared/config/design";
 import type { Period, PeriodMember } from "@/shared/api/types";
-import { EXPENSE_EXCEPTION_REASON_MAX_LENGTH } from "@/entities/expense";
+import { EXPENSE_EXCEPTION_REASON_MAX_LENGTH } from "@/shared/lib/domain/expenses";
 import {
   createPeriodTimeline,
   effectiveDatesOfPeriod,
   getPeriodPhase,
-  isExpenseMutationPhase,
-} from "@/entities/period";
-import { toSeoulLocalDate } from "@/shared/lib/date-time";
+} from "@/shared/lib/domain/period";
+import { isExpenseMutationPhase } from "@/shared/lib/domain/permissions";
+import { toSeoulLocalDate } from "@/shared/lib/domain/date-time";
 import {
   EXPENSE_CATEGORIES,
   type ExpenseCategory,

@@ -5,8 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { CommentActionProps } from "../model/types";
 import { CommentComposer } from "./comment-composer";
-import type { ReplyDraft } from "@/entities/post";
-import { createCommentCommand } from "@/entities/post";
+import type { ReplyDraft } from "@/shared/lib/domain/replies";
+import { createCommentCommand } from "@/shared/lib/domain/replies";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { createUuid } from "@/shared/lib/uuid";
 import type { PeriodPhase } from "@/shared/model/types";

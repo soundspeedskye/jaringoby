@@ -17,16 +17,16 @@ import {
   spacing,
   tabularNums,
 } from "@/shared/config/design";
-import { createPeriodMemberPlan, createWeekdayCalendar } from "@/entities/period";
+import { createPeriodMemberPlan, createWeekdayCalendar } from "@/shared/lib/domain/period";
 import {
   DEFAULT_MAX_ACTIVE_MEMBERS,
   isValidRoomCapacity,
   isValidRoomName,
   ROOM_NAME_MAX_CHARACTERS,
-} from "@/entities/room";
-import { toSeoulLocalDate } from "@/shared/lib/date-time";
-import { createKoreanHolidaySnapshot } from "@/shared/lib/holidays";
-import { isWeekend, resolveFirstWeekStart } from "@/shared/lib/week";
+} from "@/shared/lib/domain/invites";
+import { toSeoulLocalDate } from "@/shared/lib/domain/date-time";
+import { createKoreanHolidaySnapshot } from "@/shared/lib/domain/holidays";
+import { isWeekend, resolveFirstWeekStart } from "@/shared/lib/domain/week";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { formatWon } from "@/shared/lib/format";
 import { createUuid } from "@/shared/lib/uuid";

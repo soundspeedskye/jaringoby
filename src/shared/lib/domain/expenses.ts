@@ -1,5 +1,5 @@
-import { toInstantMs, toSeoulLocalDate } from '@/shared/lib/date-time';
-import { assertKrwAmount } from '@/shared/lib/limits';
+import { toInstantMs, toSeoulLocalDate } from '@/shared/lib/domain/date-time';
+import { assertKrwAmount } from '@/shared/lib/domain/limits';
 import { EXPENSE_CATEGORIES } from '@/shared/model/types';
 import type {
   ExpenseCategory,

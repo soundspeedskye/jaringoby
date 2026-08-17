@@ -15,8 +15,8 @@ import {
 
 import { CommentComposerDock } from "./comment-composer-dock";
 import { CommentItem } from "./comment-item";
-import type { ReplyDraft } from "@/entities/post";
-import { prepareReplyDraft } from "@/entities/post";
+import type { ReplyDraft } from "@/shared/lib/domain/replies";
+import { prepareReplyDraft } from "@/shared/lib/domain/replies";
 import type {
   Comment,
   CommentReaction,

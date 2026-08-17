@@ -1,5 +1,5 @@
 import type { Period } from "@/shared/api/types";
-import { createPeriodTimeline } from "@/entities/period";
+import { createPeriodTimeline } from "@/shared/lib/domain/period";
 
 export const PERIOD_NOTIFICATION_SOURCE = "jaringoby-period-schedule";
 export const PERIOD_NOTIFICATION_SCHEDULE_VERSION = 2;

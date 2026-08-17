@@ -6,7 +6,7 @@ import {
   createPeriodTimeline,
   createWeekdayCalendarFromPeriod,
   getPeriodPhase,
-} from "@/entities/period";
+} from "@/shared/lib/domain/period";
 import type { WeekDay } from "@/entities/room/ui/room-hero";
 import {
   expenseOfficialAmount,
@@ -18,7 +18,7 @@ import {
   addLocalDays,
   startOfSeoulDate,
   toSeoulLocalDate,
-} from "@/shared/lib/date-time";
+} from "@/shared/lib/domain/date-time";
 import { formatMonthDay, formatWon } from "@/shared/lib/format";
 import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
 import {

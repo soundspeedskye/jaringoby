@@ -4,12 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BackHandler, Pressable, StyleSheet, View } from "react-native";
 
 import { ExpenseSummary } from "@/entities/expense/ui/expense-summary";
+import { createPeriodTimeline, getPeriodPhase } from "@/shared/lib/domain/period";
 import {
-  createPeriodTimeline,
-  getPeriodPhase,
   isCommentMutationPhase,
   isExpenseMutationPhase,
-} from "@/entities/period";
+} from "@/shared/lib/domain/permissions";
 import { ExpenseExceptionCard } from "@/features/exception-approval";
 import { ExpenseEditor } from "@/features/expense-edit";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";

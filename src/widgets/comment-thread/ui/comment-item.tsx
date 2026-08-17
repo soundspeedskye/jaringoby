@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { formatCommentTime } from "../lib/format-comment-time";
 import type { CommentActionProps } from "../model/types";
-import { COMMENT_MAX_CHARACTERS, validateCommentBody } from "@/entities/post";
+import { COMMENT_MAX_CHARACTERS, validateCommentBody } from "@/shared/lib/domain/replies";
 import type {
   Comment,
   CommentReaction,

@@ -27,7 +27,7 @@ import type {
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/shared/api/types';
-import { createPeriodTimeline } from '@/entities/period';
+import { createPeriodTimeline } from '@/shared/lib/domain/period';
 
 export const OFFLINE_QUEUE_STORAGE_KEY = 'jaringoby.offline-mutations.v1';
 export const OFFLINE_SNAPSHOT_STORAGE_KEY = 'jaringoby.offline-snapshots.v1';

@@ -1,4 +1,4 @@
-import { calculateRemainingAmount } from '@/shared/lib/limits';
+import { calculateRemainingAmount } from '@/shared/lib/domain/limits';
 import type { MemberStatus, PeriodPhase } from '@/shared/model/types';
 
 export interface CrownMember {

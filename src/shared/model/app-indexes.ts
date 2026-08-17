@@ -15,8 +15,8 @@ import type {
   RoomPostComment,
   RoomPostReaction,
 } from '@/shared/api/types';
-import { collectSettlementExcludedExpenseIds } from '@/entities/expense';
-import { selectCrownHolders } from '@/entities/member';
+import { collectSettlementExcludedExpenseIds } from '@/shared/lib/domain/expenses';
+import { selectCrownHolders } from '@/shared/lib/domain/crown';
 
 export type AppIndexes = {
   roomById: Map<string, Room>;

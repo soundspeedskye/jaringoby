@@ -21,7 +21,7 @@ import {
   tabularNums,
 } from "@/shared/config/design";
 import type { Expense } from "@/shared/api/types";
-import { createPeriodTimeline } from "@/entities/period";
+import { createPeriodTimeline } from "@/shared/lib/domain/period";
 import {
   useCurrentUser,
   useExpenseComments,

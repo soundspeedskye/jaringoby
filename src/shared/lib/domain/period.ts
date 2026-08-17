@@ -1,11 +1,11 @@
-import { addLocalDays, compareLocalDates, startOfSeoulDate, toInstantMs } from '@/shared/lib/date-time';
+import { addLocalDays, compareLocalDates, startOfSeoulDate, toInstantMs } from '@/shared/lib/domain/date-time';
 import {
   createKoreanHolidaySnapshot,
   type KoreanHolidaySnapshot,
-} from '@/shared/lib/holidays';
-import { calculateAppliedLimit } from '@/shared/lib/limits';
+} from '@/shared/lib/domain/holidays';
+import { calculateAppliedLimit } from '@/shared/lib/domain/limits';
 import type { InstantInput, LocalDate, PeriodPhase, PeriodTimeline } from '@/shared/model/types';
-import { getIsoWeekday } from '@/shared/lib/week';
+import { getIsoWeekday } from '@/shared/lib/domain/week';
 
 const HOUR_MS = 60 * 60 * 1_000;
 

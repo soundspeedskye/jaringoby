@@ -16,7 +16,7 @@ import {
   spacing,
   tabularNums,
 } from "@/shared/config/design";
-import { isExpenseMutationPhase } from "@/entities/period";
+import { isExpenseMutationPhase } from "@/shared/lib/domain/permissions";
 import type { PeriodPhase } from "@/shared/model/types";
 import type { RoomHomeActions, RoomHomeData } from "../model/types";
 import { useUnreadNotificationCount } from "@/shared/providers/app-data-hooks";

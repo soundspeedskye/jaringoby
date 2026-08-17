@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createKoreanHolidaySnapshot } from '@/shared/lib/holidays';
-import { startOfSeoulDate } from '@/shared/lib/date-time';
+import { createKoreanHolidaySnapshot } from '@/shared/lib/domain/holidays';
+import { startOfSeoulDate } from '@/shared/lib/domain/date-time';
 import {
   countRemainingEligibleDays,
   createPeriodMemberPlan,

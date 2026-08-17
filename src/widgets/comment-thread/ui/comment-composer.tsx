@@ -2,8 +2,8 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import type { ReplyDraft } from "@/entities/post";
-import { COMMENT_MAX_CHARACTERS, validateCommentBody } from "@/entities/post";
+import type { ReplyDraft } from "@/shared/lib/domain/replies";
+import { COMMENT_MAX_CHARACTERS, validateCommentBody } from "@/shared/lib/domain/replies";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { GlassSurface } from "@/shared/ui/glass-surface";
 

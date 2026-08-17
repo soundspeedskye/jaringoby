@@ -16,7 +16,7 @@ import {
   isValidRoomCapacity,
   isValidRoomName,
   ROOM_NAME_MAX_CHARACTERS,
-} from "@/entities/room";
+} from "@/shared/lib/domain/invites";
 import {
   useActiveRoom,
   useActiveRoomMembers,
