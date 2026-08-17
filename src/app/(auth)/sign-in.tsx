@@ -13,7 +13,7 @@ import { useSession } from "@/providers/session-provider";
 type Mode = "SIGN_IN" | "SIGN_UP";
 
 export default function SignInScreen() {
-  const { requestPasswordReset, signIn, signUp } = useSession();
+  const { accountSafetyNotice, requestPasswordReset, signIn, signUp } = useSession();
   const [mode, setMode] = useState<Mode>("SIGN_IN");
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
@@ -125,6 +125,7 @@ export default function SignInScreen() {
         />
 
         <FormMessage message={message} tone="success" />
+        <FormMessage message={accountSafetyNotice} />
         <FormMessage message={error} />
         <PrimaryButton
           label={mode === "SIGN_IN" ? "로그인" : "계정 만들기"}
