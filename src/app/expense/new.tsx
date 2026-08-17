@@ -4,42 +4,44 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { ModalFormScreen } from "@/components/layout/modal-form-screen";
-import { ChoiceChip } from "@/components/ui/choice-chip";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { FormSection } from "@/components/ui/form-section";
-import { NoticeBanner } from "@/components/ui/notice-banner";
-import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
-import { PrimaryButton } from "@/components/ui/primary-button";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { ChoiceChip } from "@/shared/ui/choice-chip";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { FormSection } from "@/shared/ui/form-section";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
+import { PlatformDateTimePicker } from "@/shared/ui/platform-date-time-picker";
+import { PrimaryButton } from "@/shared/ui/primary-button";
 import {
   fonts,
   palette,
   radii,
   spacing,
   tabularNums,
-} from "@/constants/design";
-import type { Period, PeriodMember } from "@/data/types";
+} from "@/shared/config/design";
+import type { Period, PeriodMember } from "@/shared/api/types";
+import { EXPENSE_EXCEPTION_REASON_MAX_LENGTH } from "@/entities/expense";
 import {
   createPeriodTimeline,
   effectiveDatesOfPeriod,
-  EXPENSE_CATEGORIES,
-  EXPENSE_EXCEPTION_REASON_MAX_LENGTH,
   getPeriodPhase,
   isExpenseMutationPhase,
-  toSeoulLocalDate,
+} from "@/entities/period";
+import { toSeoulLocalDate } from "@/shared/lib/date-time";
+import {
+  EXPENSE_CATEGORIES,
   type ExpenseCategory,
   type LocalDate,
-} from "@/domain";
-import { useDeadlineNow } from "@/hooks/use-deadline-now";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { useCurrentRoom, usePeriodMembers } from "@/providers/app-data-hooks";
+} from "@/shared/model/types";
+import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { useCurrentRoom, usePeriodMembers } from "@/shared/providers/app-data-hooks";
 import {
   pickSanitizedExpensePhoto,
   type ExpensePhotoSource,
-} from "@/services/expense-photo-picker";
-import { createUuid } from "@/utils/uuid";
+} from "@/shared/services/expense-photo-picker";
+import { createUuid } from "@/shared/lib/uuid";
 
 const CATEGORY_ICONS: Record<
   ExpenseCategory,

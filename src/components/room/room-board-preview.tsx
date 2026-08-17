@@ -3,15 +3,15 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnimalAvatar } from '@/components/avatar/animal-avatar';
-import { fonts, palette, radii, spacing } from '@/constants/design';
-import type { RoomPost } from '@/data/types';
+import { AnimalAvatar } from '@/shared/ui/animal-avatar';
+import { fonts, palette, radii, spacing } from '@/shared/config/design';
+import type { RoomPost } from '@/shared/api/types';
 import {
   useLatestRoomNotice,
   useProfiles,
   useRoomPostCommentCounts,
   useRoomPosts,
-} from '@/providers/app-data-hooks';
+} from '@/shared/providers/app-data-hooks';
 
 const BOARD_NAME = '냥냥톡톡';
 

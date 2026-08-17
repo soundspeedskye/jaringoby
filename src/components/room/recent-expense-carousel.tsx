@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import {
   fonts,
   palette,
@@ -9,9 +9,9 @@ import {
   shadow,
   spacing,
   tabularNums,
-} from "@/constants/design";
-import type { Expense, Profile } from "@/data/types";
-import { formatDateLabel, formatWon } from "@/utils/format";
+} from "@/shared/config/design";
+import type { Expense, Profile } from "@/shared/api/types";
+import { formatDateLabel, formatWon } from "@/shared/lib/format";
 
 const CARD_WIDTH = 272;
 

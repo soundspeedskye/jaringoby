@@ -8,9 +8,9 @@ import {
 } from "react-native";
 
 import { MemberExpenseList } from "@/components/room/member-expense-list";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen, ScreenFrame } from "@/components/ui/screen";
-import { fonts, palette, radii, spacing } from "@/constants/design";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { Screen, ScreenFrame } from "@/shared/ui/screen";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { useRoomHome, type RoomHomeActions } from "@/hooks/use-room-home";
 
 export default function RoomHomeScreen() {

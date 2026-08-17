@@ -11,22 +11,22 @@ import {
   type SectionListRenderItemInfo,
 } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { ScreenFrame } from "@/components/ui/screen";
-import { SectionHeader } from "@/components/ui/section-header";
-import { fonts, palette, radii, spacing } from "@/constants/design";
-import type { OfflineMutationSummary } from "@/data/offline-queue-repository";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { ScreenFrame } from "@/shared/ui/screen";
+import { SectionHeader } from "@/shared/ui/section-header";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import type { OfflineMutationSummary } from "@/shared/api/offline-queue-repository";
 import {
   useActiveRoom,
   useClosedRooms,
   useCurrentUser,
   useHistory,
-} from "@/providers/app-data-hooks";
-import { useAppDialog } from "@/providers/app-dialog-provider";
-import { useSession } from "@/providers/session-provider";
-import { useSyncQueue } from "@/providers/sync-provider";
-import { formatWon } from "@/utils/format";
+} from "@/shared/providers/app-data-hooks";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { useSession } from "@/shared/providers/session-provider";
+import { useSyncQueue } from "@/shared/providers/sync-provider";
+import { formatWon } from "@/shared/lib/format";
 
 type ProfileListItem =
   | {

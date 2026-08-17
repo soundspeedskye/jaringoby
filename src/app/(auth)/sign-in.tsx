@@ -2,13 +2,13 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen } from "@/components/ui/screen";
-import { fonts, palette, radii, spacing } from "@/constants/design";
-import { useSession } from "@/providers/session-provider";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { Screen } from "@/shared/ui/screen";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useSession } from "@/shared/providers/session-provider";
 
 type Mode = "SIGN_IN" | "SIGN_UP";
 

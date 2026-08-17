@@ -3,12 +3,12 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Field } from '@/components/ui/field';
-import { FormMessage } from '@/components/ui/form-message';
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { Screen } from '@/components/ui/screen';
-import { palette, spacing } from '@/constants/design';
-import { useSession } from '@/providers/session-provider';
+import { Field } from '@/shared/ui/field';
+import { FormMessage } from '@/shared/ui/form-message';
+import { PrimaryButton } from '@/shared/ui/primary-button';
+import { Screen } from '@/shared/ui/screen';
+import { palette, spacing } from '@/shared/config/design';
+import { useSession } from '@/shared/providers/session-provider';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();

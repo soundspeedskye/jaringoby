@@ -17,13 +17,13 @@ import {
   type SectionListRenderItemInfo,
 } from "react-native";
 
-import { ChoiceChip } from "@/components/ui/choice-chip";
-import { EmptyState } from "@/components/ui/empty-state";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { PageHeader } from "@/components/ui/page-header";
-import { ScreenFrame } from "@/components/ui/screen";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
-import type { Period, PeriodResult, Room } from "@/data/types";
+import { ChoiceChip } from "@/shared/ui/choice-chip";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { PageHeader } from "@/shared/ui/page-header";
+import { ScreenFrame } from "@/shared/ui/screen";
+import { fonts, palette, radii, spacing, tabularNums } from "@/shared/config/design";
+import type { Period, PeriodResult, Room } from "@/shared/api/types";
 import {
   useActiveRoom,
   useCurrentUser,
@@ -31,8 +31,8 @@ import {
   useResultsForPeriods,
   useRooms,
   useRoomStats,
-} from "@/providers/app-data-hooks";
-import { formatWon } from "@/utils/format";
+} from "@/shared/providers/app-data-hooks";
+import { formatWon } from "@/shared/lib/format";
 
 type ResultFilter = "전체" | "달성" | "초과";
 type HistoryRecord = {

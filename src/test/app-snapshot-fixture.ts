@@ -1,4 +1,4 @@
-import type { AppSnapshot } from '@/data/types';
+import type { AppSnapshot } from '@/shared/api/types';
 
 /** Minimal, production-shaped snapshot for store and repository unit tests. */
 export function createTestSnapshot(): AppSnapshot {

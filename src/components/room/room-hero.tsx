@@ -2,7 +2,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import {
   fonts,
   palette,
@@ -10,8 +10,8 @@ import {
   shadow,
   spacing,
   tabularNums,
-} from "@/constants/design";
-import { formatWon } from "@/utils/format";
+} from "@/shared/config/design";
+import { formatWon } from "@/shared/lib/format";
 
 // 그 주 평일 한 칸. participating = 참여 기간(합류일~주말) 안이면서 공휴일이 아닌 날.
 export type WeekDay = {

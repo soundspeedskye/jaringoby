@@ -2,14 +2,14 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { ModalFormScreen } from "@/components/layout/modal-form-screen";
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { fonts, palette, radii, spacing } from "@/constants/design";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { useActiveRoom, useCurrentUser } from "@/providers/app-data-hooks";
-import { createUuid } from "@/utils/uuid";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { useActiveRoom, useCurrentUser } from "@/shared/providers/app-data-hooks";
+import { createUuid } from "@/shared/lib/uuid";
 
 export default function NewRoomPostScreen() {
   const router = useRouter();

@@ -3,18 +3,18 @@ import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
-import { ModalFormScreen } from "@/components/layout/modal-form-screen";
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { FormSection } from "@/components/ui/form-section";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { ANIMAL_AVATARS } from "@/constants/animals";
-import { fonts, palette, radii, spacing } from "@/constants/design";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { useCurrentUser } from "@/providers/app-data-hooks";
-import { useAppDialog } from "@/providers/app-dialog-provider";
-import { pickSanitizedProfilePhoto } from "@/services/profile-photo-picker";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { FormSection } from "@/shared/ui/form-section";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { ANIMAL_AVATARS } from "@/shared/config/animals";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { useCurrentUser } from "@/shared/providers/app-data-hooks";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { pickSanitizedProfilePhoto } from "@/shared/services/profile-photo-picker";
 
 type PhotoChange =
   | { kind: "unchanged" }

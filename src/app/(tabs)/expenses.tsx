@@ -11,26 +11,29 @@ import {
 } from "react-native";
 
 import { ExpenseCard } from "@/components/expense/expense-card";
-import { ChoiceChip } from "@/components/ui/choice-chip";
-import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { ScreenFrame } from "@/components/ui/screen";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
+import { ChoiceChip } from "@/shared/ui/choice-chip";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { PageHeader } from "@/shared/ui/page-header";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { ScreenFrame } from "@/shared/ui/screen";
+import { fonts, palette, radii, spacing, tabularNums } from "@/shared/config/design";
 import {
   expenseOfficialAmount,
   expenseOfficialCategory,
   expenseOptimisticAmount,
   hasPendingExpenseProjection,
-} from "@/data/expense-sync";
-import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/domain";
+} from "@/shared/api/expense-sync";
+import {
+  EXPENSE_CATEGORIES,
+  type ExpenseCategory,
+} from "@/shared/model/types";
 import {
   useCommentCounts,
   useCurrentRoom,
   useUserExpenses,
-} from "@/providers/app-data-hooks";
-import type { Expense } from "@/data/types";
-import { formatDateLabel, formatWon } from "@/utils/format";
+} from "@/shared/providers/app-data-hooks";
+import type { Expense } from "@/shared/api/types";
+import { formatDateLabel, formatWon } from "@/shared/lib/format";
 
 type Filter = "전체" | ExpenseCategory;
 

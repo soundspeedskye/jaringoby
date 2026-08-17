@@ -2,9 +2,9 @@ import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnimalAvatar } from '@/components/avatar/animal-avatar';
-import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/constants/design';
-import { formatWon } from '@/utils/format';
+import { AnimalAvatar } from '@/shared/ui/animal-avatar';
+import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/shared/config/design';
+import { formatWon } from '@/shared/lib/format';
 
 type ExpenseCardProps = {
   id: string;

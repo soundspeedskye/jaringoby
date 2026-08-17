@@ -3,14 +3,14 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnimalAvatar } from '@/components/avatar/animal-avatar';
+import { AnimalAvatar } from '@/shared/ui/animal-avatar';
 import { RoomPostReactionPills } from '@/components/room/room-post-reaction-pills';
-import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
-import { ScreenFrame } from '@/components/ui/screen';
-import { fonts, palette, radii, spacing } from '@/constants/design';
-import type { RoomPost } from '@/data/types';
-import { useAppActions } from '@/providers/app-actions-provider';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { PageHeader } from '@/shared/ui/page-header';
+import { ScreenFrame } from '@/shared/ui/screen';
+import { fonts, palette, radii, spacing } from '@/shared/config/design';
+import type { RoomPost } from '@/shared/api/types';
+import { useAppActions } from '@/shared/providers/app-actions-provider';
 import {
   useActiveRoom,
   useCurrentUser,
@@ -19,7 +19,7 @@ import {
   useReactionsByPostId,
   useRoomPostCommentCounts,
   useRoomPosts,
-} from '@/providers/app-data-hooks';
+} from '@/shared/providers/app-data-hooks';
 
 type BoardRow = { type: 'week'; label: string; id: string } | { type: 'post'; post: RoomPost };
 

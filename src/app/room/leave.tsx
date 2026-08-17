@@ -3,21 +3,21 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
-import { ModalFormScreen } from "@/components/layout/modal-form-screen";
-import { EmptyState } from "@/components/ui/empty-state";
-import { FormMessage } from "@/components/ui/form-message";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { NoticeBanner } from "@/components/ui/notice-banner";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { fonts, palette, radii, spacing } from "@/constants/design";
-import { useAppActions } from "@/providers/app-actions-provider";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { FormMessage } from "@/shared/ui/form-message";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
 import {
   useActiveRoom,
   useActiveRoomMembers,
   useCurrentUser,
-} from "@/providers/app-data-hooks";
-import { useAppDialog } from "@/providers/app-dialog-provider";
+} from "@/shared/providers/app-data-hooks";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 
 type LeaveMode = "leave" | "switch";
 

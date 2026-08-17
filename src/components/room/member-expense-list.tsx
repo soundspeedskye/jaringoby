@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet } from "react-native";
 
 import { MemberList } from "@/components/room/member-list";
 import { RoomHomeHeader } from "@/components/room/room-home-header";
-import { spacing } from "@/constants/design";
+import { spacing } from "@/shared/config/design";
 import type { RoomHomeActions, RoomHomeData } from "@/hooks/use-room-home";
 
 export const MemberExpenseList = memo(function MemberExpenseList({

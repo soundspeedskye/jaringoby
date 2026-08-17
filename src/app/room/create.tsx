@@ -3,35 +3,33 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { ModalFormScreen } from "@/components/layout/modal-form-screen";
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { KeyValueRow } from "@/components/ui/key-value-row";
-import { NoticeBanner } from "@/components/ui/notice-banner";
-import { PrimaryButton } from "@/components/ui/primary-button";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { KeyValueRow } from "@/shared/ui/key-value-row";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
+import { PrimaryButton } from "@/shared/ui/primary-button";
 import {
   fonts,
   palette,
   radii,
   spacing,
   tabularNums,
-} from "@/constants/design";
+} from "@/shared/config/design";
+import { createPeriodMemberPlan, createWeekdayCalendar } from "@/entities/period";
 import {
-  createKoreanHolidaySnapshot,
-  createPeriodMemberPlan,
-  createWeekdayCalendar,
   DEFAULT_MAX_ACTIVE_MEMBERS,
   isValidRoomCapacity,
   isValidRoomName,
-  isWeekend,
-  resolveFirstWeekStart,
   ROOM_NAME_MAX_CHARACTERS,
-  toSeoulLocalDate,
-} from "@/domain";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { formatWon } from "@/utils/format";
-import { createUuid } from "@/utils/uuid";
+} from "@/entities/room";
+import { toSeoulLocalDate } from "@/shared/lib/date-time";
+import { createKoreanHolidaySnapshot } from "@/shared/lib/holidays";
+import { isWeekend, resolveFirstWeekStart } from "@/shared/lib/week";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { formatWon } from "@/shared/lib/format";
+import { createUuid } from "@/shared/lib/uuid";
 
 // 공휴일은 서버(현재 공휴일 데이터셋)가 확정한다. 미리보기는 공휴일 제외 전
 // 기준이며, 실제 한도는 방 생성 응답의 주차 정보로 다시 표시된다.

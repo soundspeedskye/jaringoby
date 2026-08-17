@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { fonts, palette, radii, spacing } from '@/constants/design';
-import { ROOM_POST_REACTION_EMOJIS, type RoomPostReaction } from '@/data/types';
+import { fonts, palette, radii, spacing } from '@/shared/config/design';
+import { ROOM_POST_REACTION_EMOJIS, type RoomPostReaction } from '@/shared/api/types';
 
 export function RoomPostReactionPills({
   currentUserId,

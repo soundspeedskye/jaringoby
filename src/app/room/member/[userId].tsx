@@ -2,17 +2,17 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { ExpenseCard } from "@/components/expense/expense-card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
-import { ScreenFrame } from "@/components/ui/screen";
-import { fonts, palette, spacing } from "@/constants/design";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { PageHeader } from "@/shared/ui/page-header";
+import { ScreenFrame } from "@/shared/ui/screen";
+import { fonts, palette, spacing } from "@/shared/config/design";
 import {
   useCommentCounts,
   useCurrentRoom,
   useMemberRoomFeedExpenses,
   useProfiles,
-} from "@/providers/app-data-hooks";
-import { formatDateLabel } from "@/utils/format";
+} from "@/shared/providers/app-data-hooks";
+import { formatDateLabel } from "@/shared/lib/format";
 
 export default function MemberFeedScreen() {
   const router = useRouter();

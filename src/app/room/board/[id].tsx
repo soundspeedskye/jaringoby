@@ -3,22 +3,22 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { AnimalAvatar } from '@/components/avatar/animal-avatar';
+import { AnimalAvatar } from '@/shared/ui/animal-avatar';
 import { RoomPostReactionPills } from '@/components/room/room-post-reaction-pills';
-import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { ScreenFrame } from '@/components/ui/screen';
-import { fonts, palette, radii, spacing } from '@/constants/design';
-import { useAppActions } from '@/providers/app-actions-provider';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { PageHeader } from '@/shared/ui/page-header';
+import { PrimaryButton } from '@/shared/ui/primary-button';
+import { ScreenFrame } from '@/shared/ui/screen';
+import { fonts, palette, radii, spacing } from '@/shared/config/design';
+import { useAppActions } from '@/shared/providers/app-actions-provider';
 import {
   useCurrentUser,
   useProfiles,
   useReactionsByPostId,
   useRoomPost,
   useRoomPostComments,
-} from '@/providers/app-data-hooks';
-import { createUuid } from '@/utils/uuid';
+} from '@/shared/providers/app-data-hooks';
+import { createUuid } from '@/shared/lib/uuid';
 
 export default function RoomBoardDetailScreen() {
   const router = useRouter();

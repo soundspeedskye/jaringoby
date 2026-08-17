@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 
-import { SheetTabBar } from '@/components/navigation/sheet-tab-bar';
-import { palette } from '@/constants/design';
+import { SheetTabBar } from '@/shared/ui/sheet-tab-bar';
+import { palette } from '@/shared/config/design';
 
 export default function TabsLayout() {
   return (

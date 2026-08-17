@@ -7,7 +7,7 @@ import { ExceptionApprovalInbox } from "@/components/room/exception-approval-inb
 import { RecentExpenseCarousel } from "@/components/room/recent-expense-carousel";
 import { RoomBoardPreview } from "@/components/room/room-board-preview";
 import { RoomHero } from "@/components/room/room-hero";
-import { NoticeBanner } from "@/components/ui/notice-banner";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
 import {
   fonts,
   palette,
@@ -15,12 +15,13 @@ import {
   shadow,
   spacing,
   tabularNums,
-} from "@/constants/design";
-import { isExpenseMutationPhase, type PeriodPhase } from "@/domain";
+} from "@/shared/config/design";
+import { isExpenseMutationPhase } from "@/entities/period";
+import type { PeriodPhase } from "@/shared/model/types";
 import type { RoomHomeActions, RoomHomeData } from "@/hooks/use-room-home";
-import { useUnreadNotificationCount } from "@/providers/app-data-hooks";
-import { useAppDialog } from "@/providers/app-dialog-provider";
-import { formatDateLabel } from "@/utils/format";
+import { useUnreadNotificationCount } from "@/shared/providers/app-data-hooks";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { formatDateLabel } from "@/shared/lib/format";
 
 export const RoomHomeHeader = memo(function RoomHomeHeader({
   actions,

@@ -6,11 +6,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { palette } from '@/constants/design';
-import { AppProvider } from '@/providers/app-provider';
-import { AppDialogProvider } from '@/providers/app-dialog-provider';
-import { NotificationCoordinator } from '@/providers/notification-coordinator';
-import { SessionProvider, useSession } from '@/providers/session-provider';
+import { palette } from '@/shared/config/design';
+import { AppProvider } from '@/shared/providers/app-provider';
+import { AppDialogProvider } from '@/shared/providers/app-dialog-provider';
+import { NotificationCoordinator } from '@/shared/providers/notification-coordinator';
+import { SessionProvider, useSession } from '@/shared/providers/session-provider';
 
 void SplashScreen.preventAutoHideAsync();
 

@@ -3,15 +3,15 @@ import { useRouter } from "expo-router";
 import { useMemo } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
-import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
-import { ScreenFrame } from "@/components/ui/screen";
-import { fonts, palette, radii, spacing } from "@/constants/design";
-import type { AppNotification } from "@/data/types";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { useNotifications, useProfiles } from "@/providers/app-data-hooks";
-import { formatDateLabel } from "@/utils/format";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { PageHeader } from "@/shared/ui/page-header";
+import { ScreenFrame } from "@/shared/ui/screen";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import type { AppNotification } from "@/shared/api/types";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { useNotifications, useProfiles } from "@/shared/providers/app-data-hooks";
+import { formatDateLabel } from "@/shared/lib/format";
 
 export default function NotificationsScreen() {
   const router = useRouter();

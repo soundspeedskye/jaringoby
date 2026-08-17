@@ -2,29 +2,29 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { ModalFormScreen } from "@/components/layout/modal-form-screen";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { KeyValueRow } from "@/components/ui/key-value-row";
-import { NoticeBanner } from "@/components/ui/notice-banner";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { fonts, palette, spacing } from "@/constants/design";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { KeyValueRow } from "@/shared/ui/key-value-row";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { fonts, palette, spacing } from "@/shared/config/design";
 import {
   DEFAULT_MAX_ACTIVE_MEMBERS,
   isValidRoomCapacity,
   isValidRoomName,
   ROOM_NAME_MAX_CHARACTERS,
-} from "@/domain";
+} from "@/entities/room";
 import {
   useActiveRoom,
   useActiveRoomMembers,
   useCurrentUser,
-} from "@/providers/app-data-hooks";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { formatWon } from "@/utils/format";
-import type { Room } from "@/data/types";
+} from "@/shared/providers/app-data-hooks";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { formatWon } from "@/shared/lib/format";
+import type { Room } from "@/shared/api/types";
 
 export default function EditRoomScreen() {
   const router = useRouter();

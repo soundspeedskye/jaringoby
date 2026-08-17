@@ -3,12 +3,12 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { usePendingExceptionApprovals } from "@/providers/app-data-hooks";
-import { useAppDialog } from "@/providers/app-dialog-provider";
-import { formatWon } from "@/utils/format";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { fonts, palette, radii, spacing, tabularNums } from "@/shared/config/design";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { usePendingExceptionApprovals } from "@/shared/providers/app-data-hooks";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { formatWon } from "@/shared/lib/format";
 
 /** 홈 상단 "예외 승인 대기함"(안 B): 내가 승인해야 할 예외를 모아 보여준다. */
 export function ExceptionApprovalInbox() {

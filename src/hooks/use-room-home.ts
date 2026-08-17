@@ -7,24 +7,25 @@ import {
   expenseOfficialAmount,
   expensePendingDelta,
   hasPendingExpenseProjection,
-} from "@/data/expense-sync";
+} from "@/shared/api/expense-sync";
 import type {
   Expense,
   Period,
   PeriodMember,
   Profile,
   Room,
-} from "@/data/types";
+} from "@/shared/api/types";
 import {
-  addLocalDays,
   createPeriodTimeline,
   createWeekdayCalendarFromPeriod,
   getPeriodPhase,
+} from "@/entities/period";
+import {
+  addLocalDays,
   startOfSeoulDate,
   toSeoulLocalDate,
-  type PeriodPhase,
-  type PeriodTimeline,
-} from "@/domain";
+} from "@/shared/lib/date-time";
+import type { PeriodPhase, PeriodTimeline } from "@/shared/model/types";
 import {
   useCommentCounts,
   useCrownIds,
@@ -34,10 +35,10 @@ import {
   useProfiles,
   useRoomFeedExpenses,
   useSettlementExcludedExpenseIds,
-} from "@/providers/app-data-hooks";
-import { useAppStatus, useAppStatusActions } from "@/providers/app-status-provider";
-import { useDeadlineNow } from "@/hooks/use-deadline-now";
-import { formatMonthDay, formatWon } from "@/utils/format";
+} from "@/shared/providers/app-data-hooks";
+import { useAppStatus, useAppStatusActions } from "@/shared/providers/app-status-provider";
+import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
+import { formatMonthDay, formatWon } from "@/shared/lib/format";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EMPTY_EXPENSES: Expense[] = [];

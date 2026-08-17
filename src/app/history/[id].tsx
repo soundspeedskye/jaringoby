@@ -3,25 +3,25 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { memo, useCallback, useMemo } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { ExpenseCard } from "@/components/expense/expense-card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { KeyValueRow } from "@/components/ui/key-value-row";
-import { NoticeBanner } from "@/components/ui/notice-banner";
-import { PageHeader } from "@/components/ui/page-header";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen, ScreenFrame } from "@/components/ui/screen";
-import { SectionHeader } from "@/components/ui/section-header";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { KeyValueRow } from "@/shared/ui/key-value-row";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
+import { PageHeader } from "@/shared/ui/page-header";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { Screen, ScreenFrame } from "@/shared/ui/screen";
+import { SectionHeader } from "@/shared/ui/section-header";
 import {
   fonts,
   palette,
   radii,
   spacing,
   tabularNums,
-} from "@/constants/design";
-import type { Expense } from "@/data/types";
-import { createPeriodTimeline } from "@/domain";
+} from "@/shared/config/design";
+import type { Expense } from "@/shared/api/types";
+import { createPeriodTimeline } from "@/entities/period";
 import {
   useCurrentUser,
   useExpenseComments,
@@ -31,10 +31,10 @@ import {
   usePeriodResults,
   useProfiles,
   useRoom,
-} from "@/providers/app-data-hooks";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { useAppDialog } from "@/providers/app-dialog-provider";
-import { formatDateLabel, formatWon } from "@/utils/format";
+} from "@/shared/providers/app-data-hooks";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { formatDateLabel, formatWon } from "@/shared/lib/format";
 
 export default function HistoryDetailScreen() {
   const router = useRouter();

@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnimalAvatar } from '@/components/avatar/animal-avatar';
-import { fonts, palette, spacing, tabularNums } from '@/constants/design';
-import { formatWon } from '@/utils/format';
+import { AnimalAvatar } from '@/shared/ui/animal-avatar';
+import { fonts, palette, spacing, tabularNums } from '@/shared/config/design';
+import { formatWon } from '@/shared/lib/format';
 
 export type MemberListItem = {
   id: string;

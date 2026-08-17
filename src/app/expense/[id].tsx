@@ -25,24 +25,24 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
-import { ChoiceChip } from "@/components/ui/choice-chip";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { NoticeBanner } from "@/components/ui/notice-banner";
-import { PageHeader } from "@/components/ui/page-header";
-import { PlatformDateTimePicker } from "@/components/ui/platform-date-time-picker";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { Screen, ScreenFrame } from "@/components/ui/screen";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { ChoiceChip } from "@/shared/ui/choice-chip";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
+import { PageHeader } from "@/shared/ui/page-header";
+import { PlatformDateTimePicker } from "@/shared/ui/platform-date-time-picker";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { Screen, ScreenFrame } from "@/shared/ui/screen";
 import {
   fonts,
   palette,
   radii,
   spacing,
   tabularNums,
-} from "@/constants/design";
+} from "@/shared/config/design";
 import type {
   AddCommentInput,
   AddExpenseInput,
@@ -53,24 +53,28 @@ import type {
   Period,
   Profile,
   Room,
-} from "@/data/types";
-import { COMMENT_REACTION_EMOJIS } from "@/data/types";
+} from "@/shared/api/types";
+import { COMMENT_REACTION_EMOJIS } from "@/shared/api/types";
 import {
-  COMMENT_MAX_CHARACTERS,
-  createCommentCommand,
   createPeriodTimeline,
-  EXPENSE_CATEGORIES,
   getPeriodPhase,
   isCommentMutationPhase,
   isExpenseMutationPhase,
+} from "@/entities/period";
+import {
+  COMMENT_MAX_CHARACTERS,
+  createCommentCommand,
   prepareReplyDraft,
   validateCommentBody,
+  type ReplyDraft,
+} from "@/entities/post";
+import {
+  EXPENSE_CATEGORIES,
   type ExpenseCategory,
   type PeriodPhase,
-  type ReplyDraft,
-} from "@/domain";
-import { useDeadlineNow } from "@/hooks/use-deadline-now";
-import { useAppActions } from "@/providers/app-actions-provider";
+} from "@/shared/model/types";
+import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
 import {
   useCurrentUser,
   useExpense,
@@ -80,11 +84,11 @@ import {
   useProfiles,
   useReactionsByCommentId,
   useRoom,
-} from "@/providers/app-data-hooks";
-import { useAppDialog } from "@/providers/app-dialog-provider";
-import { pickSanitizedExpensePhoto } from "@/services/expense-photo-picker";
-import { formatDateLabel, formatWon } from "@/utils/format";
-import { createUuid } from "@/utils/uuid";
+} from "@/shared/providers/app-data-hooks";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { pickSanitizedExpensePhoto } from "@/shared/services/expense-photo-picker";
+import { formatDateLabel, formatWon } from "@/shared/lib/format";
+import { createUuid } from "@/shared/lib/uuid";
 
 export default function ExpenseDetailScreen() {
   const router = useRouter();

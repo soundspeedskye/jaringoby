@@ -10,33 +10,29 @@ import {
   View,
 } from "react-native";
 
-import { ModalFormScreen } from "@/components/layout/modal-form-screen";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/field";
-import { FormMessage } from "@/components/ui/form-message";
-import { GlassSurface } from "@/components/ui/glass-surface";
-import { KeyValueRow } from "@/components/ui/key-value-row";
-import { NoticeBanner } from "@/components/ui/notice-banner";
-import { PrimaryButton } from "@/components/ui/primary-button";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { GlassSurface } from "@/shared/ui/glass-surface";
+import { KeyValueRow } from "@/shared/ui/key-value-row";
+import { NoticeBanner } from "@/shared/ui/notice-banner";
+import { PrimaryButton } from "@/shared/ui/primary-button";
 import {
   fonts,
   palette,
   radii,
   spacing,
   tabularNums,
-} from "@/constants/design";
-import type { InvitePreview } from "@/data/types";
-import {
-  createPeriodTimeline,
-  getPeriodPhase,
-  isValidInviteCodeFormat,
-  normalizeInviteCode,
-} from "@/domain";
-import { useDeadlineNow } from "@/hooks/use-deadline-now";
-import { useAppActions } from "@/providers/app-actions-provider";
-import { useActiveRoom } from "@/providers/app-data-hooks";
-import { useAppStatus } from "@/providers/app-status-provider";
-import { formatWon } from "@/utils/format";
+} from "@/shared/config/design";
+import type { InvitePreview } from "@/shared/api/types";
+import { createPeriodTimeline, getPeriodPhase } from "@/entities/period";
+import { isValidInviteCodeFormat, normalizeInviteCode } from "@/entities/room";
+import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { useActiveRoom } from "@/shared/providers/app-data-hooks";
+import { useAppStatus } from "@/shared/providers/app-status-provider";
+import { formatWon } from "@/shared/lib/format";
 
 export default function JoinRoomScreen() {
   const router = useRouter();

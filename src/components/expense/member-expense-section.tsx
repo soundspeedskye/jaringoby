@@ -1,18 +1,18 @@
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/components/avatar/animal-avatar";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { ExpenseCard } from "@/components/expense/expense-card";
 import type { MemberListItem } from "@/components/room/member-list";
-import { EmptyState } from "@/components/ui/empty-state";
-import { fonts, palette, radii, spacing, tabularNums } from "@/constants/design";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { fonts, palette, radii, spacing, tabularNums } from "@/shared/config/design";
 import {
   expenseOfficialAmount,
   expensePendingDelta,
   hasPendingExpenseProjection,
-} from "@/data/expense-sync";
-import type { Expense } from "@/data/types";
-import { formatDateLabel, formatWon } from "@/utils/format";
+} from "@/shared/api/expense-sync";
+import type { Expense } from "@/shared/api/types";
+import { formatDateLabel, formatWon } from "@/shared/lib/format";
 
 type MemberExpenseSectionHeaderProps = {
   expenses: Expense[];
