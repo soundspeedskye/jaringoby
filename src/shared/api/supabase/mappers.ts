@@ -40,15 +40,11 @@ import type {
 } from './rows';
 import { CATEGORY_FROM_DATABASE } from './rows';
 import { RepositoryError } from './errors';
+import { asObject } from './json';
 import { ANIMAL_AVATARS } from '@/shared/config/animals';
 
 /** DB 행을 앱 타입으로 옮긴다. 네트워크도 상태도 없는 순수 함수들이다. */
 
-export function asObject(value: unknown): JsonObject | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as JsonObject)
-    : null;
-}
 
 export function requiredString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length === 0) {

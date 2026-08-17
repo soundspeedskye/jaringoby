@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { ANIMAL_AVATARS } from '@/shared/config/animals';
 import {
   asLocalDate,
-  asObject,
   defaultAvatar,
   hash32,
   mapComment,
@@ -29,6 +28,7 @@ import {
   safeNumber,
   safeSignedNumber,
 } from './mappers';
+import { asObject } from './json';
 import type {
   CommentRow,
   ExpenseRow,

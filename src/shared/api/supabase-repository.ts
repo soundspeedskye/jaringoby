@@ -1,4 +1,3 @@
-import { File as ExpoFile } from 'expo-file-system';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import type { AppRepository, Unsubscribe, UpdateExpenseOptions } from '@/shared/api/repository';
@@ -24,14 +23,7 @@ import type {
   UpdateRoomSettingsInput,
 } from '@/shared/api/types';
 import type {
-  CommentReactionRow,
-  CommentRow,
-  ExpenseExceptionApprovalRow,
-  ExpenseExceptionRow,
-  ExpenseRow,
   InviteCodeRow,
-  JsonObject,
-  NotificationRow,
   PeriodDayRow,
   PeriodMemberRow,
   PeriodResultRow,
@@ -40,14 +32,10 @@ import type {
   ProfileRow,
   RoomMemberRow,
   RoomMemberStatsRow,
-  RoomPostCommentRow,
-  RoomPostReactionRow,
-  RoomPostRow,
   RoomRow,
 } from './supabase/rows';
 import { CATEGORY_TO_DATABASE } from './supabase/rows';
 import {
-  asObject,
   hash32,
   mapComment,
   mapCommentReaction,
@@ -68,22 +56,50 @@ import {
   mapStats,
   requiredString,
 } from './supabase/mappers';
-import { RepositoryError } from './supabase/errors';
+import {
+  RepositoryError,
+  inviteError,
+  isAlreadyExistsError,
+  switchRoomError,
+  translateError,
+} from './supabase/errors';
+import {
+  requireComment,
+  requireExpense,
+  requireProfile,
+  requireRoom,
+  requireRoomPost,
+  requireRoomPostComment,
+  requireVersion,
+} from './supabase/guards';
+import { asObject, firstObject, isString } from './supabase/json';
+import { readPhoto, safeObjectStem } from './supabase/photos';
+import {
+  fetchExpenseRows,
+  fetchCommentRows,
+  fetchCommentReactionRows,
+  fetchRoomPostRows,
+  fetchRoomPostCommentRows,
+  fetchRoomPostReactionRows,
+  fetchNotificationRows,
+  fetchExceptionRows,
+  fetchExceptionApprovalRows,
+} from './supabase/queries';
+import {
+  clone,
+  collectProcessedRequestIds,
+  filterVisibleCommentRows,
+  filterVisibleExpenseRows,
+  groupBy,
+  makeUuid,
+  rows,
+  toRequestUuid,
+} from './supabase/results';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
 const MAX_EXPENSE_PHOTO_BYTES = 10 * 1024 * 1024;
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
-const EXPENSE_COLUMNS =
-  'id,client_request_id,period_id,user_id,amount,point_amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version';
-const COMMENT_COLUMNS =
-  'id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version';
-const NOTIFICATION_COLUMNS =
-  'id,user_id,kind,actor_id,room_id,period_id,expense_id,comment_id,post_id,route,read_at,created_at';
-const ROOM_POST_COLUMNS =
-  'id,client_request_id,room_id,period_id,kind,author_id,body,created_at,updated_at,deleted_at,version';
-const ROOM_POST_COMMENT_COLUMNS =
-  'id,client_request_id,post_id,author_id,body,created_at,updated_at,deleted_at,version';
 const REALTIME_TABLES = [
   'profiles',
   'rooms',
@@ -762,15 +778,15 @@ export class SupabaseRepository implements AppRepository {
         .from('room_member_stats')
         .select('room_id,user_id,participated_week_count,achieved_week_count,crown_count,current_streak'),
       this.client.from('invite_codes').select('room_id,code,is_active').eq('is_active', true),
-      this.fetchExpenseRows(),
-      this.fetchCommentRows(),
-      this.fetchCommentReactionRows(),
-      this.fetchRoomPostRows(),
-      this.fetchRoomPostCommentRows(),
-      this.fetchRoomPostReactionRows(),
-      this.fetchNotificationRows(),
-      this.fetchExceptionRows(),
-      this.fetchExceptionApprovalRows(),
+      fetchExpenseRows(this.client),
+      fetchCommentRows(this.client),
+      fetchCommentReactionRows(this.client),
+      fetchRoomPostRows(this.client),
+      fetchRoomPostCommentRows(this.client),
+      fetchRoomPostReactionRows(this.client),
+      fetchNotificationRows(this.client),
+      fetchExceptionRows(this.client),
+      fetchExceptionApprovalRows(this.client),
       this.client.from('user_room_preferences').select('room_id,is_hidden'),
     ]);
 
@@ -880,96 +896,14 @@ export class SupabaseRepository implements AppRepository {
     };
   }
 
-  private async fetchExpenseRows(): Promise<ExpenseRow[]> {
-    const result = await this.client
-      .from('expenses')
-      .select(EXPENSE_COLUMNS)
-      .order('created_at', { ascending: false });
-    if (result.error) {
-      throw translateError(result.error, '지출 데이터를 갱신하지 못했어요.');
-    }
-    return rows<ExpenseRow>(result.data);
-  }
 
-  private async fetchCommentRows(): Promise<CommentRow[]> {
-    const result = await this.client
-      .from('comments')
-      .select(COMMENT_COLUMNS)
-      .order('created_at', { ascending: true });
-    if (result.error) {
-      throw translateError(result.error, '댓글 데이터를 갱신하지 못했어요.');
-    }
-    return rows<CommentRow>(result.data);
-  }
 
-  private async fetchCommentReactionRows(): Promise<CommentReactionRow[]> {
-    const result = await this.client
-      .from('comment_reactions')
-      .select('comment_id,user_id,emoji,created_at');
-    if (result.error) {
-      throw translateError(result.error, '댓글 반응을 갱신하지 못했어요.');
-    }
-    return rows<CommentReactionRow>(result.data);
-  }
 
-  private async fetchRoomPostRows(): Promise<RoomPostRow[]> {
-    const result = await this.client
-      .from('room_posts')
-      .select(ROOM_POST_COLUMNS)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (result.error) throw translateError(result.error, '냥톡을 갱신하지 못했어요.');
-    return rows<RoomPostRow>(result.data);
-  }
 
-  private async fetchRoomPostCommentRows(): Promise<RoomPostCommentRow[]> {
-    const result = await this.client
-      .from('room_post_comments')
-      .select(ROOM_POST_COMMENT_COLUMNS)
-      .order('created_at', { ascending: true });
-    if (result.error) throw translateError(result.error, '냥톡 댓글을 갱신하지 못했어요.');
-    return rows<RoomPostCommentRow>(result.data);
-  }
 
-  private async fetchRoomPostReactionRows(): Promise<RoomPostReactionRow[]> {
-    const result = await this.client
-      .from('room_post_reactions')
-      .select('post_id,user_id,emoji,created_at');
-    if (result.error) throw translateError(result.error, '냥톡 반응을 갱신하지 못했어요.');
-    return rows<RoomPostReactionRow>(result.data);
-  }
 
-  private async fetchNotificationRows(): Promise<NotificationRow[]> {
-    const result = await this.client
-      .from('notifications')
-      .select(NOTIFICATION_COLUMNS)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (result.error) {
-      throw translateError(result.error, '소식 데이터를 갱신하지 못했어요.');
-    }
-    return rows<NotificationRow>(result.data);
-  }
 
-  private async fetchExceptionRows(): Promise<ExpenseExceptionRow[]> {
-    const result = await this.client
-      .from('expense_exceptions')
-      .select('expense_id,reason,requested_by,requested_at');
-    if (result.error) {
-      throw translateError(result.error, '예외 데이터를 갱신하지 못했어요.');
-    }
-    return rows<ExpenseExceptionRow>(result.data);
-  }
 
-  private async fetchExceptionApprovalRows(): Promise<ExpenseExceptionApprovalRow[]> {
-    const result = await this.client
-      .from('expense_exception_approvals')
-      .select('expense_id,user_id,created_at');
-    if (result.error) {
-      throw translateError(result.error, '예외 승인 데이터를 갱신하지 못했어요.');
-    }
-    return rows<ExpenseExceptionApprovalRow>(result.data);
-  }
 
   private async requireUserId(): Promise<string> {
     if (this.fixedUserId) return this.fixedUserId;
@@ -1162,19 +1096,19 @@ export class SupabaseRepository implements AppRepository {
     const shouldFetchApprovals = tables.has('expense_exception_approvals');
     const [expenseRows, commentRows, commentReactionRows, exceptionRows, approvalRows] = await Promise.all([
       shouldFetchExpenses
-        ? this.fetchExpenseRows()
+        ? fetchExpenseRows(this.client)
         : Promise.resolve(null),
       shouldFetchComments
-        ? this.fetchCommentRows()
+        ? fetchCommentRows(this.client)
         : Promise.resolve(null),
       shouldFetchCommentReactions
-        ? this.fetchCommentReactionRows()
+        ? fetchCommentReactionRows(this.client)
         : Promise.resolve(null),
       shouldFetchExceptions
-        ? this.fetchExceptionRows()
+        ? fetchExceptionRows(this.client)
         : Promise.resolve(null),
       shouldFetchApprovals
-        ? this.fetchExceptionApprovalRows()
+        ? fetchExceptionApprovalRows(this.client)
         : Promise.resolve(null),
     ]);
 
@@ -1361,263 +1295,4 @@ export class SupabaseRepository implements AppRepository {
     }
     return signedUrls;
   }
-}
-
-async function readPhoto(uri: string): Promise<{
-  buffer: ArrayBuffer;
-  contentType: string;
-  extension: string;
-}> {
-  let buffer: ArrayBuffer;
-  let detectedType = '';
-  try {
-    if (/^(file|content):/u.test(uri)) {
-      const file = new ExpoFile(uri);
-      buffer = await file.arrayBuffer();
-      detectedType = file.type;
-    } else {
-      const response = await fetch(uri);
-      if (!response.ok) throw new Error(`photo read failed (${response.status})`);
-      detectedType = response.headers.get('content-type')?.split(';')[0] ?? '';
-      buffer = await response.arrayBuffer();
-    }
-  } catch (error) {
-    throw new RepositoryError('PHOTO_READ_FAILED', '선택한 사진 파일을 읽지 못했어요.', { cause: error });
-  }
-
-  const uriExtension = /\.([a-z0-9]+)(?:[?#]|$)/iu.exec(uri)?.[1]?.toLowerCase();
-  const contentType = normalizeImageType(detectedType, uriExtension);
-  const extension = extensionForContentType(contentType);
-  return { buffer, contentType, extension };
-}
-
-function normalizeImageType(type: string, extension?: string): string {
-  const normalized = type.toLowerCase();
-  if (['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(normalized)) {
-    return normalized;
-  }
-  const byExtension: Record<string, string> = {
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    png: 'image/png',
-    webp: 'image/webp',
-    heic: 'image/heic',
-    heif: 'image/heif',
-  };
-  if (extension && byExtension[extension]) return byExtension[extension];
-  throw new RepositoryError('PHOTO_TYPE_NOT_ALLOWED', 'JPEG, PNG, WebP, HEIC 사진만 올릴 수 있어요.');
-}
-
-function extensionForContentType(contentType: string): string {
-  if (contentType === 'image/jpeg') return 'jpg';
-  return contentType.slice('image/'.length);
-}
-
-function translateError(error: unknown, fallback: string): RepositoryError {
-  if (error instanceof RepositoryError) return error;
-  const value = asObject(error);
-  const code = typeof value?.code === 'string' ? value.code : 'SUPABASE_ERROR';
-  const message = typeof value?.message === 'string' ? value.message : '';
-  const normalized = message.toLowerCase();
-  const status = value?.status ?? value?.statusCode;
-
-  if (Number(status) === 401 || normalized.includes('jwt expired') || normalized.includes('invalid jwt')) {
-    return new RepositoryError('AUTH_REQUIRED', '로그인이 만료됐어요. 다시 로그인해 주세요.', { cause: error });
-  }
-  if (message === 'NICKNAME_COOLDOWN') {
-    return new RepositoryError('NICKNAME_COOLDOWN', '닉네임은 7일에 한 번만 변경할 수 있어요.', { cause: error });
-  }
-  if (message === 'INVALID_NICKNAME') {
-    return new RepositoryError('INVALID_NICKNAME', '닉네임은 앞뒤 공백을 제외하고 2~20자로 입력해 주세요.', { cause: error });
-  }
-  if (code === '40001' || normalized.includes('version conflict')) {
-    return new RepositoryError('VERSION_CONFLICT', '다른 기기에서 먼저 수정했어요. 새로고침한 뒤 다시 시도해 주세요.', { cause: error });
-  }
-  if (code === '42501' || normalized.includes('permission denied')) {
-    return new RepositoryError('FORBIDDEN', '이 작업을 수행할 권한이 없어요.', { cause: error });
-  }
-  if (normalized.includes('failed to fetch') || normalized.includes('network request failed')) {
-    return new RepositoryError('NETWORK_ERROR', '네트워크 연결을 확인한 뒤 다시 시도해 주세요.', { cause: error });
-  }
-  const policyMessage = policyErrorMessage(normalized);
-  return new RepositoryError(code, policyMessage ?? fallback, { cause: error });
-}
-
-function policyErrorMessage(message: string): string | null {
-  if (message.includes('authentication required')) return '로그인이 필요해요.';
-  if (message.includes('room name')) return '방 이름을 확인해 주세요.';
-  if (message.includes('holiday dataset does not cover')) return '이번 주 공휴일 데이터가 아직 준비되지 않았어요.';
-  if (message.includes('published korean holiday dataset')) return '공휴일 데이터가 아직 준비되지 않았어요.';
-  if (message.includes('capacity can only increase')) return '정원은 현재보다 크게, 최대 10명까지 설정할 수 있어요.';
-  if (message.includes('closed rooms are read-only') || message.includes('closed rooms do not open')) {
-    return '닫힌 방은 읽기 전용이에요.';
-  }
-  if (message.includes('expense adjustment deadline')) return '지출 보정 마감이 지나 수정할 수 없어요.';
-  if (message.includes('writable only during active and adjustment')) return '현재는 지출을 입력하거나 수정할 수 없는 기간이에요.';
-  if (message.includes('active period membership')) return '이번 주차 참여자만 지출을 기록할 수 있어요.';
-  if (message.includes('active room membership')) return '방 참여자만 쓸 수 있어요.';
-  if (message.includes('expense time is outside')) return '주차 기간과 내 합류일 안의 지출만 등록할 수 있어요.';
-  if (message.includes('excluded holiday')) return '공휴일 지출은 주차 한도에 포함할 수 없어요.';
-  if (message.includes('uploaded photo is required') || message.includes('photo upload')) return '마감 전에 지출 사진 1장 업로드를 완료해 주세요.';
-  if (message.includes('room owner must select')) return '방장이 나가려면 다른 참여자에게 방장을 넘겨야 해요.';
-  if (message.includes('comment edit window')) return '댓글은 작성 후 5분 안에만 수정할 수 있어요.';
-  if (message.includes('comment is read-only')) return '정산이 끝난 주차의 댓글은 읽기 전용이에요.';
-  if (message.includes('comment body')) return '댓글은 앞뒤 공백을 제외하고 1~500자로 입력해 주세요.';
-  return null;
-}
-
-function inviteError(code: string): RepositoryError {
-  const messages: Record<string, string> = {
-    INVALID_CODE: '참여 코드를 확인해 주세요.',
-    RATE_LIMITED: '코드를 너무 자주 확인했어요. 10분 뒤 다시 시도해 주세요.',
-    ROOM_CLOSED: '이미 닫힌 방이에요.',
-    CAPACITY_FULL: '방 정원이 가득 찼어요.',
-    ALREADY_PARTICIPATED: '이미 참여했거나 참여했던 방이에요.',
-  };
-  return new RepositoryError(code, messages[code] ?? '방에 참여할 수 없어요.');
-}
-
-// switch_room rolls the leave back and raises when the join half fails, tagging
-// the reason as "switch_room join failed: <CODE>". Recover that code so the
-// caller sees the same friendly message join_room would have produced; anything
-// else (e.g. owner-successor rules from the leave half) falls through to the
-// shared policy translator.
-function switchRoomError(error: unknown): RepositoryError {
-  const value = asObject(error);
-  const message = typeof value?.message === 'string' ? value.message : '';
-  const matched = /switch_room join failed:\s*([A-Z_]+)/u.exec(message);
-  if (matched) return inviteError(matched[1]);
-  return translateError(error, '방을 옮기지 못했어요.');
-}
-
-function isAlreadyExistsError(error: unknown): boolean {
-  const value = asObject(error);
-  const message = typeof value?.message === 'string' ? value.message.toLowerCase() : '';
-  const status = value?.statusCode ?? value?.status;
-  return Number(status) === 409 || message.includes('already exists') || message.includes('duplicate');
-}
-
-function toRequestUuid(value: string): string {
-  if (!value.trim()) {
-    throw new RepositoryError('REQUEST_ID_REQUIRED', '중복 저장 방지를 위한 요청 식별자가 필요해요.');
-  }
-  const normalized = value.trim().toLowerCase();
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(normalized)) {
-    return normalized;
-  }
-  const words = [hash32(`0:${value}`), hash32(`1:${value}`), hash32(`2:${value}`), hash32(`3:${value}`)];
-  const hex = words.map((word) => word.toString(16).padStart(8, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
-
-function makeUuid(): string {
-  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
-  const seed = `${Date.now()}:${Math.random()}:${Math.random()}`;
-  return toRequestUuid(seed);
-}
-
-function safeObjectStem(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]/gu, '-').slice(0, 120);
-}
-
-function requireVersion(version: number | undefined, entity: string): number {
-  if (!Number.isInteger(version) || (version ?? 0) < 1) {
-    throw new RepositoryError('VERSION_REQUIRED', `${entity}의 최신 버전을 불러온 뒤 다시 시도해 주세요.`);
-  }
-  return version as number;
-}
-
-function requireRoom(snapshot: AppSnapshot, id: string): Room {
-  const room = snapshot.rooms.find((item) => item.id === id);
-  if (!room) throw new RepositoryError('NOT_FOUND', '방을 찾을 수 없어요.');
-  return room;
-}
-
-function requireProfile(snapshot: AppSnapshot, id: string): Profile {
-  const profile = snapshot.profiles.find((item) => item.id === id);
-  if (!profile) throw new RepositoryError('NOT_FOUND', '프로필을 찾을 수 없어요.');
-  return profile;
-}
-
-function requireExpense(snapshot: AppSnapshot, id: string): Expense {
-  const expense = snapshot.expenses.find((item) => item.id === id);
-  if (!expense) throw new RepositoryError('NOT_FOUND', '지출 기록을 찾을 수 없어요.');
-  return expense;
-}
-
-function requireComment(snapshot: AppSnapshot, id: string): Comment {
-  const comment = snapshot.comments.find((item) => item.id === id);
-  if (!comment) throw new RepositoryError('NOT_FOUND', '댓글을 찾을 수 없어요.');
-  return comment;
-}
-
-function requireRoomPost(snapshot: AppSnapshot, id: string): RoomPost {
-  const post = snapshot.roomPosts.find((item) => item.id === id);
-  if (!post) throw new RepositoryError('NOT_FOUND', '냥톡을 찾을 수 없어요.');
-  return post;
-}
-
-function requireRoomPostComment(snapshot: AppSnapshot, id: string): RoomPostComment {
-  const comment = snapshot.roomPostComments.find((item) => item.id === id);
-  if (!comment) throw new RepositoryError('NOT_FOUND', '댓글을 찾을 수 없어요.');
-  return comment;
-}
-
-function rows<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
-function filterVisibleExpenseRows(
-  expenseRows: ExpenseRow[],
-  visiblePeriodIds: ReadonlySet<string>,
-): ExpenseRow[] {
-  return expenseRows.filter(
-    (row) => !row.period_id || visiblePeriodIds.has(row.period_id),
-  );
-}
-
-function filterVisibleCommentRows(
-  commentRows: CommentRow[],
-  visibleExpenseIds: ReadonlySet<string>,
-): CommentRow[] {
-  return commentRows.filter((row) => visibleExpenseIds.has(row.expense_id));
-}
-
-function collectProcessedRequestIds(
-  expenseRows: ExpenseRow[],
-  commentRows: CommentRow[],
-  userId: string,
-): string[] {
-  return [
-    ...expenseRows
-      .filter((row) => row.user_id === userId)
-      .map((row) => row.client_request_id),
-    ...commentRows
-      .filter((row) => row.user_id === userId)
-      .map((row) => row.client_request_id),
-  ];
-}
-
-function firstObject(value: unknown): JsonObject | null {
-  if (Array.isArray(value)) return asObject(value[0]);
-  return asObject(value);
-}
-
-function isString(value: string | null): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
-  const result = new Map<string, T[]>();
-  for (const item of items) {
-    const itemKey = key(item);
-    const group = result.get(itemKey) ?? [];
-    group.push(item);
-    result.set(itemKey, group);
-  }
-  return result;
-}
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
 }

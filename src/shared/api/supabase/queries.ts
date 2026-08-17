@@ -1,0 +1,119 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import { translateError } from './errors';
+import { rows } from './results';
+import type {
+  CommentReactionRow,
+  CommentRow,
+  ExpenseExceptionApprovalRow,
+  ExpenseExceptionRow,
+  ExpenseRow,
+  NotificationRow,
+  RoomPostCommentRow,
+  RoomPostReactionRow,
+  RoomPostRow,
+} from './rows';
+
+/** 스냅샷을 채우는 테이블 조회. 클라이언트 외에는 아무 상태도 쓰지 않는다. */
+
+export const EXPENSE_COLUMNS =
+  'id,client_request_id,period_id,user_id,amount,point_amount,category,memo,photo_path,occurred_at,created_at,updated_at,deleted_at,version';
+export const COMMENT_COLUMNS =
+  'id,client_request_id,expense_id,user_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version';
+export const NOTIFICATION_COLUMNS =
+  'id,user_id,kind,actor_id,room_id,period_id,expense_id,comment_id,post_id,route,read_at,created_at';
+export const ROOM_POST_COLUMNS =
+  'id,client_request_id,room_id,period_id,kind,author_id,body,created_at,updated_at,deleted_at,version';
+export const ROOM_POST_COMMENT_COLUMNS =
+  'id,client_request_id,post_id,author_id,body,created_at,updated_at,deleted_at,version';
+
+export async function fetchExpenseRows(client: SupabaseClient): Promise<ExpenseRow[]> {
+  const result = await client
+    .from('expenses')
+    .select(EXPENSE_COLUMNS)
+    .order('created_at', { ascending: false });
+  if (result.error) {
+    throw translateError(result.error, '지출 데이터를 갱신하지 못했어요.');
+  }
+  return rows<ExpenseRow>(result.data);
+}
+
+export async function fetchCommentRows(client: SupabaseClient): Promise<CommentRow[]> {
+  const result = await client
+    .from('comments')
+    .select(COMMENT_COLUMNS)
+    .order('created_at', { ascending: true });
+  if (result.error) {
+    throw translateError(result.error, '댓글 데이터를 갱신하지 못했어요.');
+  }
+  return rows<CommentRow>(result.data);
+}
+
+export async function fetchCommentReactionRows(client: SupabaseClient): Promise<CommentReactionRow[]> {
+  const result = await client
+    .from('comment_reactions')
+    .select('comment_id,user_id,emoji,created_at');
+  if (result.error) {
+    throw translateError(result.error, '댓글 반응을 갱신하지 못했어요.');
+  }
+  return rows<CommentReactionRow>(result.data);
+}
+
+export async function fetchRoomPostRows(client: SupabaseClient): Promise<RoomPostRow[]> {
+  const result = await client
+    .from('room_posts')
+    .select(ROOM_POST_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (result.error) throw translateError(result.error, '냥톡을 갱신하지 못했어요.');
+  return rows<RoomPostRow>(result.data);
+}
+
+export async function fetchRoomPostCommentRows(client: SupabaseClient): Promise<RoomPostCommentRow[]> {
+  const result = await client
+    .from('room_post_comments')
+    .select(ROOM_POST_COMMENT_COLUMNS)
+    .order('created_at', { ascending: true });
+  if (result.error) throw translateError(result.error, '냥톡 댓글을 갱신하지 못했어요.');
+  return rows<RoomPostCommentRow>(result.data);
+}
+
+export async function fetchRoomPostReactionRows(client: SupabaseClient): Promise<RoomPostReactionRow[]> {
+  const result = await client
+    .from('room_post_reactions')
+    .select('post_id,user_id,emoji,created_at');
+  if (result.error) throw translateError(result.error, '냥톡 반응을 갱신하지 못했어요.');
+  return rows<RoomPostReactionRow>(result.data);
+}
+
+export async function fetchNotificationRows(client: SupabaseClient): Promise<NotificationRow[]> {
+  const result = await client
+    .from('notifications')
+    .select(NOTIFICATION_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (result.error) {
+    throw translateError(result.error, '소식 데이터를 갱신하지 못했어요.');
+  }
+  return rows<NotificationRow>(result.data);
+}
+
+export async function fetchExceptionRows(client: SupabaseClient): Promise<ExpenseExceptionRow[]> {
+  const result = await client
+    .from('expense_exceptions')
+    .select('expense_id,reason,requested_by,requested_at');
+  if (result.error) {
+    throw translateError(result.error, '예외 데이터를 갱신하지 못했어요.');
+  }
+  return rows<ExpenseExceptionRow>(result.data);
+}
+
+export async function fetchExceptionApprovalRows(client: SupabaseClient): Promise<ExpenseExceptionApprovalRow[]> {
+  const result = await client
+    .from('expense_exception_approvals')
+    .select('expense_id,user_id,created_at');
+  if (result.error) {
+    throw translateError(result.error, '예외 승인 데이터를 갱신하지 못했어요.');
+  }
+  return rows<ExpenseExceptionApprovalRow>(result.data);
+}
