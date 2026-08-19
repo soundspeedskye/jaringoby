@@ -19,10 +19,11 @@ import {
   useReactionsByCommentId,
 } from "@/entities/expense/api/use-expense-comments";
 import { useExpense } from "@/entities/expense/api/use-expenses";
-import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
+import { useProfiles } from "@/entities/member/api/use-members";
 import { usePeriod } from "@/entities/period/api/use-periods";
 import { useRoom } from "@/entities/room/api/use-rooms";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { FormMessage } from "@/shared/ui/form-message";
 import { NoticeBanner } from "@/shared/ui/notice-banner";
@@ -53,7 +54,7 @@ export function ExpenseDetailPage() {
     updateComment,
     updateExpense,
   } = useAppActions();
-  const currentUser = useCurrentUser();
+  const { currentPeriod, currentUser } = useCurrentRoom();
   // 저장 직후 오프라인 큐가 낙관적 ID를 서버 ID로 교체하면 라우트의 id로는
   // 더 이상 찾을 수 없다. 교체 전후로 불변인 멱등 키(rid)로 폴백 조회한다.
   const expense = useExpense(expenseId, requestId);
@@ -115,33 +116,35 @@ export function ExpenseDetailPage() {
   const canMutateComments = phase ? isCommentMutationPhase(phase) : false;
   const [editingExpense, setEditingExpense] = useState(false);
   const [expenseError, setExpenseError] = useState<string | null>(null);
-  // New expenses replace the form route with this detail route, so there may
-  // be no reliable native history to pop. The challenge home is the stable
-  // return destination after viewing, deleting, or cancelling a new expense.
-  const returnToChallengeHome = useCallback(() => {
-    router.replace("/");
-  }, [router]);
+  // 새 지출은 작성 폼 라우트를 이 상세로 replace하므로 되돌아갈 네이티브
+  // 히스토리가 없을 수 있다. 지출은 자기 주차에 속하니 조회·삭제·취소 후에는
+  // 그 지출의 주차 화면으로 되돌린다: 진행 중이면 홈, 아니면 그 지난 주차 화면.
+  const returnToPeriodContext = useCallback(() => {
+    router.replace(
+      period && period.id !== currentPeriod?.id ? `/history/${period.id}` : "/",
+    );
+  }, [currentPeriod?.id, period, router]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        returnToChallengeHome();
+        returnToPeriodContext();
         return true;
       },
     );
     return () => subscription.remove();
-  }, [returnToChallengeHome]);
+  }, [returnToPeriodContext]);
 
   if (!expense || !expenseId) {
     return (
       <Screen testID="expense-detail-screen">
-        <PageHeader onBack={returnToChallengeHome} title="지출 상세" />
+        <PageHeader onBack={returnToPeriodContext} title="지출 상세" />
         <EmptyState
           action={
             <PrimaryButton
               label="뒤로 가기"
-              onPress={returnToChallengeHome}
+              onPress={returnToPeriodContext}
               variant="secondary"
             />
           }
@@ -165,7 +168,7 @@ export function ExpenseDetailPage() {
             void (async () => {
               try {
                 await deleteExpense(expense.id);
-                returnToChallengeHome();
+                returnToPeriodContext();
               } catch (reason) {
                 setExpenseError(
                   reason instanceof Error
@@ -197,7 +200,7 @@ export function ExpenseDetailPage() {
         reactionsByCommentId={reactionsByCommentId}
         header={
           <>
-            <PageHeader onBack={returnToChallengeHome} title="지출 상세" />
+            <PageHeader onBack={returnToPeriodContext} title="지출 상세" />
 
             {phase === "ARCHIVED" ? (
               <NoticeBanner
