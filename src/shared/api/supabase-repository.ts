@@ -36,6 +36,7 @@ import type {
 } from './supabase/rows';
 import { CATEGORY_TO_DATABASE } from './supabase/rows';
 import {
+  expenseThumbnailPath,
   hash32,
   mapComment,
   mapCommentReaction,
@@ -213,7 +214,9 @@ export class SupabaseRepository implements AppRepository {
   }
 
   async cleanupExpensePhoto(path: string): Promise<void> {
-    const { error } = await this.client.storage.from('expense-photos').remove([path]);
+    const { error } = await this.client.storage
+      .from('expense-photos')
+      .remove([path, expenseThumbnailPath(path)]);
     if (error) throw translateError(error, '교체 또는 삭제된 사진을 정리하지 못했어요.');
   }
 
@@ -530,7 +533,8 @@ export class SupabaseRepository implements AppRepository {
     const photoPaths = snapshot.expenses
       .filter((expense) => expense.periodId === periodId)
       .map((expense) => expense.photoPath)
-      .filter((path): path is string => typeof path === 'string');
+      .filter((path): path is string => typeof path === 'string')
+      .flatMap((path) => [path, expenseThumbnailPath(path)]);
     const { error } = await this.client.rpc('delete_archived_period', {
       p_period_id: periodId,
     });
@@ -839,20 +843,27 @@ export class SupabaseRepository implements AppRepository {
     const inviteRows = rows<InviteCodeRow>(invitesResult.data);
     const preferenceRows = rows<PreferenceRow>(preferencesResult.data);
 
-    const [expenseSignedUrls, avatarSignedUrls] = await Promise.all([
+    const expensePhotoPaths = expenseRows
+      .filter((row) => row.deleted_at === null)
+      .map((row) => row.photo_path)
+      .filter(isString);
+    const [expenseSignedUrls, expenseThumbnailSignedUrls, avatarSignedUrls] = await Promise.all([
       this.createSignedUrlMap(
         'expense-photos',
-        expenseRows
-          .filter((row) => row.deleted_at === null)
-          .map((row) => row.photo_path)
-          .filter(isString),
+        expensePhotoPaths,
+      ),
+      this.createSignedUrlMap(
+        'expense-photos',
+        expensePhotoPaths.map(expenseThumbnailPath),
       ),
       this.createSignedUrlMap(
         'profile-images',
         profileRows.map((row) => row.avatar_path).filter(isString),
       ),
     ]);
-    this.scheduleSignedUrlRefresh(expenseSignedUrls.size + avatarSignedUrls.size > 0);
+    this.scheduleSignedUrlRefresh(
+      expenseSignedUrls.size + expenseThumbnailSignedUrls.size + avatarSignedUrls.size > 0,
+    );
 
     const hiddenClosedIds = new Set(
       preferenceRows.filter((row) => row.is_hidden).map((row) => row.room_id),
@@ -902,7 +913,9 @@ export class SupabaseRepository implements AppRepository {
       memberStats: statsRows
         .filter((row) => visibleRoomIds.has(row.room_id))
         .map(mapStats),
-      expenses: visibleExpenseRows.map((row) => mapExpense(row, expenseSignedUrls)),
+      expenses: visibleExpenseRows.map((row) =>
+        mapExpense(row, expenseSignedUrls, expenseThumbnailSignedUrls),
+      ),
       comments: visibleCommentRows.map(mapComment),
       commentReactions: commentReactionRows
         .filter((row) => visibleCommentIds.has(row.comment_id))
@@ -1148,9 +1161,13 @@ export class SupabaseRepository implements AppRepository {
     let expenses = previous.expenses;
     if (visibleExpenseRows) {
       const expenseSignedUrls = new Map<string, string>();
+      const expenseThumbnailSignedUrls = new Map<string, string>();
       previous.expenses.forEach((expense) => {
         if (expense.photoPath && expense.photoUri) {
           expenseSignedUrls.set(expense.photoPath, expense.photoUri);
+        }
+        if (expense.photoPath && expense.photoThumbnailUri) {
+          expenseThumbnailSignedUrls.set(expenseThumbnailPath(expense.photoPath), expense.photoThumbnailUri);
         }
       });
       const unsignedPaths = visibleExpenseRows
@@ -1158,10 +1175,24 @@ export class SupabaseRepository implements AppRepository {
         .map((row) => row.photo_path)
         .filter(isString)
         .filter((path) => !expenseSignedUrls.has(path));
-      const newSignedUrls = await this.createSignedUrlMap('expense-photos', unsignedPaths);
+      const unsignedThumbnailPaths = visibleExpenseRows
+        .filter((row) => row.deleted_at === null)
+        .map((row) => row.photo_path)
+        .filter(isString)
+        .map(expenseThumbnailPath)
+        .filter((path) => !expenseThumbnailSignedUrls.has(path));
+      const [newSignedUrls, newThumbnailSignedUrls] = await Promise.all([
+        this.createSignedUrlMap('expense-photos', unsignedPaths),
+        this.createSignedUrlMap('expense-photos', unsignedThumbnailPaths),
+      ]);
       newSignedUrls.forEach((url, path) => expenseSignedUrls.set(path, url));
-      expenses = visibleExpenseRows.map((row) => mapExpense(row, expenseSignedUrls));
-      if (expenseSignedUrls.size > 0) this.scheduleSignedUrlRefresh(true);
+      newThumbnailSignedUrls.forEach((url, path) => expenseThumbnailSignedUrls.set(path, url));
+      expenses = visibleExpenseRows.map((row) =>
+        mapExpense(row, expenseSignedUrls, expenseThumbnailSignedUrls),
+      );
+      if (expenseSignedUrls.size + expenseThumbnailSignedUrls.size > 0) {
+        this.scheduleSignedUrlRefresh(true);
+      }
     }
 
     const visibleExpenseIds = new Set(expenses.map((expense) => expense.id));
@@ -1269,6 +1300,25 @@ export class SupabaseRepository implements AppRepository {
     });
     if (error && !isAlreadyExistsError(error)) {
       throw translateError(error, '사진을 업로드하지 못했어요.');
+    }
+    try {
+      const { createExpensePhotoThumbnail } = await import('@/shared/services/expense-photo-transform');
+      const thumbnailUri = await createExpensePhotoThumbnail(uri);
+      const thumbnail = await readPhoto(thumbnailUri);
+      const thumbnailPath = expenseThumbnailPath(path);
+      const { error: thumbnailError } = await this.client.storage
+        .from('expense-photos')
+        .upload(thumbnailPath, thumbnail.buffer, {
+          cacheControl: '3600',
+          contentType: thumbnail.contentType,
+          upsert: false,
+        });
+      if (thumbnailError && !isAlreadyExistsError(thumbnailError)) {
+        throw translateError(thumbnailError, '목록용 사진을 업로드하지 못했어요.');
+      }
+    } catch (error) {
+      await this.removeOrphanPhoto(path);
+      throw error;
     }
     return path;
   }

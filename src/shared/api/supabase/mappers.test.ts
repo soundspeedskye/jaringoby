@@ -4,6 +4,7 @@ import { ANIMAL_AVATARS } from '@/shared/config/animals';
 import {
   asLocalDate,
   defaultAvatar,
+  expenseThumbnailPath,
   hash32,
   mapComment,
   mapCommentReaction,
@@ -459,6 +460,14 @@ describe('mapExpense', () => {
       deletedAt: undefined,
       syncStatus: 'SYNCED',
       version: 1,
+    });
+  });
+
+  it('목록용 사진 URL은 원본 경로의 결정적 썸네일 경로에서 읽는다', () => {
+    const thumbnailPath = expenseThumbnailPath('photos/a.jpg');
+    expect(thumbnailPath).toBe('photos/a.thumb.jpg');
+    expect(mapExpense(row, NO_URLS, new Map([[thumbnailPath, 'https://signed/a-thumb.jpg']]))).toMatchObject({
+      photoThumbnailUri: 'https://signed/a-thumb.jpg',
     });
   });
 

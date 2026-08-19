@@ -82,7 +82,9 @@ export function ExpenseListPage() {
         nickname="나"
         occurredAtLabel={formatDateLabel(expense.occurredAt)}
         onPress={openExpense}
-        photoUri={expense.photoUri ?? ""}
+        photoPath={expense.photoPath}
+        photoThumbnailUri={expense.photoThumbnailUri}
+        photoUri={expense.photoUri}
       />
     ),
     [commentCounts, currentUser?.avatar, openExpense],

@@ -114,6 +114,8 @@ export type Expense = {
   pointAmount: number;
   category: ExpenseCategory;
   memo: string;
+  /** Small signed rendition used by feed cards; falls back to photoUri for legacy photos. */
+  photoThumbnailUri?: string;
   photoUri?: string;
   /** Private Storage object path; never rendered directly. */
   photoPath?: string;

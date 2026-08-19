@@ -211,7 +211,11 @@ export function mapNotification(row: NotificationRow): AppNotification {
   };
 }
 
-export function mapExpense(row: ExpenseRow, signedUrls: Map<string, string>): Expense {
+export function mapExpense(
+  row: ExpenseRow,
+  signedUrls: Map<string, string>,
+  thumbnailSignedUrls: Map<string, string> = new Map(),
+): Expense {
   const photoPath = row.photo_path ?? undefined;
   return {
     id: row.id,
@@ -223,6 +227,7 @@ export function mapExpense(row: ExpenseRow, signedUrls: Map<string, string>): Ex
     category: CATEGORY_FROM_DATABASE[row.category],
     memo: row.memo ?? '',
     photoPath,
+    photoThumbnailUri: photoPath ? thumbnailSignedUrls.get(expenseThumbnailPath(photoPath)) : undefined,
     photoUri: photoPath ? signedUrls.get(photoPath) : undefined,
     occurredAt: row.occurred_at,
     createdAt: row.created_at,
@@ -231,6 +236,13 @@ export function mapExpense(row: ExpenseRow, signedUrls: Map<string, string>): Ex
     syncStatus: 'SYNCED',
     version: row.version,
   };
+}
+
+export function expenseThumbnailPath(photoPath: string): string {
+  const extensionIndex = photoPath.lastIndexOf('.');
+  const pathStart = photoPath.lastIndexOf('/') + 1;
+  const stem = extensionIndex >= pathStart ? photoPath.slice(0, extensionIndex) : photoPath;
+  return `${stem}.thumb.jpg`;
 }
 
 export function mapComment(row: CommentRow): Comment {

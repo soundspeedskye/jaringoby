@@ -407,7 +407,9 @@ const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
         nickname={`${isCrowned ? "👑 " : ""}${profile?.nickname ?? "알 수 없음"}`}
         occurredAtLabel={formatDateLabel(expense.occurredAt)}
         onPress={onOpen}
-        photoUri={expense.photoUri ?? ""}
+        photoPath={expense.photoPath}
+        photoThumbnailUri={expense.photoThumbnailUri}
+        photoUri={expense.photoUri}
       />
       {comments.length ? (
         <View style={styles.commentPreview}>

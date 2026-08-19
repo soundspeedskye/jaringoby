@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
 import { ChoiceChip } from "@/shared/ui/choice-chip";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { ExpensePaymentFields } from "@/entities/expense/ui/expense-payment-fields";
 import { Field } from "@/shared/ui/field";
 import { FormMessage } from "@/shared/ui/form-message";
 import { FormSection } from "@/shared/ui/form-section";
@@ -316,48 +317,16 @@ export function ExpenseCreatePage() {
         </View>
       </FormSection>
 
-      <Field
-        keyboardType="number-pad"
-        label="결제 금액"
-        onChangeText={(value) => setAmountText(formatKrwInput(value))}
-        placeholder="예: 12,000"
-        value={amountText}
+      <ExpensePaymentFields
+        amountPlaceholder="예: 12,000"
+        amountText={amountText}
+        onAmountChange={setAmountText}
+        onPointAmountChange={setPointAmountText}
+        onUsesPointsChange={setUsesPoints}
+        pointAmountPlaceholder="예: 3,000"
+        pointAmountText={pointAmountText}
+        usesPoints={usesPoints}
       />
-
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: usesPoints }}
-        onPress={() => {
-          setUsesPoints((value) => !value);
-          if (usesPoints) setPointAmountText("");
-        }}
-        style={styles.pointsToggle}
-      >
-        <View style={[styles.checkbox, usesPoints && styles.checkboxChecked]}>
-          {usesPoints ? (
-            <MaterialCommunityIcons
-              color={palette.cream}
-              name="check"
-              size={15}
-            />
-          ) : null}
-        </View>
-        <View style={styles.pointsToggleCopy}>
-          <Text style={styles.pointsToggleLabel}>포인트 결제</Text>
-        </View>
-      </Pressable>
-
-      {usesPoints ? (
-        <View style={styles.pointAmountField}>
-          <Field
-            keyboardType="number-pad"
-            label="포인트 사용 금액"
-            onChangeText={(value) => setPointAmountText(formatKrwInput(value))}
-            placeholder="예: 3,000"
-            value={pointAmountText}
-          />
-        </View>
-      ) : null}
 
       <View style={styles.categorySection}>
         <View style={styles.categoryHeader}>
@@ -447,14 +416,6 @@ export function ExpenseCreatePage() {
       <FormMessage message={formError} style={styles.formMessage} />
     </ModalFormScreen>
   );
-}
-
-function formatKrwInput(value: string): string {
-  const digits = value.replace(/[^0-9]/gu, "");
-  if (!digits) return "";
-
-  const normalized = digits.replace(/^0+(?=\d)/u, "");
-  return normalized.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
 }
 
 function OccurrenceDateTimePicker({
@@ -623,13 +584,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  pointsToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  pointAmountField: { marginTop: spacing.md },
   checkbox: {
     width: 22,
     height: 22,
@@ -641,13 +595,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.paper,
   },
   checkboxChecked: { backgroundColor: palette.green },
-  pointsToggleCopy: { flex: 1 },
-  pointsToggleLabel: {
-    color: palette.ink,
-    fontFamily: fonts.handBold,
-    fontSize: 14,
-    fontWeight: "700",
-  },
   categorySection: {
     marginTop: spacing.xxl,
     marginBottom: spacing.xl,

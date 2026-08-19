@@ -3,6 +3,14 @@ export function formatWon(amount: number, includeUnit = true): string {
   return includeUnit ? `${formatted}원` : formatted;
 }
 
+export function formatKrwInput(value: string): string {
+  const digits = value.replace(/[^0-9]/gu, '');
+  if (!digits) return '';
+
+  const normalized = digits.replace(/^0+(?=\d)/u, '');
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/gu, ',');
+}
+
 /** "2026-07-28" → "7/28". Parses the LocalDate string directly, no timezone math. */
 export function formatMonthDay(date: string): string {
   const [, month, day] = date.split('-');

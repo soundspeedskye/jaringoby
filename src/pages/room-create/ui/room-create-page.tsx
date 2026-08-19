@@ -28,7 +28,7 @@ import { toSeoulLocalDate } from "@/shared/lib/domain/date-time";
 import { createKoreanHolidaySnapshot } from "@/shared/lib/domain/holidays";
 import { isWeekend, resolveFirstWeekStart } from "@/shared/lib/domain/week";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
-import { formatWon } from "@/shared/lib/format";
+import { formatKrwInput, formatWon } from "@/shared/lib/format";
 import { createUuid } from "@/shared/lib/uuid";
 
 // 공휴일은 서버(현재 공휴일 데이터셋)가 확정한다. 미리보기는 공휴일 제외 전
@@ -212,13 +212,6 @@ export function RoomCreatePage() {
 function parseKrw(value: string): number {
   const normalized = value.replace(/[^0-9]/gu, "");
   return normalized ? Number(normalized) : 0;
-}
-
-function formatKrwInput(value: string): string {
-  const digits = value.replace(/[^0-9]/gu, "");
-  if (!digits) return "";
-  const normalized = digits.replace(/^0+(?=\d)/u, "");
-  return normalized.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
 }
 
 function validate(input: {

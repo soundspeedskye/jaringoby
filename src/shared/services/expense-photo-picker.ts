@@ -15,7 +15,7 @@ const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
   mediaTypes: ['images'],
   quality: 0.78,
 };
-const MAX_EXPENSE_PHOTO_WIDTH = 1_600;
+const MAX_EXPENSE_PHOTO_EDGE = 1_600;
 
 export async function pickSanitizedExpensePhoto(
   source: ExpensePhotoSource,
@@ -37,13 +37,26 @@ export async function pickSanitizedExpensePhoto(
   // Re-encoding drops the original EXIF block, including GPS metadata.
   const sanitized = await ImageManipulator.manipulateAsync(
     asset.uri,
-    asset.width > MAX_EXPENSE_PHOTO_WIDTH
-      ? [{ resize: { width: MAX_EXPENSE_PHOTO_WIDTH } }]
-      : [],
+    resizeActions(asset.width, asset.height, MAX_EXPENSE_PHOTO_EDGE),
     {
       compress: 0.8,
       format: ImageManipulator.SaveFormat.JPEG,
     },
   );
   return { status: 'selected', uri: sanitized.uri };
+}
+
+function resizeActions(
+  width: number,
+  height: number | undefined,
+  maxEdge: number,
+): ImageManipulator.Action[] {
+  const [nextWidth, nextHeight] = resizeDimensions(width, height ?? width, maxEdge);
+  if (nextWidth === width && nextHeight === (height ?? width)) return [];
+  return [{ resize: { width: nextWidth, height: nextHeight } }];
+}
+
+function resizeDimensions(width: number, height: number, maxEdge: number): [number, number] {
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  return [Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))];
 }

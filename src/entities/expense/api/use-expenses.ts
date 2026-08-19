@@ -40,11 +40,9 @@ export function useMemberRoomFeedExpenses(
     useCallback(
       (state: AppStoreState) => {
         if (!roomId || !userId) return EMPTY_EXPENSES;
-        // 방 피드는 이미 삭제 제외·최신순 정렬돼 있어 작성자 필터만 하면 된다.
-        const feed = state.indexes.feedExpensesByRoomId.get(roomId);
-        if (!feed) return EMPTY_EXPENSES;
-        const mine = feed.filter((expense) => expense.userId === userId);
-        return mine.length ? mine : EMPTY_EXPENSES;
+        return state.indexes.feedExpensesByRoomAndUserId
+          .get(roomId)
+          ?.get(userId) ?? EMPTY_EXPENSES;
       },
       [roomId, userId],
     ),

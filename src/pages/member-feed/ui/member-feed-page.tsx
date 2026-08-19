@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { FlatList, StyleSheet, View } from "react-native";
+import { useCallback } from "react";
+import { FlatList, StyleSheet, View, type ListRenderItemInfo } from "react-native";
 
 import { ExpenseCard } from "@/entities/expense/ui/expense-card";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -11,6 +12,7 @@ import { useMemberRoomFeedExpenses } from "@/entities/expense/api/use-expenses";
 import { useProfiles } from "@/entities/member/api/use-members";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { formatDateLabel } from "@/shared/lib/format";
+import type { Expense } from "@/shared/api/types";
 
 export function MemberFeedPage() {
   const router = useRouter();
@@ -22,6 +24,34 @@ export function MemberFeedPage() {
   const profile = userId ? profilesById.get(userId) : undefined;
   const displayName =
     userId === currentUser?.id ? "나" : (profile?.nickname ?? "멤버");
+  const openExpense = useCallback(
+    (expenseId: string) => router.push(`/expense/${expenseId}`),
+    [router],
+  );
+  const renderExpense = useCallback(
+    ({ item: expense }: ListRenderItemInfo<Expense>) => (
+      <View style={styles.cardWrap}>
+        <ExpenseCard
+          amount={expense.amount}
+          avatar={profile?.avatar ?? ""}
+          avatarUri={profile?.avatarUri}
+          category={expense.category}
+          commentCount={commentCounts.get(expense.id) ?? 0}
+          hideAuthor
+          id={expense.id}
+          memo={expense.memo}
+          nickname={displayName}
+          occurredAtLabel={formatDateLabel(expense.occurredAt)}
+          onPress={openExpense}
+          photoPath={expense.photoPath}
+          photoThumbnailUri={expense.photoThumbnailUri}
+          photoUri={expense.photoUri}
+          pointAmount={expense.pointAmount}
+        />
+      </View>
+    ),
+    [commentCounts, displayName, openExpense, profile?.avatar, profile?.avatarUri],
+  );
 
   return (
     <ScreenFrame testID="member-feed-screen">
@@ -45,25 +75,7 @@ export function MemberFeedPage() {
             />
           </>
         }
-        renderItem={({ item: expense }) => (
-          <View style={styles.cardWrap}>
-            <ExpenseCard
-              amount={expense.amount}
-              avatar={profile?.avatar ?? ""}
-              avatarUri={profile?.avatarUri}
-              category={expense.category}
-              commentCount={commentCounts.get(expense.id) ?? 0}
-              hideAuthor
-              id={expense.id}
-              memo={expense.memo}
-              nickname={displayName}
-              occurredAtLabel={formatDateLabel(expense.occurredAt)}
-              onPress={(expenseId) => router.push(`/expense/${expenseId}`)}
-              photoUri={expense.photoUri ?? ""}
-              pointAmount={expense.pointAmount}
-            />
-          </View>
-        )}
+        renderItem={renderExpense}
         showsVerticalScrollIndicator={false}
       />
     </ScreenFrame>

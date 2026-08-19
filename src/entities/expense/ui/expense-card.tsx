@@ -1,8 +1,8 @@
-import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AnimalAvatar } from '@/shared/ui/animal-avatar';
+import { ExpensePhoto } from '@/entities/expense/ui/expense-photo';
 import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/shared/config/design';
 import { formatWon } from '@/shared/lib/format';
 
@@ -15,7 +15,9 @@ type ExpenseCardProps = {
   amount: number;
   pointAmount: number;
   memo?: string;
-  photoUri: string;
+  photoUri?: string;
+  photoThumbnailUri?: string;
+  photoPath?: string;
   occurredAtLabel: string;
   commentCount: number;
   edited?: boolean;
@@ -53,7 +55,14 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
           ) : null}
         </View>
       </View>
-      <Image accessibilityLabel={`${props.category} 지출 사진`} contentFit="contain" source={{ uri: props.photoUri }} style={styles.photo} />
+      <ExpensePhoto
+        accessibilityLabel={`${props.category} 지출 사진`}
+        photoPath={props.photoPath}
+        photoThumbnailUri={props.photoThumbnailUri}
+        photoUri={props.photoUri}
+        style={styles.photo}
+        variant="thumbnail"
+      />
       <View style={styles.footer}>
         {props.memo ? <Text numberOfLines={2} style={styles.memo}>{props.memo}</Text> : null}
         <Text style={styles.comments}>댓글 {props.commentCount}개</Text>

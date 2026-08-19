@@ -24,7 +24,6 @@ import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
 import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
 import {
   usePeriodExpenses,
-  useRoomFeedExpenses,
   useSettlementExcludedExpenseIds,
 } from "@/entities/expense/api/use-expenses";
 import { useProfiles } from "@/entities/member/api/use-members";
@@ -43,15 +42,6 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
   const { clearError, refresh } = useAppStatusActions();
   const members = usePeriodMembers(currentPeriod?.id);
   const periodExpenses = usePeriodExpenses(currentPeriod?.id);
-  const roomFeedExpenses = useRoomFeedExpenses(activeRoom?.id);
-  const memberUserIds = useMemo(
-    () => [
-      ...members.map((member) => member.userId),
-      ...roomFeedExpenses.map((expense) => expense.userId),
-    ],
-    [members, roomFeedExpenses],
-  );
-  const profilesById = useProfiles(memberUserIds);
   const expenses = useMemo(
     // createdAt은 ISO(UTC)라 사전식 비교가 시간순과 같다.
     () => [...periodExpenses].sort(
@@ -59,7 +49,21 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     ),
     [periodExpenses],
   );
-  const commentCounts = useCommentCounts(roomFeedExpenses);
+  // 최근 피드는 과거 주차를 섞지 않고 이번 주차의 게시물만 보여 준다.
+  // pending 삭제도 방 전체 피드와 동일하게 즉시 숨긴다.
+  const currentPeriodFeedExpenses = useMemo(
+    () => expenses.filter((expense) => !expense.deletedAt),
+    [expenses],
+  );
+  const memberUserIds = useMemo(
+    () => [
+      ...members.map((member) => member.userId),
+      ...currentPeriodFeedExpenses.map((expense) => expense.userId),
+    ],
+    [currentPeriodFeedExpenses, members],
+  );
+  const profilesById = useProfiles(memberUserIds);
+  const commentCounts = useCommentCounts(currentPeriodFeedExpenses);
   const crownIds = useCrownIds(currentPeriod?.id);
   const excludedExpenseIds = useSettlementExcludedExpenseIds();
   const expensesByUserId = useMemo(() => {
@@ -226,7 +230,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
         memberRows,
         expensesByUserId: sectionExpensesByUserId,
         commentCounts,
-        recentExpenses: roomFeedExpenses.slice(0, 10),
+        recentExpenses: currentPeriodFeedExpenses.slice(0, 10),
         profilesById,
         error,
       },
@@ -246,7 +250,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     profilesById,
     sectionExpensesByUserId,
     timeline,
-    roomFeedExpenses,
+    currentPeriodFeedExpenses,
   ]);
 
   return { state, actions };

@@ -1,8 +1,8 @@
-import { Image } from "expo-image";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import type { Expense, Period, Profile, Room } from "@/shared/api/types";
+import { ExpensePhoto } from "@/entities/expense/ui/expense-photo";
 import {
   fonts,
   palette,
@@ -53,11 +53,12 @@ export const ExpenseSummary = memo(function ExpenseSummary({
           ) : null}
         </View>
       </View>
-      <Image
+      <ExpensePhoto
         accessibilityLabel={`${expense.category} 지출 사진`}
-        contentFit="contain"
-        source={{ uri: expense.photoUri }}
+        photoPath={expense.photoPath}
+        photoUri={expense.photoUri}
         style={styles.expensePhoto}
+        variant="detail"
       />
       <View style={styles.expenseCopy}>
         <Text style={styles.expenseMemo}>{expense.memo || "메모 없음"}</Text>
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
   },
   expensePhoto: {
     width: "100%",
-    aspectRatio: 16 / 10,
+    aspectRatio: 4 / 3,
     backgroundColor: palette.line,
   },
   expenseCopy: { padding: spacing.md, gap: 5 },
