@@ -92,6 +92,8 @@ function snapshotWith(input: {
   roomPosts: [],
   roomPostComments: [],
   roomPostReactions: [],
+  roomPostPollOptions: [],
+  roomPostPollVotes: [],
   notifications: [],
     expenseExceptions: [exception()],
     expenseExceptionApprovals: input.approvals,

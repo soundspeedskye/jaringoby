@@ -1,15 +1,15 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnimalAvatar } from '@/shared/ui/animal-avatar';
 import { RoomPostReactionPills } from '@/entities/post/ui/post-reaction-pills';
+import { RoomPostCard } from '@/entities/post/ui/room-post-card';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { PageHeader } from '@/shared/ui/page-header';
 import { ScreenFrame } from '@/shared/ui/screen';
 import { fonts, palette, radii, spacing } from '@/shared/config/design';
-import type { RoomPost } from '@/shared/api/types';
+import type { Profile, RoomPost, RoomPostReaction } from '@/shared/api/types';
 import { useAppActions } from '@/shared/providers/app-actions-provider';
 import { useCurrentUser, useProfiles } from '@/entities/member/api/use-members';
 import {
@@ -22,6 +22,8 @@ import { useActiveRoom } from '@/entities/room/api/use-rooms';
 
 type BoardRow = { type: 'week'; label: string; id: string } | { type: 'post'; post: RoomPost };
 
+const EMPTY_REACTIONS: RoomPostReaction[] = [];
+
 export function BoardPage() {
   const router = useRouter();
   const room = useActiveRoom();
@@ -33,12 +35,38 @@ export function BoardPage() {
     [latestNotice?.id, posts],
   );
   const rows = useMemo(() => buildRows(listPosts), [listPosts]);
-  const profiles = useProfiles(posts.map((post) => post.authorId));
-  const reactionsByPostId = useReactionsByPostId(posts.map((post) => post.id));
+  const postAuthorIds = useMemo(() => posts.map((post) => post.authorId), [posts]);
+  const postIds = useMemo(() => posts.map((post) => post.id), [posts]);
+  const profiles = useProfiles(postAuthorIds);
+  const reactionsByPostId = useReactionsByPostId(postIds);
   const commentCounts = useRoomPostCommentCounts(posts);
   const { toggleRoomPostReaction } = useAppActions();
   const canWrite = Boolean(room && currentUser && room.status === 'OPEN');
   const returnToChallengeHome = useCallback(() => router.replace('/'), [router]);
+  const openPost = useCallback(
+    (postId: string) => router.push(`/room/board/${postId}`),
+    [router],
+  );
+  const togglePostReaction = useCallback(
+    (postId: string, emoji: RoomPostReaction['emoji']) =>
+      void toggleRoomPostReaction(postId, emoji),
+    [toggleRoomPostReaction],
+  );
+  const renderRow = useCallback(({ item }: { item: BoardRow }) => {
+    if (item.type === 'week') return <Text style={styles.week}>{item.label}</Text>;
+    const post = item.post;
+    return (
+      <BoardPostRow
+        author={profiles.get(post.authorId)}
+        commentCount={commentCounts.get(post.id) ?? 0}
+        currentUserId={currentUser?.id}
+        onOpen={openPost}
+        onToggleReaction={togglePostReaction}
+        post={post}
+        reactions={reactionsByPostId.get(post.id) ?? EMPTY_REACTIONS}
+      />
+    );
+  }, [commentCounts, currentUser?.id, openPost, profiles, reactionsByPostId, togglePostReaction]);
 
   // 냥냥톡톡은 홈의 맥락 콘텐츠다. 목록에서 나갈 때 이전 스택이 아니라
   // 언제나 챌린지 홈으로 돌아가도록 안드로이드 시스템 뒤로가기도 가로챈다.
@@ -96,58 +124,58 @@ export function BoardPage() {
             ) : null}
           </>
         }
-        renderItem={({ item }) => {
-          if (item.type === 'week') return <Text style={styles.week}>{item.label}</Text>;
-          const post = item.post;
-          const author = profiles.get(post.authorId);
-          return (
-            <Pressable
-              accessibilityLabel={`${author?.nickname ?? '알 수 없음'}님의 글: ${post.body}`}
-              accessibilityRole="button"
-              onPress={() => router.push(`/room/board/${post.id}`)}
-              style={({ pressed }) => [
-                styles.post,
-                post.kind === 'NOTICE' && styles.postNotice,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={styles.postHeader}>
-                <View style={styles.authorRow}>
-                  <AnimalAvatar photoUri={author?.avatarUri} size={40} value={author?.avatar} />
-                  <Text style={styles.author}>{author?.nickname ?? '알 수 없음'}</Text>
-                </View>
-                <Text style={styles.date}>{formatDay(post.createdAt)}</Text>
-              </View>
-              {post.kind === 'NOTICE' ? (
-                <View style={[styles.noticeBadge, styles.postNoticeBadge]}>
-                  <MaterialCommunityIcons color={palette.cream} name="pin" size={12} />
-                  <Text style={styles.postNoticeBadgeText}>공지</Text>
-                </View>
-              ) : null}
-              <Text
-                numberOfLines={3}
-                style={[styles.postBody, post.kind === 'NOTICE' && styles.postBodyNotice]}>
-                {post.body}
-              </Text>
-              <View style={styles.postFooter}>
-                <RoomPostReactionPills
-                  currentUserId={currentUser?.id}
-                  onToggle={(emoji) => void toggleRoomPostReaction(post.id, emoji)}
-                  reactions={reactionsByPostId.get(post.id) ?? []}
-                />
-                <View style={styles.comments}>
-                  <MaterialCommunityIcons color={palette.muted} name="comment-outline" size={16} />
-                  <Text style={styles.commentsText}>댓글 {commentCounts.get(post.id) ?? 0}</Text>
-                </View>
-              </View>
-            </Pressable>
-          );
-        }}
+        renderItem={renderRow}
         showsVerticalScrollIndicator={false}
       />
     </ScreenFrame>
   );
 }
+
+const BoardPostRow = memo(function BoardPostRow({
+  author,
+  commentCount,
+  currentUserId,
+  onOpen,
+  onToggleReaction,
+  post,
+  reactions,
+}: {
+  author?: Profile;
+  commentCount: number;
+  currentUserId?: string;
+  onOpen: (postId: string) => void;
+  onToggleReaction: (postId: string, emoji: RoomPostReaction['emoji']) => void;
+  post: RoomPost;
+  reactions: readonly RoomPostReaction[];
+}) {
+  const toggleReaction = useCallback(
+    (emoji: RoomPostReaction['emoji']) => onToggleReaction(post.id, emoji),
+    [onToggleReaction, post.id],
+  );
+  const footer = (
+    <View style={styles.postFooter}>
+      <RoomPostReactionPills
+        currentUserId={currentUserId}
+        onToggle={toggleReaction}
+        reactions={reactions}
+      />
+      <View style={styles.comments}>
+        <MaterialCommunityIcons color={palette.muted} name="comment-outline" size={16} />
+        <Text style={styles.commentsText}>댓글 {commentCount}</Text>
+      </View>
+    </View>
+  );
+  return (
+    <RoomPostCard
+      author={author}
+      dateLabel={formatDay(post.createdAt)}
+      footer={footer}
+      onPress={() => onOpen(post.id)}
+      post={post}
+      variant="list"
+    />
+  );
+});
 
 function buildRows(posts: readonly RoomPost[]): BoardRow[] {
   const rows: BoardRow[] = [];
@@ -194,18 +222,6 @@ const styles = StyleSheet.create({
   noticeBadgeText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 13, fontWeight: '700' },
   noticeBody: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 19, lineHeight: 27 },
   week: { color: palette.muted, fontFamily: fonts.handBold, fontSize: 17, fontWeight: '700', marginBottom: spacing.md },
-  post: { marginBottom: spacing.lg, padding: spacing.lg, borderWidth: 1, borderColor: palette.rule, borderRadius: radii.xl, backgroundColor: palette.paper },
-  pressed: { opacity: 0.78 },
-  postHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  authorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  author: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 16, fontWeight: '700' },
-  date: { color: palette.muted, fontFamily: fonts.number, fontSize: 14 },
-  postBody: { color: palette.ink, fontFamily: fonts.hand, fontSize: 18, lineHeight: 27 },
-  // 흐름 안에 섞인 지난 공지. 구분이 필요한 자리는 고정 슬롯이 아니라 여기다.
-  postNotice: { borderColor: palette.lineStrong },
-  postNoticeBadge: { paddingVertical: 2 },
-  postNoticeBadgeText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 11, fontWeight: '700' },
-  postBodyNotice: { fontFamily: fonts.handBold },
   postFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.lg },
   comments: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   commentsText: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },

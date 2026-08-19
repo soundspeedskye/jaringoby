@@ -4,10 +4,9 @@ import type { FocusEvent } from "react-native";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { formatCommentTime } from "../lib/format-comment-time";
-import type { CommentActionProps } from "../model/types";
-import { COMMENT_MAX_CHARACTERS, validateCommentBody } from "@/shared/lib/domain/replies";
+import type { ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
+import { validateCommentBody } from "@/shared/lib/domain/replies";
 import type {
-  Comment,
   CommentReaction,
   CommentReactionEmoji,
   Profile,
@@ -24,11 +23,11 @@ import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 
 export const CommentItem = memo(function CommentItem({
+  canDelete,
   canEdit,
   canMutate,
   comment,
   currentUserId,
-  deleteComment,
   editing,
   onBeginEdit,
   onError,
@@ -40,34 +39,34 @@ export const CommentItem = memo(function CommentItem({
   reactions,
   replied,
   repliedProfile,
-  toggleCommentReaction,
-  updateComment,
-}: Omit<CommentActionProps, "addComment"> & {
+  remove: removeComment,
+  toggleReaction: toggleCommentReaction,
+  update: updateComment,
+  features,
+}: Pick<ThreadActions, "remove" | "update" | "toggleReaction"> & {
+  canDelete: boolean;
   canEdit: boolean;
   canMutate: boolean;
-  comment: Comment;
+  comment: ThreadMessage;
   currentUserId?: string;
   editing: boolean;
-  onBeginEdit: (comment: Comment) => void;
+  features: ThreadFeatures;
+  onBeginEdit: (comment: ThreadMessage) => void;
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
   onFocusEdit: (commentId: string, event: FocusEvent) => void;
   onFinishEdit: () => void;
-  onReply: (comment: Comment) => void;
+  onReply: (comment: ThreadMessage) => void;
   profile?: Profile;
   reactions: CommentReaction[];
-  replied?: Comment;
+  replied?: ThreadMessage;
   repliedProfile?: Profile;
-  toggleCommentReaction: (
-    commentId: string,
-    emoji: CommentReactionEmoji,
-  ) => Promise<void>;
 }) {
   const { showDialog } = useAppDialog();
   const [editingBody, setEditingBody] = useState(comment.body);
   const [reactingEmoji, setReactingEmoji] =
     useState<CommentReactionEmoji | null>(null);
-  const mine = comment.userId === currentUserId;
+  const mine = comment.authorId === currentUserId;
   // 반응을 한 번만 훑어 이모지별 개수·내 선택 여부를 집계한다(렌더는 조회만).
   const reactionSummary = useMemo(() => {
     const summary = new Map<string, { count: number; selected: boolean }>();
@@ -90,7 +89,9 @@ export const CommentItem = memo(function CommentItem({
   }, [comment, onFeedback]);
   const openMessageMenu = useCallback(() => {
     const buttons = [
-      { text: "답글", onPress: () => onReply(comment) },
+      ...(features.replies
+        ? [{ text: "답글", onPress: () => onReply(comment) }]
+        : []),
       ...(!comment.deletedAt
         ? [{ text: "복사", onPress: () => void copyMessage() }]
         : []),
@@ -98,16 +99,18 @@ export const CommentItem = memo(function CommentItem({
     ];
     showDialog(
       "메시지 메뉴",
-      "답글을 선택하면 입력창 위에 원문이 읽기 전용으로 표시돼요.",
+      features.replies
+        ? "답글을 선택하면 입력창 위에 원문이 읽기 전용으로 표시돼요."
+        : "댓글을 복사할 수 있어요.",
       buttons,
     );
-  }, [comment, copyMessage, onReply, showDialog]);
+  }, [comment, copyMessage, features.replies, onReply, showDialog]);
   const saveEdit = async () => {
-    const validation = validateCommentBody(editingBody);
+    const validation = validateCommentBody(editingBody, features.maxLength);
     if (!validation.valid) {
       onError(
         validation.reason === "TOO_LONG"
-          ? `댓글은 앞뒤 공백을 제외하고 ${COMMENT_MAX_CHARACTERS}자까지 입력할 수 있어요.`
+          ? `댓글은 앞뒤 공백을 제외하고 ${features.maxLength}자까지 입력할 수 있어요.`
           : "댓글 내용을 입력해 주세요.",
       );
       return;
@@ -132,7 +135,7 @@ export const CommentItem = memo(function CommentItem({
           text: "삭제",
           style: "destructive",
           onPress: () =>
-            void deleteComment(comment.id).catch((reason: unknown) => {
+            void removeComment(comment.id).catch((reason: unknown) => {
               onError(
                 reason instanceof Error
                   ? reason.message
@@ -144,7 +147,7 @@ export const CommentItem = memo(function CommentItem({
     );
   };
   const toggleReaction = async (emoji: CommentReactionEmoji) => {
-    if (!canMutate || comment.deletedAt || reactingEmoji) return;
+    if (!canMutate || !features.reactions || comment.deletedAt || reactingEmoji || !toggleCommentReaction) return;
     setReactingEmoji(emoji);
     try {
       await toggleCommentReaction(comment.id, emoji);
@@ -176,7 +179,7 @@ export const CommentItem = memo(function CommentItem({
           </Text>
         ) : null}
         <Pressable
-          accessibilityHint="길게 눌러 답글 또는 복사"
+          accessibilityHint={features.replies ? "길게 눌러 답글 또는 복사" : "길게 눌러 복사"}
           delayLongPress={320}
           onLongPress={openMessageMenu}
           style={[
@@ -185,7 +188,7 @@ export const CommentItem = memo(function CommentItem({
             comment.deletedAt && styles.bubbleDeleted,
           ]}
         >
-          {comment.replyToId ? (
+          {features.replies && comment.replyToId ? (
             <View style={styles.quotedMessage}>
               <Text style={styles.quoteAuthor}>
                 {repliedProfile?.nickname ?? "삭제된 메시지"}
@@ -200,7 +203,7 @@ export const CommentItem = memo(function CommentItem({
           {editing ? (
             <TextInput
               autoFocus
-              maxLength={COMMENT_MAX_CHARACTERS}
+              maxLength={features.maxLength}
               multiline
               onChangeText={setEditingBody}
               onFocus={(event) => onFocusEdit(comment.id, event)}
@@ -219,7 +222,7 @@ export const CommentItem = memo(function CommentItem({
             </Text>
           )}
         </Pressable>
-        {!comment.deletedAt ? (
+        {features.reactions && !comment.deletedAt ? (
           <View style={[styles.reactionRow, mine && styles.reactionRowMine]}>
             {COMMENT_REACTION_EMOJIS.map((emoji) => {
               const { count = 0, selected = false } =
@@ -228,13 +231,13 @@ export const CommentItem = memo(function CommentItem({
                 <Pressable
                   accessibilityLabel={`${emoji} 반응${count ? ` ${count}개` : ""}${selected ? ", 선택됨" : ""}`}
                   accessibilityRole="button"
-                  disabled={!canMutate || Boolean(reactingEmoji)}
+                  disabled={!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)}
                   key={emoji}
                   onPress={() => void toggleReaction(emoji)}
                   style={[
                     styles.reactionButton,
                     selected && styles.reactionButtonSelected,
-                    (!canMutate || Boolean(reactingEmoji)) &&
+                    (!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)) &&
                       styles.reactionButtonDisabled,
                   ]}
                 >
@@ -256,7 +259,7 @@ export const CommentItem = memo(function CommentItem({
               ? " · 수정됨"
               : ""}
           </Text>
-          {comment.syncStatus !== "SYNCED" ? (
+          {comment.syncStatus && comment.syncStatus !== "SYNCED" ? (
             <Text style={styles.pending}>
               {comment.syncStatus === "PENDING" ? "전송 중" : "전송 실패"}
             </Text>
@@ -271,7 +274,7 @@ export const CommentItem = memo(function CommentItem({
               <Text style={styles.commentActionStrong}>저장</Text>
             </Pressable>
           </View>
-        ) : mine && canMutate && !comment.deletedAt ? (
+        ) : (canEdit || canDelete) && !comment.deletedAt ? (
           <View style={[styles.commentActions, styles.commentActionsMine]}>
             {canEdit ? (
               <Pressable
@@ -283,9 +286,11 @@ export const CommentItem = memo(function CommentItem({
                 <Text style={styles.commentAction}>수정</Text>
               </Pressable>
             ) : null}
-            <Pressable onPress={remove}>
-              <Text style={styles.commentActionDanger}>삭제</Text>
-            </Pressable>
+            {canDelete ? (
+              <Pressable onPress={remove}>
+                <Text style={styles.commentActionDanger}>삭제</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </View>

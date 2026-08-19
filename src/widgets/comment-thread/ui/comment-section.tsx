@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { CommentActionProps } from "../model/types";
+import type { ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type {
@@ -27,9 +27,7 @@ import { InputFocusContext } from "@/shared/lib/input-focus-context";
 import type { ReplyDraft } from "@/shared/lib/domain/replies";
 import { prepareReplyDraft } from "@/shared/lib/domain/replies";
 import type {
-  Comment,
   CommentReaction,
-  CommentReactionEmoji,
   Profile,
 } from "@/shared/api/types";
 import { fonts, palette, spacing } from "@/shared/config/design";
@@ -38,34 +36,32 @@ import { EmptyState } from "@/shared/ui/empty-state";
 
 const EMPTY_COMMENT_REACTIONS: CommentReaction[] = [];
 
-export function CommentSection({
-  addComment,
+export function CommentThread({
+  actions,
   canMutate,
+  canDelete,
+  canEdit,
   comments,
   currentUserId,
-  deleteComment,
-  expenseId,
+  features,
   header,
   phase,
   profilesById,
   reactionsByCommentId,
-  toggleCommentReaction,
-  updateComment,
-}: CommentActionProps & {
+}: {
+  actions: ThreadActions;
   canMutate: boolean;
-  comments: Comment[];
+  canDelete: (comment: ThreadMessage) => boolean;
+  canEdit: (comment: ThreadMessage) => boolean;
+  comments: ThreadMessage[];
   currentUserId?: string;
-  reactionsByCommentId: ReadonlyMap<string, CommentReaction[]>;
-  expenseId: string;
+  features: ThreadFeatures;
   header: ReactNode;
-  phase: PeriodPhase | null;
+  phase?: PeriodPhase | null;
   profilesById: ReadonlyMap<string, Profile>;
-  toggleCommentReaction: (
-    commentId: string,
-    emoji: CommentReactionEmoji,
-  ) => Promise<void>;
+  reactionsByCommentId?: ReadonlyMap<string, CommentReaction[]>;
 }) {
-  const listRef = useRef<FlatList<Comment>>(null);
+  const listRef = useRef<FlatList<ThreadMessage>>(null);
   const composerRef = useRef<TextInput>(null);
   const [composerHeight, setComposerHeight] = useState(0);
   // 입력 독 높이만큼 목록 아래 여백을 준다. 워크릿에서 읽히므로 shared value다.
@@ -126,8 +122,8 @@ export function CommentSection({
     [composerContentPadding],
   );
   const selectReply = useCallback(
-    (comment: Comment) => {
-      const profile = profilesById.get(comment.userId);
+    (comment: ThreadMessage) => {
+      const profile = profilesById.get(comment.authorId);
       setReplyDraft(
         prepareReplyDraft({
           messageId: comment.id,
@@ -142,59 +138,65 @@ export function CommentSection({
     },
     [profilesById],
   );
-  const beginEdit = useCallback((comment: Comment) => {
+  const beginEdit = useCallback((comment: ThreadMessage) => {
     setEditingCommentId(comment.id);
   }, []);
   const finishEdit = useCallback(() => {
     setEditingCommentId(null);
   }, []);
   const renderComment = useCallback(
-    ({ item: comment }: ListRenderItemInfo<Comment>) => {
+    ({ item: comment }: ListRenderItemInfo<ThreadMessage>) => {
       const replied = comment.replyToId
         ? commentsById.get(comment.replyToId)
         : undefined;
-      const canEdit = comment.userId === currentUserId && !comment.deletedAt;
+      const editable = canMutate && canEdit(comment) && !comment.deletedAt;
+      const deletable = canMutate && canDelete(comment) && !comment.deletedAt;
       return (
         <CommentItem
-          canEdit={canEdit}
+          canDelete={deletable}
+          canEdit={editable}
           canMutate={canMutate}
           comment={comment}
           currentUserId={currentUserId}
-          deleteComment={deleteComment}
-          editing={editingCommentId === comment.id && canMutate && canEdit}
+          editing={editingCommentId === comment.id && editable}
+          features={features}
           onBeginEdit={beginEdit}
           onError={setError}
           onFeedback={setFeedback}
           onFocusEdit={focusCommentEditor}
           onFinishEdit={finishEdit}
           onReply={selectReply}
-          profile={profilesById.get(comment.userId)}
+          profile={profilesById.get(comment.authorId)}
           reactions={
-            reactionsByCommentId.get(comment.id) ?? EMPTY_COMMENT_REACTIONS
+            reactionsByCommentId?.get(comment.id) ?? EMPTY_COMMENT_REACTIONS
           }
           replied={replied}
           repliedProfile={
-            replied ? profilesById.get(replied.userId) : undefined
+            replied ? profilesById.get(replied.authorId) : undefined
           }
-          toggleCommentReaction={toggleCommentReaction}
-          updateComment={updateComment}
+          remove={actions.remove}
+          toggleReaction={actions.toggleReaction}
+          update={actions.update}
         />
       );
     },
     [
       beginEdit,
+      actions.remove,
+      actions.toggleReaction,
+      actions.update,
+      canDelete,
+      canEdit,
       canMutate,
       commentsById,
       currentUserId,
-      deleteComment,
       editingCommentId,
+      features,
       finishEdit,
       focusCommentEditor,
       profilesById,
       reactionsByCommentId,
       selectReply,
-      toggleCommentReaction,
-      updateComment,
     ],
   );
 
@@ -202,7 +204,7 @@ export function CommentSection({
     <InputFocusContext.Provider value={scrollInputAboveKeyboard}>
       <View style={styles.commentScreen}>
         <FlatList
-          accessibilityLabel="지출 댓글 대화"
+          accessibilityLabel="댓글 대화"
           contentContainerStyle={styles.commentListContent}
           data={comments}
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
@@ -242,16 +244,16 @@ export function CommentSection({
           style={styles.composerSticky}
         >
           <CommentComposerDock
-            addComment={addComment}
+            actions={actions}
             canMutate={canMutate}
             error={error}
-            expenseId={expenseId}
             feedback={feedback}
+            features={features}
             inputRef={composerRef}
             onError={setError}
             onFeedback={setFeedback}
             onReplyChange={setReplyDraft}
-            phase={phase}
+            phase={phase ?? null}
             replyDraft={replyDraft}
           />
         </KeyboardStickyView>

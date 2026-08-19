@@ -156,7 +156,7 @@ export type CommentReaction = {
   createdAt: string;
 };
 
-export type RoomPostKind = "NOTICE" | "POST";
+export type RoomPostKind = "NOTICE" | "POST" | "POLL";
 
 /** 방의 이야기. 작성 당시 진행 중인 주차는 기록용 도장으로만 남긴다. */
 export type RoomPost = {
@@ -193,6 +193,22 @@ export type RoomPostReaction = {
   postId: string;
   userId: string;
   emoji: RoomPostReactionEmoji;
+  createdAt: string;
+};
+
+/** 투표글의 선택지. 표시 순서는 position으로 고정한다. */
+export type RoomPostPollOption = {
+  id: string;
+  postId: string;
+  body: string;
+  position: number;
+};
+
+/** 방 멤버는 투표글마다 하나의 선택지만 고를 수 있으며 다시 고를 수 있다. */
+export type RoomPostPollVote = {
+  postId: string;
+  optionId: string;
+  userId: string;
   createdAt: string;
 };
 
@@ -243,6 +259,8 @@ export type AppSnapshot = {
   roomPosts: RoomPost[];
   roomPostComments: RoomPostComment[];
   roomPostReactions: RoomPostReaction[];
+  roomPostPollOptions: RoomPostPollOption[];
+  roomPostPollVotes: RoomPostPollVote[];
   notifications: AppNotification[];
   expenseExceptions: ExpenseException[];
   expenseExceptionApprovals: ExpenseExceptionApproval[];
@@ -321,6 +339,8 @@ export type AddRoomPostInput = {
   roomId: string;
   kind: RoomPostKind;
   body: string;
+  /** 투표글일 때만 2~4개의 선택지를 전달한다. */
+  options?: readonly string[];
   clientRequestId: string;
 };
 

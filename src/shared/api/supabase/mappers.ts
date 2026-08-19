@@ -15,6 +15,8 @@ import type {
   RoomMemberStats,
   RoomPost,
   RoomPostComment,
+  RoomPostPollOption,
+  RoomPostPollVote,
   RoomPostReaction,
 } from '@/shared/api/types';
 import type { LocalDate, MemberStatus, PeriodPhase } from '@/shared/model/types';
@@ -34,6 +36,8 @@ import type {
   RoomMemberRow,
   RoomMemberStatsRow,
   RoomPostCommentRow,
+  RoomPostPollOptionRow,
+  RoomPostPollVoteRow,
   RoomPostReactionRow,
   RoomPostRow,
   RoomRow,
@@ -260,7 +264,7 @@ export function mapRoomPost(row: RoomPostRow): RoomPost {
     clientRequestId: row.client_request_id,
     roomId: row.room_id,
     periodId: row.period_id ?? undefined,
-    kind: row.kind === 'notice' ? 'NOTICE' : 'POST',
+    kind: row.kind === 'notice' ? 'NOTICE' : row.kind === 'poll' ? 'POLL' : 'POST',
     authorId: row.author_id,
     body: row.deleted_at ? '삭제된 냥톡입니다.' : row.body ?? '',
     createdAt: row.created_at,
@@ -289,6 +293,19 @@ export function mapRoomPostReaction(row: RoomPostReactionRow): RoomPostReaction 
     postId: row.post_id,
     userId: row.user_id,
     emoji: row.emoji,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapRoomPostPollOption(row: RoomPostPollOptionRow): RoomPostPollOption {
+  return { id: row.id, postId: row.post_id, body: row.body, position: row.position };
+}
+
+export function mapRoomPostPollVote(row: RoomPostPollVoteRow): RoomPostPollVote {
+  return {
+    postId: row.post_id,
+    optionId: row.option_id,
+    userId: row.user_id,
     createdAt: row.created_at,
   };
 }

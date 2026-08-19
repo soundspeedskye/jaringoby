@@ -678,6 +678,11 @@ export class OfflineQueueRepository implements AppRepository {
     void this.refreshBase().catch(() => undefined);
   }
 
+  async voteRoomPostPoll(postId: string, optionId: string): Promise<void> {
+    await this.base.voteRoomPostPoll(postId, optionId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
   // 읽음 처리는 서버의 사용자별 상태만 바꾸므로 오프라인 큐에 재생하지 않는다.
   // 다음 동기화에서 받은 스냅샷이 최종 상태다.
   async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {

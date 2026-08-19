@@ -64,6 +64,8 @@ All parameter names are part of the client contract.
 | `add_comment` | `p_expense_id uuid`, `p_body text`, `p_reply_to_comment_id uuid?`, `p_client_request_id uuid` | one `comments` row; idempotent by user/request ID |
 | `update_comment` | `p_comment_id uuid`, `p_body text`, `p_expected_version int4` | updated `comments` row; only within five minutes |
 | `delete_comment` | `p_comment_id uuid`, `p_expected_version int4` | soft-deleted `comments` row |
+| `add_room_post` | `p_room_id uuid`, `p_kind room_post_kind`, `p_body text`, `p_options text[]?`, `p_client_request_id uuid` | one room post; polls require 2–4 distinct options |
+| `vote_room_post_poll` | `p_post_id uuid`, `p_option_id uuid` | one vote per active member; a later choice replaces the previous one |
 | `finalize_challenge` | `p_challenge_id uuid` | one `challenge_archives` row; idempotent after `F` |
 
 `preview_invite` success:
@@ -124,6 +126,7 @@ Join failures use `INVALID_CODE`, `RATE_LIMITED`, `CHALLENGE_CLOSED`,
 | `user_challenge_preferences` | per-user hide and notification settings |
 | `reports`, `blocks` | safety controls scoped by RLS |
 | `notifications` | owner-only kind/actor/entity/route/read state; no message body is stored |
+| `room_posts`, `room_post_poll_options`, `room_post_poll_votes` | member-scoped board posts and single-choice poll data; direct writes are RPC-only |
 | `device_push_tokens` | owner-only iOS/Android token registration and enable state |
 
 Members can read all room expenses/comments including records created before

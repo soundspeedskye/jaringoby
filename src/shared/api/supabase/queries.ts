@@ -10,6 +10,8 @@ import type {
   ExpenseRow,
   NotificationRow,
   RoomPostCommentRow,
+  RoomPostPollOptionRow,
+  RoomPostPollVoteRow,
   RoomPostReactionRow,
   RoomPostRow,
 } from './rows';
@@ -84,6 +86,23 @@ export async function fetchRoomPostReactionRows(client: SupabaseClient): Promise
     .select('post_id,user_id,emoji,created_at');
   if (result.error) throw translateError(result.error, '냥톡 반응을 갱신하지 못했어요.');
   return rows<RoomPostReactionRow>(result.data);
+}
+
+export async function fetchRoomPostPollOptionRows(client: SupabaseClient): Promise<RoomPostPollOptionRow[]> {
+  const result = await client
+    .from('room_post_poll_options')
+    .select('id,post_id,body,position')
+    .order('position', { ascending: true });
+  if (result.error) throw translateError(result.error, '투표 선택지를 갱신하지 못했어요.');
+  return rows<RoomPostPollOptionRow>(result.data);
+}
+
+export async function fetchRoomPostPollVoteRows(client: SupabaseClient): Promise<RoomPostPollVoteRow[]> {
+  const result = await client
+    .from('room_post_poll_votes')
+    .select('post_id,option_id,user_id,created_at');
+  if (result.error) throw translateError(result.error, '투표 결과를 갱신하지 못했어요.');
+  return rows<RoomPostPollVoteRow>(result.data);
 }
 
 export async function fetchNotificationRows(client: SupabaseClient): Promise<NotificationRow[]> {

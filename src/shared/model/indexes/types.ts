@@ -1,4 +1,4 @@
-import type { Comment, CommentReaction, Expense, ExpenseException, Period, PeriodMember, PeriodResult, Profile, Room, RoomMemberStats, RoomPost, RoomPostComment, RoomPostReaction } from '@/shared/api/types';
+import type { Comment, CommentReaction, Expense, ExpenseException, Period, PeriodMember, PeriodResult, Profile, Room, RoomMemberStats, RoomPost, RoomPostComment, RoomPostPollOption, RoomPostPollVote, RoomPostReaction } from '@/shared/api/types';
 
 export type AppIndexes = {
   roomById: Map<string, Room>;
@@ -11,6 +11,8 @@ export type AppIndexes = {
   expensesByPeriodAndUserId: Map<string, Map<string, Expense[]>>;
   /** 방별 피드 지출(삭제 제외), 게시 시각(createdAt) 최신순 정렬. */
   feedExpensesByRoomId: Map<string, Expense[]>;
+  /** 방·작성자별 피드 지출(삭제 제외), 게시 시각(createdAt) 최신순 정렬. */
+  feedExpensesByRoomAndUserId: Map<string, Map<string, Expense[]>>;
   commentsByExpenseId: Map<string, Comment[]>;
   commentCountByExpenseId: Map<string, number>;
   reactionsByCommentId: Map<string, CommentReaction[]>;
@@ -19,6 +21,8 @@ export type AppIndexes = {
   commentsByPostId: Map<string, RoomPostComment[]>;
   commentCountByPostId: Map<string, number>;
   reactionsByPostId: Map<string, RoomPostReaction[]>;
+  pollOptionsByPostId: Map<string, RoomPostPollOption[]>;
+  pollVotesByPostId: Map<string, RoomPostPollVote[]>;
   resultsByPeriodId: Map<string, PeriodResult[]>;
   statsByRoomId: Map<string, RoomMemberStats[]>;
   crownIdsByPeriodId: Map<string, string[]>;

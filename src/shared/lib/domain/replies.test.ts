@@ -51,6 +51,17 @@ describe('validateCommentBody', () => {
     });
   });
 
+  it('accepts the board comment limit when it is supplied', () => {
+    expect(validateCommentBody('가'.repeat(300), 300)).toMatchObject({
+      valid: true,
+      length: 300,
+    });
+    expect(validateCommentBody('가'.repeat(301), 300)).toMatchObject({
+      valid: false,
+      reason: 'TOO_LONG',
+    });
+  });
+
   it('ignores surrounding spaces when measuring, like btrim', () => {
     const body = `   ${'가'.repeat(COMMENT_MAX_CHARACTERS)}   `;
     expect(validateCommentBody(body)).toMatchObject({

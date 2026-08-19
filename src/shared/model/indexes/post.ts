@@ -1,4 +1,9 @@
-import type { RoomPost, RoomPostComment } from '@/shared/api/types';
+import type {
+  RoomPost,
+  RoomPostComment,
+  RoomPostPollOption,
+  RoomPostPollVote,
+} from '@/shared/api/types';
 import type { AppIndexes } from './types';
 import { appendIndexValue } from './util';
 
@@ -45,4 +50,35 @@ export function pickPostCommentIndexes(indexes: AppIndexes): Pick<
     commentsByPostId: indexes.commentsByPostId,
     commentCountByPostId: indexes.commentCountByPostId,
   };
+}
+
+export function buildPostPollIndexes(
+  options: RoomPostPollOption[],
+  votes: RoomPostPollVote[],
+): Pick<AppIndexes, 'pollOptionsByPostId' | 'pollVotesByPostId'> {
+  const pollOptionsByPostId = new Map<string, RoomPostPollOption[]>();
+  options.forEach((option) => appendIndexValue(pollOptionsByPostId, option.postId, option));
+  pollOptionsByPostId.forEach((postOptions) => {
+    postOptions.sort((left, right) => left.position - right.position);
+  });
+  return {
+    pollOptionsByPostId,
+    pollVotesByPostId: groupPollVotes(votes),
+  };
+}
+
+export function pickPostPollIndexes(indexes: AppIndexes): Pick<
+  AppIndexes,
+  'pollOptionsByPostId' | 'pollVotesByPostId'
+> {
+  return {
+    pollOptionsByPostId: indexes.pollOptionsByPostId,
+    pollVotesByPostId: indexes.pollVotesByPostId,
+  };
+}
+
+function groupPollVotes(votes: RoomPostPollVote[]): Map<string, RoomPostPollVote[]> {
+  const grouped = new Map<string, RoomPostPollVote[]>();
+  votes.forEach((vote) => appendIndexValue(grouped, vote.postId, vote));
+  return grouped;
 }

@@ -59,6 +59,7 @@ export interface AppRepository {
   updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment>;
   deleteRoomPostComment(commentId: string): Promise<void>;
   toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void>;
+  voteRoomPostPoll(postId: string, optionId: string): Promise<void>;
   markNotificationsRead(notificationIds: readonly string[]): Promise<void>;
   markAllNotificationsRead(): Promise<void>;
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe;

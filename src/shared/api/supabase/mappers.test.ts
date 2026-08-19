@@ -22,6 +22,8 @@ import {
   mapRoomMember,
   mapRoomPost,
   mapRoomPostComment,
+  mapRoomPostPollOption,
+  mapRoomPostPollVote,
   mapRoomPostReaction,
   mapStats,
   requiredString,
@@ -571,6 +573,10 @@ describe('mapRoomPost', () => {
     expect(mapRoomPost({ ...row, kind: 'post' }).kind).toBe('POST');
   });
 
+  it('poll을 POLL로 옮긴다', () => {
+    expect(mapRoomPost({ ...row, kind: 'poll' }).kind).toBe('POLL');
+  });
+
   it('삭제된 게시글은 원문을 감춘다', () => {
     expect(mapRoomPost({ ...row, deleted_at: '2026-08-05T00:00:00.000Z' }).body)
       .toBe('삭제된 냥톡입니다.');
@@ -636,6 +642,18 @@ describe('반응 매퍼', () => {
       userId: 'user-b',
       emoji: '👍',
       createdAt: '2026-08-04T03:00:00.000Z',
+    });
+  });
+});
+
+describe('투표 매퍼', () => {
+  it('선택지와 투표를 옮긴다', () => {
+    expect(mapRoomPostPollOption({ id: 'option-1', post_id: 'post-1', body: '도시락', position: 0 }))
+      .toEqual({ id: 'option-1', postId: 'post-1', body: '도시락', position: 0 });
+    expect(mapRoomPostPollVote({
+      post_id: 'post-1', option_id: 'option-1', user_id: 'user-a', created_at: '2026-08-05T06:00:00.000Z',
+    })).toEqual({
+      postId: 'post-1', optionId: 'option-1', userId: 'user-a', createdAt: '2026-08-05T06:00:00.000Z',
     });
   });
 });

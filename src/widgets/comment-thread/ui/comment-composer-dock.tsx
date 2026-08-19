@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import type { CommentActionProps } from "../model/types";
+import type { ThreadActions, ThreadFeatures } from "../model/types";
 import { CommentComposer } from "./comment-composer";
 import type { ReplyDraft } from "@/shared/lib/domain/replies";
 import { createCommentCommand } from "@/shared/lib/domain/replies";
@@ -13,10 +13,9 @@ import type { PeriodPhase } from "@/shared/model/types";
 import { FormMessage } from "@/shared/ui/form-message";
 
 export function CommentComposerDock({
-  addComment,
+  actions,
   canMutate,
   error,
-  expenseId,
   feedback,
   inputRef,
   onError,
@@ -24,11 +23,13 @@ export function CommentComposerDock({
   onReplyChange,
   phase,
   replyDraft,
-}: Pick<CommentActionProps, "addComment"> & {
+  features,
+}: {
+  actions: Pick<ThreadActions, "create">;
   canMutate: boolean;
   error: string | null;
-  expenseId: string;
   feedback: string | null;
+  features: ThreadFeatures;
   inputRef: React.RefObject<TextInput | null>;
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
@@ -42,10 +43,13 @@ export function CommentComposerDock({
   const sendComment = useCallback(async () => {
     onError(null);
     try {
-      const command = createCommentCommand(body, replyDraft);
+      const command = createCommentCommand(
+        body,
+        features.replies ? replyDraft : null,
+        features.maxLength,
+      );
       setSending(true);
-      await addComment({
-        expenseId,
+      await actions.create({
         body: command.body,
         replyToId: command.replyToMessageId ?? undefined,
         clientRequestId,
@@ -64,10 +68,11 @@ export function CommentComposerDock({
       setSending(false);
     }
   }, [
-    addComment,
+    actions,
     body,
     clientRequestId,
-    expenseId,
+    features.maxLength,
+    features.replies,
     onError,
     onFeedback,
     onReplyChange,
@@ -88,9 +93,11 @@ export function CommentComposerDock({
           <CommentComposer
             body={body}
             inputRef={inputRef}
+            maxLength={features.maxLength}
             onBodyChange={setBody}
             onReplyChange={onReplyChange}
             onSend={sendComment}
+            placeholder={features.placeholder}
             replyDraft={replyDraft}
             sending={sending}
           />

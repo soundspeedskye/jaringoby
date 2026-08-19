@@ -52,6 +52,8 @@ import {
   mapRoomMember,
   mapRoomPost,
   mapRoomPostComment,
+  mapRoomPostPollOption,
+  mapRoomPostPollVote,
   mapRoomPostReaction,
   mapStats,
   requiredString,
@@ -80,6 +82,8 @@ import {
   fetchCommentReactionRows,
   fetchRoomPostRows,
   fetchRoomPostCommentRows,
+  fetchRoomPostPollOptionRows,
+  fetchRoomPostPollVoteRows,
   fetchRoomPostReactionRows,
   fetchNotificationRows,
   fetchExceptionRows,
@@ -113,6 +117,8 @@ const REALTIME_TABLES = [
   'room_posts',
   'room_post_comments',
   'room_post_reactions',
+  'room_post_poll_options',
+  'room_post_poll_votes',
   'notifications',
   'expense_exceptions',
   'expense_exception_approvals',
@@ -601,8 +607,9 @@ export class SupabaseRepository implements AppRepository {
     await this.requireUserId();
     const { data, error } = await this.client.rpc('add_room_post', {
       p_room_id: input.roomId,
-      p_kind: input.kind === 'NOTICE' ? 'notice' : 'post',
+      p_kind: input.kind === 'NOTICE' ? 'notice' : input.kind === 'POLL' ? 'poll' : 'post',
       p_body: input.body,
+      p_options: input.kind === 'POLL' ? input.options?.map((option) => option.trim()) ?? [] : null,
       p_client_request_id: toRequestUuid(input.clientRequestId),
     });
     if (error) throw translateError(error, '냥톡을 남기지 못했어요.');
@@ -692,6 +699,18 @@ export class SupabaseRepository implements AppRepository {
     );
   }
 
+  async voteRoomPostPoll(postId: string, optionId: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc('vote_room_post_poll', {
+      p_post_id: postId,
+      p_option_id: optionId,
+    });
+    if (error) throw translateError(error, '투표하지 못했어요.');
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(['room_post_poll_votes']),
+    );
+  }
+
   async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
     await this.requireUserId();
     const ids = [...new Set(notificationIds)].filter((id) => id.length > 0);
@@ -748,6 +767,8 @@ export class SupabaseRepository implements AppRepository {
       roomPostRows,
       roomPostCommentRows,
       roomPostReactionRows,
+      roomPostPollOptionRows,
+      roomPostPollVoteRows,
       notificationRows,
       exceptionRows,
       approvalRows,
@@ -784,6 +805,8 @@ export class SupabaseRepository implements AppRepository {
       fetchRoomPostRows(this.client),
       fetchRoomPostCommentRows(this.client),
       fetchRoomPostReactionRows(this.client),
+      fetchRoomPostPollOptionRows(this.client),
+      fetchRoomPostPollVoteRows(this.client),
       fetchNotificationRows(this.client),
       fetchExceptionRows(this.client),
       fetchExceptionApprovalRows(this.client),
@@ -889,6 +912,12 @@ export class SupabaseRepository implements AppRepository {
       roomPostReactions: roomPostReactionRows
         .filter((row) => visibleRoomPostIds.has(row.post_id))
         .map(mapRoomPostReaction),
+      roomPostPollOptions: roomPostPollOptionRows
+        .filter((row) => visibleRoomPostIds.has(row.post_id))
+        .map(mapRoomPostPollOption),
+      roomPostPollVotes: roomPostPollVoteRows
+        .filter((row) => visibleRoomPostIds.has(row.post_id))
+        .map(mapRoomPostPollVote),
       notifications: notificationRows.map(mapNotification),
       expenseExceptions: visibleExceptionRows.map(mapExpenseException),
       expenseExceptionApprovals: visibleApprovalRows.map(mapExpenseExceptionApproval),

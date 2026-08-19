@@ -51,6 +51,7 @@ export type AppActionsContextValue = {
   updateRoomPostComment: (commentId: string, body: string) => Promise<RoomPostComment>;
   deleteRoomPostComment: (commentId: string) => Promise<void>;
   toggleRoomPostReaction: (postId: string, emoji: RoomPostReactionEmoji) => Promise<void>;
+  voteRoomPostPoll: (postId: string, optionId: string) => Promise<void>;
   markNotificationsRead: (notificationIds: readonly string[]) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
 };
@@ -176,6 +177,10 @@ export function AppActionsProvider({
       execute(() => repository.toggleRoomPostReaction(postId, emoji)),
     [execute, repository],
   );
+  const voteRoomPostPoll = useCallback(
+    (postId: string, optionId: string) => execute(() => repository.voteRoomPostPoll(postId, optionId)),
+    [execute, repository],
+  );
   const markNotificationsRead = useCallback(
     (notificationIds: readonly string[]) =>
       execute(() => repository.markNotificationsRead(notificationIds)),
@@ -214,6 +219,7 @@ export function AppActionsProvider({
     updateRoomPostComment,
     deleteRoomPostComment,
     toggleRoomPostReaction,
+    voteRoomPostPoll,
     markNotificationsRead,
     markAllNotificationsRead,
   }), [
@@ -234,6 +240,7 @@ export function AppActionsProvider({
     updateRoomPostComment,
     deleteRoomPostComment,
     toggleRoomPostReaction,
+    voteRoomPostPoll,
     deleteArchivedPeriod,
     deleteExpense,
     joinRoom,

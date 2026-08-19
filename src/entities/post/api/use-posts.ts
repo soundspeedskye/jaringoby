@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import type {
   RoomPost,
   RoomPostComment,
+  RoomPostPollOption,
+  RoomPostPollVote,
   RoomPostReaction,
 } from '@/shared/api/types';
 import type { AppStoreState } from '@/shared/model/app-store';
@@ -20,6 +22,10 @@ const EMPTY_POSTS: RoomPost[] = [];
 const EMPTY_POST_COMMENTS: RoomPostComment[] = [];
 
 const EMPTY_REACTIONS_BY_POST: ReadonlyMap<string, RoomPostReaction[]> = new Map();
+
+const EMPTY_POLL_OPTIONS: RoomPostPollOption[] = [];
+
+const EMPTY_POLL_VOTES: RoomPostPollVote[] = [];
 
 export function useRoomPosts(roomId: string | undefined): RoomPost[] {
   return useIndexedArray(
@@ -88,4 +94,26 @@ export function useRoomPostCommentCounts(posts: readonly RoomPost[]): ReadonlyMa
     return counts;
   }, [posts]);
   return useAppStoreSelector(selector, shallowMapEqual);
+}
+
+export function useRoomPostPollOptions(postId: string | undefined): RoomPostPollOption[] {
+  return useIndexedArray(
+    useCallback(
+      (state: AppStoreState) => (
+        postId ? state.indexes.pollOptionsByPostId.get(postId) ?? EMPTY_POLL_OPTIONS : EMPTY_POLL_OPTIONS
+      ),
+      [postId],
+    ),
+  );
+}
+
+export function useRoomPostPollVotes(postId: string | undefined): RoomPostPollVote[] {
+  return useIndexedArray(
+    useCallback(
+      (state: AppStoreState) => (
+        postId ? state.indexes.pollVotesByPostId.get(postId) ?? EMPTY_POLL_VOTES : EMPTY_POLL_VOTES
+      ),
+      [postId],
+    ),
+  );
 }

@@ -9,14 +9,16 @@ import {
 } from './indexes/exception';
 import {
   buildExpenseIndexes,
-  buildRoomFeedIndex,
+  buildRoomFeedIndexes,
   pickExpenseIndexes,
 } from './indexes/expense';
 import {
   buildPostCommentIndexes,
   buildPostIndexes,
+  buildPostPollIndexes,
   pickPostCommentIndexes,
   pickPostIndexes,
+  pickPostPollIndexes,
 } from './indexes/post';
 import type { AppIndexes } from './indexes/types';
 import { groupValues, indexById } from './indexes/util';
@@ -51,12 +53,15 @@ export function buildAppIndexes(
     ? pickCommentIndexes(previousIndexes)
     : buildCommentIndexes(snapshot.comments);
   // 피드는 지출·주차 편성 둘 다에 의존한다. 둘 다 그대로면 재사용.
-  const feedExpensesByRoomId =
+  const roomFeedIndexes =
     canReuse &&
     snapshot.expenses === previousSnapshot.expenses &&
     snapshot.periods === previousSnapshot.periods
-      ? previousIndexes.feedExpensesByRoomId
-      : buildRoomFeedIndex(snapshot.expenses, snapshot.periods);
+      ? {
+        feedExpensesByRoomId: previousIndexes.feedExpensesByRoomId,
+        feedExpensesByRoomAndUserId: previousIndexes.feedExpensesByRoomAndUserId,
+      }
+      : buildRoomFeedIndexes(snapshot.expenses, snapshot.periods);
   const reactionsByCommentId =
     canReuse && snapshot.commentReactions === previousSnapshot.commentReactions
       ? previousIndexes.reactionsByCommentId
@@ -71,6 +76,11 @@ export function buildAppIndexes(
     canReuse && snapshot.roomPostReactions === previousSnapshot.roomPostReactions
       ? previousIndexes.reactionsByPostId
       : groupValues(snapshot.roomPostReactions, (reaction) => reaction.postId);
+  const pollIndexes = canReuse
+    && snapshot.roomPostPollOptions === previousSnapshot.roomPostPollOptions
+    && snapshot.roomPostPollVotes === previousSnapshot.roomPostPollVotes
+    ? pickPostPollIndexes(previousIndexes)
+    : buildPostPollIndexes(snapshot.roomPostPollOptions, snapshot.roomPostPollVotes);
   const exceptionIndexes = canReuse && exceptionInputsAreShared(snapshot, previousSnapshot)
     ? pickExceptionIndexes(previousIndexes)
     : buildExceptionIndexes(snapshot, membersByPeriodId, expenseIndexes.expenseById);
@@ -104,12 +114,13 @@ export function buildAppIndexes(
     profileById,
     membersByPeriodId,
     ...expenseIndexes,
-    feedExpensesByRoomId,
+    ...roomFeedIndexes,
     ...commentIndexes,
     reactionsByCommentId,
     ...postIndexes,
     ...postCommentIndexes,
     reactionsByPostId,
+    ...pollIndexes,
     ...exceptionIndexes,
     resultsByPeriodId,
     statsByRoomId,
@@ -128,6 +139,7 @@ function createEmptyIndexes(): AppIndexes {
     expensesByUserId: new Map(),
     expensesByPeriodAndUserId: new Map(),
     feedExpensesByRoomId: new Map(),
+    feedExpensesByRoomAndUserId: new Map(),
     commentsByExpenseId: new Map(),
     commentCountByExpenseId: new Map(),
     reactionsByCommentId: new Map(),
@@ -136,6 +148,8 @@ function createEmptyIndexes(): AppIndexes {
     commentsByPostId: new Map(),
     commentCountByPostId: new Map(),
     reactionsByPostId: new Map(),
+    pollOptionsByPostId: new Map(),
+    pollVotesByPostId: new Map(),
     resultsByPeriodId: new Map(),
     statsByRoomId: new Map(),
     crownIdsByPeriodId: new Map(),

@@ -170,7 +170,7 @@ export type RoomPostRow = {
   client_request_id: string;
   room_id: string;
   period_id: string | null;
-  kind: 'notice' | 'post';
+  kind: 'notice' | 'post' | 'poll';
   author_id: string;
   body: string | null;
   created_at: string;
@@ -195,6 +195,20 @@ export type RoomPostReactionRow = {
   post_id: string;
   user_id: string;
   emoji: RoomPostReactionEmoji;
+  created_at: string;
+};
+
+export type RoomPostPollOptionRow = {
+  id: string;
+  post_id: string;
+  body: string;
+  position: number;
+};
+
+export type RoomPostPollVoteRow = {
+  post_id: string;
+  option_id: string;
+  user_id: string;
   created_at: string;
 };
 

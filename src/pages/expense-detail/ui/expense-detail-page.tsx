@@ -29,7 +29,14 @@ import { NoticeBanner } from "@/shared/ui/notice-banner";
 import { PageHeader } from "@/shared/ui/page-header";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { Screen, ScreenFrame } from "@/shared/ui/screen";
-import { CommentSection } from "@/widgets/comment-thread";
+import { CommentThread, type ThreadFeatures, type ThreadMessage } from "@/widgets/comment-thread";
+
+const EXPENSE_COMMENT_FEATURES: ThreadFeatures = {
+  replies: true,
+  reactions: true,
+  maxLength: 500,
+  placeholder: "응원이나 피드백을 남겨요",
+};
 
 export function ExpenseDetailPage() {
   const router = useRouter();
@@ -69,6 +76,19 @@ export function ExpenseDetailPage() {
           )
         : [],
     [expense, expenseComments],
+  );
+  const threadMessages = useMemo<ThreadMessage[]>(
+    () => comments.map((comment) => ({
+      id: comment.id,
+      authorId: comment.userId,
+      body: comment.body,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      deletedAt: comment.deletedAt,
+      syncStatus: comment.syncStatus,
+      replyToId: comment.replyToId,
+    })),
+    [comments],
   );
   const commentIds = useMemo(
     () => comments.map((comment) => comment.id),
@@ -161,14 +181,20 @@ export function ExpenseDetailPage() {
 
   return (
     <ScreenFrame testID="expense-detail-screen">
-      <CommentSection
-        addComment={addComment}
+      <CommentThread
+        actions={{
+          create: (input) => addComment({ ...input, expenseId: expense.id }),
+          update: updateComment,
+          remove: deleteComment,
+          toggleReaction: toggleCommentReaction,
+        }}
+        canDelete={(comment) => comment.authorId === currentUser?.id}
+        canEdit={(comment) => comment.authorId === currentUser?.id}
         canMutate={canMutateComments}
-        comments={comments}
+        comments={threadMessages}
         currentUserId={currentUser?.id}
+        features={EXPENSE_COMMENT_FEATURES}
         reactionsByCommentId={reactionsByCommentId}
-        deleteComment={deleteComment}
-        expenseId={expense.id}
         header={
           <>
             <PageHeader onBack={returnToChallengeHome} title="지출 상세" />
@@ -239,8 +265,6 @@ export function ExpenseDetailPage() {
         }
         phase={phase}
         profilesById={profilesById}
-        toggleCommentReaction={toggleCommentReaction}
-        updateComment={updateComment}
       />
     </ScreenFrame>
   );

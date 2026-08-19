@@ -796,6 +796,15 @@ class FakeRepository implements AppRepository {
     else this.snapshot.roomPostReactions.push({ postId, userId: this.userId, emoji, createdAt: new Date().toISOString() });
   }
 
+  async voteRoomPostPoll(postId: string, optionId: string): Promise<void> {
+    const index = this.snapshot.roomPostPollVotes.findIndex(
+      (vote) => vote.postId === postId && vote.userId === this.userId,
+    );
+    const vote = { postId, optionId, userId: this.userId, createdAt: new Date().toISOString() };
+    if (index >= 0) this.snapshot.roomPostPollVotes[index] = vote;
+    else this.snapshot.roomPostPollVotes.push(vote);
+  }
+
   async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
     const readAt = new Date().toISOString();
     this.snapshot.notifications.forEach((notification) => {
@@ -855,7 +864,9 @@ function snapshotFixture(userId: string, period: Period): AppSnapshot {
     commentReactions: [],
     roomPosts: [],
     roomPostComments: [],
-    roomPostReactions: [],
+  roomPostReactions: [],
+  roomPostPollOptions: [],
+  roomPostPollVotes: [],
   notifications: [],
     expenseExceptions: [],
     expenseExceptionApprovals: [],

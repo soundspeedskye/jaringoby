@@ -103,6 +103,16 @@ function shareAppSnapshot(previous: AppSnapshot | null, incoming: AppSnapshot): 
       incoming.roomPostReactions,
       (value) => `${value.postId}\u0000${value.userId}\u0000${value.emoji}`,
     ),
+    roomPostPollOptions: shareRecords(
+      previous.roomPostPollOptions,
+      incoming.roomPostPollOptions,
+      (value) => value.id,
+    ),
+    roomPostPollVotes: shareRecords(
+      previous.roomPostPollVotes,
+      incoming.roomPostPollVotes,
+      (value) => `${value.postId}\u0000${value.userId}`,
+    ),
     notifications: shareRecords(previous.notifications, incoming.notifications, (value) => value.id),
     expenseExceptions: shareRecords(
       previous.expenseExceptions,

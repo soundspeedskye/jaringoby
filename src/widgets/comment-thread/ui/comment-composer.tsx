@@ -3,7 +3,7 @@ import { memo } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { ReplyDraft } from "@/shared/lib/domain/replies";
-import { COMMENT_MAX_CHARACTERS, validateCommentBody } from "@/shared/lib/domain/replies";
+import { validateCommentBody } from "@/shared/lib/domain/replies";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { GlassSurface } from "@/shared/ui/glass-surface";
 
@@ -13,6 +13,8 @@ export const CommentComposer = memo(function CommentComposer({
   onBodyChange,
   onReplyChange,
   onSend,
+  maxLength,
+  placeholder,
   replyDraft,
   sending,
 }: {
@@ -21,10 +23,12 @@ export const CommentComposer = memo(function CommentComposer({
   onBodyChange: (body: string) => void;
   onReplyChange: (replyDraft: ReplyDraft | null) => void;
   onSend: () => Promise<void>;
+  maxLength: number;
+  placeholder: string;
   replyDraft: ReplyDraft | null;
   sending: boolean;
 }) {
-  const bodyValid = validateCommentBody(body).valid;
+  const bodyValid = validateCommentBody(body, maxLength).valid;
 
   return (
     <GlassSurface interactive style={styles.composer} testID="comment-composer">
@@ -58,10 +62,10 @@ export const CommentComposer = memo(function CommentComposer({
       <View style={styles.composerRow}>
         <TextInput
           accessibilityLabel="댓글 입력"
-          maxLength={COMMENT_MAX_CHARACTERS}
+          maxLength={maxLength}
           multiline
           onChangeText={onBodyChange}
-          placeholder="응원이나 피드백을 남겨요"
+          placeholder={placeholder}
           placeholderTextColor={palette.muted}
           ref={inputRef}
           style={styles.composerInput}

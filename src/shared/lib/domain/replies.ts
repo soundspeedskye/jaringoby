@@ -50,12 +50,15 @@ export function normalizeCommentBody(body: string): string {
  * newline through: staying stricter than the server never lets through
  * something it would refuse.
  */
-export function validateCommentBody(body: string): CommentBodyValidation {
+export function validateCommentBody(
+  body: string,
+  maxLength = COMMENT_MAX_CHARACTERS,
+): CommentBodyValidation {
   const length = Array.from(normalizeCommentBody(body)).length;
   const reason =
     body.trim().length === 0
       ? 'EMPTY'
-      : length > COMMENT_MAX_CHARACTERS
+      : length > maxLength
         ? 'TOO_LONG'
         : 'VALID';
   return Object.freeze({
@@ -90,8 +93,12 @@ export function prepareReplyDraft(target: ReplyTargetMessage, previewLength = 60
   });
 }
 
-export function createCommentCommand(body: string, replyDraft?: ReplyDraft | null): CommentCommand {
-  const validation = validateCommentBody(body);
+export function createCommentCommand(
+  body: string,
+  replyDraft?: ReplyDraft | null,
+  maxLength = COMMENT_MAX_CHARACTERS,
+): CommentCommand {
+  const validation = validateCommentBody(body, maxLength);
   if (!validation.valid) {
     throw new RangeError(`Invalid comment body: ${validation.reason}`);
   }
