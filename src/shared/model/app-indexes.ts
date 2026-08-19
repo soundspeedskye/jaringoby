@@ -7,11 +7,7 @@ import {
   exceptionInputsAreShared,
   pickExceptionIndexes,
 } from './indexes/exception';
-import {
-  buildExpenseIndexes,
-  buildRoomFeedIndexes,
-  pickExpenseIndexes,
-} from './indexes/expense';
+import { buildExpenseIndexes, pickExpenseIndexes } from './indexes/expense';
 import {
   buildPostCommentIndexes,
   buildPostIndexes,
@@ -52,16 +48,6 @@ export function buildAppIndexes(
   const commentIndexes = canReuse && snapshot.comments === previousSnapshot.comments
     ? pickCommentIndexes(previousIndexes)
     : buildCommentIndexes(snapshot.comments);
-  // 피드는 지출·주차 편성 둘 다에 의존한다. 둘 다 그대로면 재사용.
-  const roomFeedIndexes =
-    canReuse &&
-    snapshot.expenses === previousSnapshot.expenses &&
-    snapshot.periods === previousSnapshot.periods
-      ? {
-        feedExpensesByRoomId: previousIndexes.feedExpensesByRoomId,
-        feedExpensesByRoomAndUserId: previousIndexes.feedExpensesByRoomAndUserId,
-      }
-      : buildRoomFeedIndexes(snapshot.expenses, snapshot.periods);
   const reactionsByCommentId =
     canReuse && snapshot.commentReactions === previousSnapshot.commentReactions
       ? previousIndexes.reactionsByCommentId
@@ -114,7 +100,6 @@ export function buildAppIndexes(
     profileById,
     membersByPeriodId,
     ...expenseIndexes,
-    ...roomFeedIndexes,
     ...commentIndexes,
     reactionsByCommentId,
     ...postIndexes,
@@ -136,10 +121,7 @@ function createEmptyIndexes(): AppIndexes {
     membersByPeriodId: new Map(),
     expenseById: new Map(),
     expensesByPeriodId: new Map(),
-    expensesByUserId: new Map(),
     expensesByPeriodAndUserId: new Map(),
-    feedExpensesByRoomId: new Map(),
-    feedExpensesByRoomAndUserId: new Map(),
     commentsByExpenseId: new Map(),
     commentCountByExpenseId: new Map(),
     reactionsByCommentId: new Map(),

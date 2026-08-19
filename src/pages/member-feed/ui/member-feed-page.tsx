@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { FlatList, StyleSheet, View, type ListRenderItemInfo } from "react-native";
 
 import { ExpenseCard } from "@/entities/expense/ui/expense-card";
@@ -7,23 +7,38 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ScreenFrame } from "@/shared/ui/screen";
 import { fonts, palette, spacing } from "@/shared/config/design";
+import {
+  compareExpenseFeedOrder,
+  isFeedVisibleExpense,
+} from "@/shared/api/expense-sync";
 import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
-import { useMemberRoomFeedExpenses } from "@/entities/expense/api/use-expenses";
+import { useUserExpenses } from "@/entities/expense/api/use-expenses";
 import { useProfiles } from "@/entities/member/api/use-members";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
-import { formatDateLabel } from "@/shared/lib/format";
+import { formatDateLabel, formatMonthDay } from "@/shared/lib/format";
 import type { Expense } from "@/shared/api/types";
 
 export function MemberFeedPage() {
   const router = useRouter();
   const { userId } = useLocalSearchParams<"/room/member/[userId]">();
-  const { activeRoom, currentUser } = useCurrentRoom();
-  const expenses = useMemberRoomFeedExpenses(activeRoom?.id, userId);
+  const { activeRoom, currentPeriod, currentUser } = useCurrentRoom();
+  // 지출은 자기 주차에 속한다. 이 피드는 진행 중인 주차만 보여 주고, 지난
+  // 주차 기록은 내 정보 · 지난 주차에서 읽기 전용으로 확인한다.
+  const periodExpenses = useUserExpenses(userId, currentPeriod?.id);
+  const expenses = useMemo(
+    () => periodExpenses.filter(isFeedVisibleExpense).sort(compareExpenseFeedOrder),
+    [periodExpenses],
+  );
   const profilesById = useProfiles(userId ? [userId] : []);
   const commentCounts = useCommentCounts(expenses);
   const profile = userId ? profilesById.get(userId) : undefined;
   const displayName =
     userId === currentUser?.id ? "나" : (profile?.nickname ?? "멤버");
+  const subtitle = useMemo(() => {
+    if (!currentPeriod) return activeRoom?.name;
+    const weekLabel = `${currentPeriod.weekIndex}주차 ${formatMonthDay(currentPeriod.weekStart)}~${formatMonthDay(currentPeriod.weekEnd)}`;
+    return activeRoom ? `${activeRoom.name} · ${weekLabel}` : weekLabel;
+  }, [activeRoom, currentPeriod]);
   const openExpense = useCallback(
     (expenseId: string) => router.push(`/expense/${expenseId}`),
     [router],
@@ -61,17 +76,17 @@ export function MemberFeedPage() {
         keyExtractor={(expense) => expense.id}
         ListEmptyComponent={
           <EmptyState
-            description="이 멤버가 기록한 지출은 여기에 최신순으로 모여요."
+            description="지난 주차 기록은 내 정보 · 지난 주차에서 볼 수 있어요."
             icon="receipt-text-outline"
-            title="아직 지출 기록이 없어요."
+            title="이번 주차에 기록한 지출이 없어요."
           />
         }
         ListHeaderComponent={
           <>
             <PageHeader
               onBack={() => router.back()}
-              subtitle={activeRoom?.name}
-              title={`${displayName}님의 피드`}
+              subtitle={subtitle}
+              title={`${displayName}님의 이번 주차`}
             />
           </>
         }

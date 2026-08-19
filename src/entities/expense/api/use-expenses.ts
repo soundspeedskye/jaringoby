@@ -17,47 +17,21 @@ export function usePeriodExpenses(periodId: string | undefined): Expense[] {
   );
 }
 
-/** 현재 방에서 볼 수 있는 모든 주차 지출을 게시 시각 최신순으로 가져온다. */
-
-export function useRoomFeedExpenses(roomId: string | undefined): Expense[] {
-  return useIndexedArray(
-    useCallback(
-      (state: AppStoreState) => (
-        roomId
-          ? state.indexes.feedExpensesByRoomId.get(roomId) ?? EMPTY_EXPENSES
-          : EMPTY_EXPENSES
-      ),
-      [roomId],
-    ),
-  );
-}
-
-export function useMemberRoomFeedExpenses(
-  roomId: string | undefined,
+/**
+ * 한 주차에서 한 사람이 기록한 지출. periodId는 선택 인자가 아니다: 주차를
+ * 넘나드는 지출 목록은 존재하지 않고, 지난 주차는 지난 주차 화면에서 본다.
+ */
+export function useUserExpenses(
   userId: string | undefined,
+  periodId: string | undefined,
 ): Expense[] {
   return useIndexedArray(
     useCallback(
-      (state: AppStoreState) => {
-        if (!roomId || !userId) return EMPTY_EXPENSES;
-        return state.indexes.feedExpensesByRoomAndUserId
-          .get(roomId)
-          ?.get(userId) ?? EMPTY_EXPENSES;
-      },
-      [roomId, userId],
-    ),
-  );
-}
-
-export function useUserExpenses(userId: string | undefined, periodId?: string): Expense[] {
-  return useIndexedArray(
-    useCallback(
-      (state: AppStoreState) => {
-        if (!userId) return EMPTY_EXPENSES;
-        return periodId
+      (state: AppStoreState) => (
+        userId && periodId
           ? state.indexes.expensesByPeriodAndUserId.get(periodId)?.get(userId) ?? EMPTY_EXPENSES
-          : state.indexes.expensesByUserId.get(userId) ?? EMPTY_EXPENSES;
-      },
+          : EMPTY_EXPENSES
+      ),
       [periodId, userId],
     ),
   );

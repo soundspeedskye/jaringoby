@@ -108,7 +108,6 @@ describe('createAppStore', () => {
 
     expect(after.expenseById).not.toBe(before.expenseById);
     expect(after.expensesByPeriodId).not.toBe(before.expensesByPeriodId);
-    expect(after.expensesByUserId).not.toBe(before.expensesByUserId);
     expect(after.expensesByPeriodAndUserId).not.toBe(
       before.expensesByPeriodAndUserId,
     );

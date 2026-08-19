@@ -9,9 +9,11 @@ import {
 } from "@/shared/lib/domain/period";
 import type { WeekDay } from "@/entities/room/ui/room-hero";
 import {
+  compareExpenseFeedOrder,
   expenseOfficialAmount,
   expensePendingDelta,
   hasPendingExpenseProjection,
+  isFeedVisibleExpense,
 } from "@/shared/api/expense-sync";
 import type { Expense } from "@/shared/api/types";
 import {
@@ -43,16 +45,12 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
   const members = usePeriodMembers(currentPeriod?.id);
   const periodExpenses = usePeriodExpenses(currentPeriod?.id);
   const expenses = useMemo(
-    // createdAt은 ISO(UTC)라 사전식 비교가 시간순과 같다.
-    () => [...periodExpenses].sort(
-      (a, b) => b.createdAt.localeCompare(a.createdAt),
-    ),
+    () => [...periodExpenses].sort(compareExpenseFeedOrder),
     [periodExpenses],
   );
-  // 최근 피드는 과거 주차를 섞지 않고 이번 주차의 게시물만 보여 준다.
-  // pending 삭제도 방 전체 피드와 동일하게 즉시 숨긴다.
+  // 최근 피드는 이번 주차의 게시물만 보여 준다. 멤버 피드와 같은 노출 규칙.
   const currentPeriodFeedExpenses = useMemo(
-    () => expenses.filter((expense) => !expense.deletedAt),
+    () => expenses.filter(isFeedVisibleExpense),
     [expenses],
   );
   const memberUserIds = useMemo(

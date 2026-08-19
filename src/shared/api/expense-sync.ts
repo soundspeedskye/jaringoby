@@ -38,3 +38,16 @@ export function expenseOfficialCategory(expense: Expense): Expense['category'] |
 export function isExpenseVisible(expense: Expense): boolean {
   return !expense.deletedAt || expense.syncStatus !== 'SYNCED';
 }
+
+/**
+ * 피드 노출 규칙. isExpenseVisible보다 엄격해서 아직 서버가 확인하지 않은
+ * 삭제도 즉시 숨긴다: 내가 지운 지출이 남의 피드에 남아 보이면 안 된다.
+ */
+export function isFeedVisibleExpense(expense: Expense): boolean {
+  return !expense.deletedAt;
+}
+
+/** 피드 정렬: 서버 게시 시각 최신순. createdAt은 ISO(UTC)라 사전식=시간순. */
+export function compareExpenseFeedOrder(left: Expense, right: Expense): number {
+  return right.createdAt.localeCompare(left.createdAt);
+}

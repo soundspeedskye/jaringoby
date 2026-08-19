@@ -7,12 +7,7 @@ export type AppIndexes = {
   membersByPeriodId: Map<string, PeriodMember[]>;
   expenseById: Map<string, Expense>;
   expensesByPeriodId: Map<string, Expense[]>;
-  expensesByUserId: Map<string, Expense[]>;
   expensesByPeriodAndUserId: Map<string, Map<string, Expense[]>>;
-  /** 방별 피드 지출(삭제 제외), 게시 시각(createdAt) 최신순 정렬. */
-  feedExpensesByRoomId: Map<string, Expense[]>;
-  /** 방·작성자별 피드 지출(삭제 제외), 게시 시각(createdAt) 최신순 정렬. */
-  feedExpensesByRoomAndUserId: Map<string, Map<string, Expense[]>>;
   commentsByExpenseId: Map<string, Comment[]>;
   commentCountByExpenseId: Map<string, number>;
   reactionsByCommentId: Map<string, CommentReaction[]>;
