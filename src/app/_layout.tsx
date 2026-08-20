@@ -66,7 +66,18 @@ function AuthenticatedApp() {
       <AppDialogProvider>
         <NotificationCoordinator>
           <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.cream } }}>
+          {/*
+            fullScreenGestureEnabled: iOS 26은 기본값이 true지만 18 이하는 false라,
+            구버전에서는 화면 맨 왼쪽 가장자리에서만 스와이프 뒤로가기가 먹었다.
+            버전과 무관하게 화면 어디서나 밀어 뒤로 가도록 명시한다.
+            (대가: iOS 18 이하에서는 스와이프 전환이 simple_push가 되어 시차 효과가 빠진다)
+          */}
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              fullScreenGestureEnabled: true,
+              contentStyle: { backgroundColor: palette.cream },
+            }}>
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="room/create" options={{ presentation: 'modal' }} />
