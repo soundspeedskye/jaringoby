@@ -43,6 +43,7 @@ import { NoticeBanner } from "@/shared/ui/notice-banner";
 import { PageHeader } from "@/shared/ui/page-header";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { Screen, ScreenFrame } from "@/shared/ui/screen";
+import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { SectionHeader } from "@/shared/ui/section-header";
 
 export function HistoryDetailPage() {
@@ -184,6 +185,7 @@ export function HistoryDetailPage() {
     ),
     [crownIdSet, openExpense],
   );
+  const refreshControl = usePullToRefreshControl();
   const renderArchivedDay = useCallback(
     ({ section }: { section: ArchivedDaySection }) => (
       <ArchivedDayHeader
@@ -433,6 +435,7 @@ export function HistoryDetailPage() {
             </View>
           </>
         }
+        refreshControl={refreshControl}
         renderItem={renderArchivedExpense}
         renderSectionHeader={renderArchivedDay}
         sections={expenseSections}

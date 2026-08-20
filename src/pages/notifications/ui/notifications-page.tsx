@@ -7,6 +7,7 @@ import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ScreenFrame } from "@/shared/ui/screen";
+import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import type { AppNotification } from "@/shared/api/types";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
@@ -16,6 +17,7 @@ import { formatDateLabel } from "@/shared/lib/format";
 
 export function NotificationsPage() {
   const router = useRouter();
+  const refreshControl = usePullToRefreshControl();
   const notifications = useNotifications();
   const actorIds = useMemo(
     () =>
@@ -70,6 +72,7 @@ export function NotificationsPage() {
             title="아직 새 소식이 없어요."
           />
         }
+        refreshControl={refreshControl}
         renderItem={({ item: notification }) => {
           const actor = notification.actorId
             ? profilesById.get(notification.actorId)

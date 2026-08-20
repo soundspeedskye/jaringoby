@@ -22,6 +22,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { GlassSurface } from "@/shared/ui/glass-surface";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ScreenFrame } from "@/shared/ui/screen";
+import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { fonts, palette, radii, spacing, tabularNums } from "@/shared/config/design";
 import type { Period, PeriodResult, Room } from "@/shared/api/types";
 import { useCurrentUser } from "@/entities/member/api/use-members";
@@ -50,6 +51,7 @@ type HistorySection = {
 
 export function HistoryPage() {
   const router = useRouter();
+  const refreshControl = usePullToRefreshControl();
   const activeRoom = useActiveRoom();
   const currentUser = useCurrentUser();
   const { pastPeriods } = useHistory();
@@ -261,6 +263,7 @@ export function HistoryPage() {
             </View>
           </>
         }
+        refreshControl={refreshControl}
         renderItem={renderRecord}
         renderSectionFooter={() => <View style={styles.monthFooter} />}
         renderSectionHeader={({ section }) => (

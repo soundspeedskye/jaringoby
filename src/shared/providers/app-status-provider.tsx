@@ -17,8 +17,18 @@ type AppStatusContextValue = {
   error: string | null;
 };
 
+type RefreshOptions = {
+  /**
+   * 전역 loading을 건드리지 않고 갱신한다.
+   * 당겨서 새로고침처럼 화면이 이미 그려진 상태에서 쓴다. loading을 올리면
+   * 그 값으로 화면 상태를 가르는 곳(use-room-home 등)이 통째로 스피너로
+   * 바뀌어, 정작 당김 인디케이터가 사라진다.
+   */
+  silent?: boolean;
+};
+
 type AppStatusActionsContextValue = {
-  refresh: () => Promise<void>;
+  refresh: (options?: RefreshOptions) => Promise<void>;
   clearError: () => void;
 };
 
@@ -54,8 +64,8 @@ export function AppStatusProvider({
     return true;
   }, [acceptsSnapshot, store]);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async ({ silent = false }: RefreshOptions = {}) => {
+    if (!silent) setLoading(true);
     try {
       const snapshot = await repository.load();
       applySnapshot(snapshot);
@@ -63,7 +73,7 @@ export function AppStatusProvider({
     } catch (reason) {
       setError(errorMessage(reason, '데이터를 불러오지 못했어요.'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [applySnapshot, repository]);
 

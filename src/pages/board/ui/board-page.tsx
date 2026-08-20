@@ -8,6 +8,7 @@ import { RoomPostCard } from '@/entities/post/ui/room-post-card';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { PageHeader } from '@/shared/ui/page-header';
 import { ScreenFrame } from '@/shared/ui/screen';
+import { usePullToRefreshControl } from '@/shared/ui/pull-to-refresh';
 import { fonts, palette, radii, spacing } from '@/shared/config/design';
 import type { Profile, RoomPost, RoomPostReaction } from '@/shared/api/types';
 import { useAppActions } from '@/shared/providers/app-actions-provider';
@@ -26,6 +27,7 @@ const EMPTY_REACTIONS: RoomPostReaction[] = [];
 
 export function BoardPage() {
   const router = useRouter();
+  const refreshControl = usePullToRefreshControl();
   const room = useActiveRoom();
   const currentUser = useCurrentUser();
   const posts = useRoomPosts(room?.id);
@@ -127,6 +129,7 @@ export function BoardPage() {
             ) : null}
           </>
         }
+        refreshControl={refreshControl}
         renderItem={renderRow}
         showsVerticalScrollIndicator={false}
       />

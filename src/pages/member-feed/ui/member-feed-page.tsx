@@ -6,6 +6,7 @@ import { ExpenseCard } from "@/entities/expense/ui/expense-card";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ScreenFrame } from "@/shared/ui/screen";
+import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { fonts, palette, spacing } from "@/shared/config/design";
 import {
   compareExpenseFeedOrder,
@@ -20,6 +21,7 @@ import type { Expense } from "@/shared/api/types";
 
 export function MemberFeedPage() {
   const router = useRouter();
+  const refreshControl = usePullToRefreshControl();
   const { userId } = useLocalSearchParams<"/room/member/[userId]">();
   const { activeRoom, currentPeriod, currentUser } = useCurrentRoom();
   // 지출은 자기 주차에 속한다. 이 피드는 진행 중인 주차만 보여 주고, 지난
@@ -89,6 +91,7 @@ export function MemberFeedPage() {
             title="이번 주차에 기록한 지출이 없어요."
           />
         }
+        refreshControl={refreshControl}
         renderItem={renderExpense}
         showsVerticalScrollIndicator={false}
       />

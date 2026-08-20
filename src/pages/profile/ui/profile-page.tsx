@@ -14,6 +14,7 @@ import {
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { GlassSurface } from "@/shared/ui/glass-surface";
 import { ScreenFrame } from "@/shared/ui/screen";
+import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { useTabBarClearance } from "@/shared/lib/use-tab-bar-clearance";
 import { SectionHeader } from "@/shared/ui/section-header";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
@@ -57,6 +58,7 @@ type ProfileSection = {
 export function ProfilePage() {
   const router = useRouter();
   const tabBarClearance = useTabBarClearance();
+  const refreshControl = usePullToRefreshControl();
   const currentUser = useCurrentUser();
   const activeRoom = useActiveRoom();
   const closedRooms = useClosedRooms();
@@ -356,6 +358,7 @@ export function ProfilePage() {
             </Pressable>
           </>
         }
+        refreshControl={refreshControl}
         renderItem={renderProfileItem}
         renderSectionHeader={renderProfileSectionHeader}
         sections={sections}
