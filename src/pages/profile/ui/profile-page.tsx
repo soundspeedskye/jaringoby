@@ -14,6 +14,7 @@ import {
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { GlassSurface } from "@/shared/ui/glass-surface";
 import { ScreenFrame } from "@/shared/ui/screen";
+import { useTabBarClearance } from "@/shared/lib/use-tab-bar-clearance";
 import { SectionHeader } from "@/shared/ui/section-header";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import type { OfflineMutationSummary } from "@/shared/api/offline-queue-repository";
@@ -55,6 +56,7 @@ type ProfileSection = {
 
 export function ProfilePage() {
   const router = useRouter();
+  const tabBarClearance = useTabBarClearance();
   const currentUser = useCurrentUser();
   const activeRoom = useActiveRoom();
   const closedRooms = useClosedRooms();
@@ -333,7 +335,7 @@ export function ProfilePage() {
   return (
     <ScreenFrame testID="profile-screen">
       <SectionList
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
         keyExtractor={(item) => item.key}
         ListHeaderComponent={
           <>
@@ -474,7 +476,6 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingBottom: 120,
   },
   title: {
     color: palette.ink,

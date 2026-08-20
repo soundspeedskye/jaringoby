@@ -4,6 +4,8 @@ import type { TextStyle, ViewStyle } from 'react-native';
 // - 재질은 반투명 유리·소프트 섀도 대신 종이/괘선/테두리로 표현한다.
 // - 위계는 큰 라운드가 아니라 라인과 타이포로 만든다.
 // - 숫자는 탭룰러 정렬로 스캔이 쉽게(가계부/영수증) 유지한다.
+// - 예외 하나: 하단 탭바는 콘텐츠가 아니라 그 위에 떠 있는 크롬 레이어라 리퀴드 글래스를
+//   허용한다(glass 토큰). 콘텐츠 표면(GlassSurface·카드·시트)은 종이 그대로 둔다.
 
 export const palette = {
   cream: '#FBF4E1', // 앱 배경 (장부 종이)
@@ -52,6 +54,31 @@ export const shadow = {
   shadowOffset: { width: 0, height: 3 },
   elevation: 2,
 } as const satisfies ViewStyle;
+
+// 리퀴드 글래스 토큰. 하단 탭바 한 겹에만 쓴다.
+// iOS 기본 청회색 유리를 크림 쪽으로 당겨 "장부 위에 얹힌 유산지"로 읽히게 한다.
+// alpha를 더 올리면 유리가 탁해지고, 더 내리면 배경색이 파랗게 돈다.
+export const glass = {
+  tint: 'rgba(251, 244, 225, 0.42)', // palette.cream + alpha
+} as const;
+
+const tabBarRowHeight = 56;
+const tabBarCapsulePaddingY = spacing.xs;
+
+// 하단 탭바 기하. 유리 경로(떠 있는 캡슐)와 종이 경로(도킹된 시트)가 화면을 가리는
+// 높이가 서로 달라, 콘텐츠 하단 여백을 상수로 둘 수 없다.
+// 실제 여백 계산은 use-tab-bar-clearance가 이 값들로 한다.
+export const tabBar = {
+  rowHeight: tabBarRowHeight, // 탭 아이템 최소 높이 (두 경로 공통)
+  capsulePaddingY: tabBarCapsulePaddingY, // 캡슐 내부 상하 패딩
+  capsuleHeight: tabBarRowHeight + tabBarCapsulePaddingY * 2,
+  capsuleInsetX: spacing.lg, // 캡슐 좌우 여백
+  capsuleGap: spacing.md, // 캡슐과 화면 하단 사이 최소 간격 (세이프에어리어가 크면 그쪽)
+  sheetPaddingTop: spacing.sm, // 시트 상단 패딩
+  sheetGap: spacing.sm, // 시트 하단 최소 간격 (세이프에어리어가 크면 그쪽)
+  contentGap: spacing.xxl, // 탭바와 마지막 콘텐츠 사이 숨 쉴 틈
+  maxWidth: 520, // 콘텐츠 폭(Screen)과 맞춘다
+} as const;
 
 // 서체 토큰. 패밀리명은 _layout.tsx useFonts의 key와 일치한다.
 // 결정: 제목·본문·숫자를 IBM Plex Sans KR로 통일한다.

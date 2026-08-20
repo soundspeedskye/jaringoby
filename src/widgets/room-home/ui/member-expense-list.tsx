@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet } from "react-native";
 import { MemberList } from "@/entities/member/ui/member-list";
 import { RoomHomeHeader } from "./room-home-header";
 import { spacing } from "@/shared/config/design";
+import { useTabBarClearance } from "@/shared/lib/use-tab-bar-clearance";
 import type { RoomHomeActions, RoomHomeData } from "../model/types";
 
 export const MemberExpenseList = memo(function MemberExpenseList({
@@ -13,9 +14,11 @@ export const MemberExpenseList = memo(function MemberExpenseList({
   actions: RoomHomeActions;
   data: RoomHomeData;
 }) {
+  const tabBarClearance = useTabBarClearance();
+
   return (
     <ScrollView
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
@@ -32,6 +35,5 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingBottom: 120,
   },
 });
