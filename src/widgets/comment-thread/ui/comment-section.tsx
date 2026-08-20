@@ -69,6 +69,18 @@ export function CommentThread({
     () => composerHeight,
     [composerHeight],
   );
+  // 독 높이가 0에서 실제값으로 처음 뛸 때, 스크롤 컴포넌트는 그 증가분을
+  // "키보드가 올라왔다"와 똑같이 보고 목록을 그만큼 밀어 내린다. 그래서 화면에
+  // 들어오자마자 글 상단이 독 높이만큼 잘린 채로 시작한다.
+  //
+  // 그래서 입력에 처음 포커스가 갈 때까지 스크롤 보정을 얼려 둔다.
+  // 얼음을 프레임 타이밍으로 풀면 안 된다. shared value가 UI 스레드에 닿는
+  // 시점이 프레임 경계와 어긋나 먼저 녹아버릴 수 있다(실제로 그랬다).
+  // 포커스는 키보드가 뜨기 전에 확실히 앞서고, 독 높이가 변하는 경우(멀티라인·
+  // 답글 칩·에러 문구)도 전부 포커스 이후라 이 시점에 풀면 잃는 보정이 없다.
+  // 여백(contentInset) 확장은 freeze와 무관하게 적용되어 아래 공간은 계속 확보된다.
+  const [chatScrollFrozen, setChatScrollFrozen] = useState(true);
+  const unfreezeChatScroll = useCallback(() => setChatScrollFrozen(false), []);
   const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -105,9 +117,10 @@ export function CommentThread({
           viewPosition: 0.5,
         });
       }
+      unfreezeChatScroll();
       scrollInputAboveKeyboard(event);
     },
-    [comments, scrollInputAboveKeyboard],
+    [comments, scrollInputAboveKeyboard, unfreezeChatScroll],
   );
   const handleComposerLayout = useCallback((event: LayoutChangeEvent) => {
     setComposerHeight(event.nativeEvent.layout.height);
@@ -117,9 +130,10 @@ export function CommentThread({
       <CommentChatScrollView
         {...props}
         extraContentPadding={composerContentPadding}
+        freeze={chatScrollFrozen}
       />
     ),
-    [composerContentPadding],
+    [chatScrollFrozen, composerContentPadding],
   );
   const selectReply = useCallback(
     (comment: ThreadMessage) => {
@@ -252,6 +266,7 @@ export function CommentThread({
             inputRef={composerRef}
             onError={setError}
             onFeedback={setFeedback}
+            onFocus={unfreezeChatScroll}
             onReplyChange={setReplyDraft}
             phase={phase ?? null}
             replyDraft={replyDraft}

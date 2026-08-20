@@ -11,6 +11,7 @@ export const CommentComposer = memo(function CommentComposer({
   body,
   inputRef,
   onBodyChange,
+  onFocus,
   onReplyChange,
   onSend,
   maxLength,
@@ -21,6 +22,7 @@ export const CommentComposer = memo(function CommentComposer({
   body: string;
   inputRef: React.RefObject<TextInput | null>;
   onBodyChange: (body: string) => void;
+  onFocus: () => void;
   onReplyChange: (replyDraft: ReplyDraft | null) => void;
   onSend: () => Promise<void>;
   maxLength: number;
@@ -65,6 +67,7 @@ export const CommentComposer = memo(function CommentComposer({
           maxLength={maxLength}
           multiline
           onChangeText={onBodyChange}
+          onFocus={onFocus}
           placeholder={placeholder}
           placeholderTextColor={palette.muted}
           ref={inputRef}

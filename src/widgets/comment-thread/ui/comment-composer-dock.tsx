@@ -20,6 +20,7 @@ export function CommentComposerDock({
   inputRef,
   onError,
   onFeedback,
+  onFocus,
   onReplyChange,
   phase,
   replyDraft,
@@ -33,6 +34,7 @@ export function CommentComposerDock({
   inputRef: React.RefObject<TextInput | null>;
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
+  onFocus: () => void;
   onReplyChange: (replyDraft: ReplyDraft | null) => void;
   phase: PeriodPhase | null;
   replyDraft: ReplyDraft | null;
@@ -95,6 +97,7 @@ export function CommentComposerDock({
             inputRef={inputRef}
             maxLength={features.maxLength}
             onBodyChange={setBody}
+            onFocus={onFocus}
             onReplyChange={onReplyChange}
             onSend={sendComment}
             placeholder={features.placeholder}
