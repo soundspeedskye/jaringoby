@@ -38,7 +38,27 @@ export function NotificationsPage() {
   };
 
   return (
-    <ScreenFrame testID="notifications-screen">
+    <ScreenFrame
+      fixedHeader={
+        <PageHeader
+          bottomSpacing="md"
+          onBack={() => router.back()}
+          right={
+            hasUnread ? (
+              <Pressable
+                accessibilityLabel="소식 모두 읽음 처리"
+                accessibilityRole="button"
+                onPress={() => void markAllNotificationsRead()}
+                style={styles.readAllButton}
+              >
+                <Text style={styles.readAllText}>모두 읽음</Text>
+              </Pressable>
+            ) : undefined
+          }
+          title="소식함"
+        />
+      }
+      testID="notifications-screen">
       <FlatList
         contentContainerStyle={styles.content}
         data={notifications}
@@ -48,25 +68,6 @@ export function NotificationsPage() {
             description="새 지출과 방 공지, 내 지출에 달린 댓글·답글이 이곳에 도착해요."
             icon="bell-outline"
             title="아직 새 소식이 없어요."
-          />
-        }
-        ListHeaderComponent={
-          <PageHeader
-            bottomSpacing="md"
-            onBack={() => router.back()}
-            right={
-              hasUnread ? (
-                <Pressable
-                  accessibilityLabel="소식 모두 읽음 처리"
-                  accessibilityRole="button"
-                  onPress={() => void markAllNotificationsRead()}
-                  style={styles.readAllButton}
-                >
-                  <Text style={styles.readAllText}>모두 읽음</Text>
-                </Pressable>
-              ) : undefined
-            }
-            title="소식함"
           />
         }
         renderItem={({ item: notification }) => {

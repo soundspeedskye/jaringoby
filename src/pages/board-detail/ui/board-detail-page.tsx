@@ -120,7 +120,9 @@ export function BoardDetailPage() {
   const canMutateComments = Boolean(currentUser && room?.status === 'OPEN');
 
   return (
-    <ScreenFrame testID="room-board-detail-screen">
+    <ScreenFrame
+      fixedHeader={<PageHeader bottomSpacing="md" onBack={returnToBoard} title="냥냥톡톡" />}
+      testID="room-board-detail-screen">
       <CommentThread
         actions={threadActions}
         canDelete={canDeleteComment}
@@ -131,7 +133,6 @@ export function BoardDetailPage() {
         features={ROOM_POST_COMMENT_FEATURES}
         header={
           <>
-            <PageHeader bottomSpacing="md" onBack={returnToBoard} title="냥냥톡톡" />
             <RoomPostCard
               author={author}
               dateLabel={formatFullDate(post.createdAt)}

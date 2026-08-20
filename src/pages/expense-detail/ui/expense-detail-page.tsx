@@ -183,7 +183,9 @@ export function ExpenseDetailPage() {
   };
 
   return (
-    <ScreenFrame testID="expense-detail-screen">
+    <ScreenFrame
+      fixedHeader={<PageHeader onBack={returnToPeriodContext} title="지출 상세" />}
+      testID="expense-detail-screen">
       <CommentThread
         actions={{
           create: (input) => addComment({ ...input, expenseId: expense.id }),
@@ -200,8 +202,6 @@ export function ExpenseDetailPage() {
         reactionsByCommentId={reactionsByCommentId}
         header={
           <>
-            <PageHeader onBack={returnToPeriodContext} title="지출 상세" />
-
             {phase === "ARCHIVED" ? (
               <NoticeBanner
                 icon="archive-lock-outline"

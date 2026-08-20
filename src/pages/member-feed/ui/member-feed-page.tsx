@@ -69,7 +69,15 @@ export function MemberFeedPage() {
   );
 
   return (
-    <ScreenFrame testID="member-feed-screen">
+    <ScreenFrame
+      fixedHeader={
+        <PageHeader
+          onBack={() => router.back()}
+          subtitle={subtitle}
+          title={`${displayName}님의 이번 주차`}
+        />
+      }
+      testID="member-feed-screen">
       <FlatList
         contentContainerStyle={styles.content}
         data={expenses}
@@ -80,15 +88,6 @@ export function MemberFeedPage() {
             icon="receipt-text-outline"
             title="이번 주차에 기록한 지출이 없어요."
           />
-        }
-        ListHeaderComponent={
-          <>
-            <PageHeader
-              onBack={() => router.back()}
-              subtitle={subtitle}
-              title={`${displayName}님의 이번 주차`}
-            />
-          </>
         }
         renderItem={renderExpense}
         showsVerticalScrollIndicator={false}

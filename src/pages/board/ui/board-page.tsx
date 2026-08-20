@@ -79,7 +79,25 @@ export function BoardPage() {
   }, [returnToChallengeHome]));
 
   return (
-    <ScreenFrame testID="room-board-screen">
+    <ScreenFrame
+      fixedHeader={
+        <PageHeader
+          bottomSpacing="md"
+          onBack={returnToChallengeHome}
+          right={canWrite ? (
+            <Pressable
+              accessibilityLabel="냥톡 쓰기"
+              accessibilityRole="button"
+              onPress={() => router.push('/room/board/new')}
+              style={styles.writeButton}
+            >
+              <MaterialCommunityIcons color={palette.green} name="pencil-outline" size={21} />
+            </Pressable>
+          ) : undefined}
+          title="냥냥톡톡"
+        />
+      }
+      testID="room-board-screen">
       <FlatList
         contentContainerStyle={styles.content}
         data={rows}
@@ -93,21 +111,6 @@ export function BoardPage() {
         )}
         ListHeaderComponent={
           <>
-            <PageHeader
-              bottomSpacing="md"
-              onBack={returnToChallengeHome}
-              right={canWrite ? (
-                <Pressable
-                  accessibilityLabel="냥톡 쓰기"
-                  accessibilityRole="button"
-                  onPress={() => router.push('/room/board/new')}
-                  style={styles.writeButton}
-                >
-                  <MaterialCommunityIcons color={palette.green} name="pencil-outline" size={21} />
-                </Pressable>
-              ) : undefined}
-              title="냥냥톡톡"
-            />
             {latestNotice ? (
               <Pressable
                 accessibilityLabel={`공지: ${latestNotice.body}`}

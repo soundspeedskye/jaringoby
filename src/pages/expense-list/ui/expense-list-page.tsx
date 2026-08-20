@@ -90,7 +90,28 @@ export function ExpenseListPage() {
   );
 
   return (
-    <ScreenFrame testID="expenses-screen">
+    <ScreenFrame
+      fixedHeader={
+        <PageHeader
+          bottomSpacing="xl"
+          right={
+            <Pressable
+              accessibilityLabel="지난 챌린지"
+              accessibilityRole="button"
+              onPress={() => router.push("/history")}
+              style={styles.historyButton}
+            >
+              <MaterialCommunityIcons
+                color={palette.green}
+                name="archive-outline"
+                size={22}
+              />
+            </Pressable>
+          }
+          title="내 지출"
+        />
+      }
+      testID="expenses-screen">
       <FlatList
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
         data={visibleExpenses}
@@ -112,25 +133,6 @@ export function ExpenseListPage() {
         }
         ListHeaderComponent={
           <>
-            <PageHeader
-              bottomSpacing="xl"
-              right={
-                <Pressable
-                  accessibilityLabel="지난 챌린지"
-                  accessibilityRole="button"
-                  onPress={() => router.push("/history")}
-                  style={styles.historyButton}
-                >
-                  <MaterialCommunityIcons
-                    color={palette.green}
-                    name="archive-outline"
-                    size={22}
-                  />
-                </Pressable>
-              }
-              title="내 지출"
-            />
-
             <View style={styles.totalCard}>
               <View style={styles.totalHeader}>
                 <Text style={styles.totalLabel}>

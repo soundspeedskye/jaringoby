@@ -219,7 +219,27 @@ export function HistoryDetailPage() {
   if (!timeline) return null;
 
   return (
-    <ScreenFrame testID="history-detail-screen">
+    <ScreenFrame
+      fixedHeader={
+        <PageHeader
+          onBack={() => router.back()}
+          right={
+            canDeletePeriod ? (
+              <Pressable
+                accessibilityLabel="지난 주차 삭제"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={confirmDeletePeriod}
+              >
+                <Text style={styles.deletePeriodText}>삭제</Text>
+              </Pressable>
+            ) : undefined
+          }
+          title="지난 주차"
+        />
+      }
+      testID="history-detail-screen"
+    >
       <SectionList
         contentContainerStyle={styles.content}
         ItemSeparatorComponent={ArchivedExpenseSeparator}
@@ -229,21 +249,6 @@ export function HistoryDetailPage() {
         }
         ListHeaderComponent={
           <>
-            <PageHeader
-              onBack={() => router.back()}
-              right={canDeletePeriod ? (
-                <Pressable
-                  accessibilityLabel="지난 주차 삭제"
-                  accessibilityRole="button"
-                  hitSlop={8}
-                  onPress={confirmDeletePeriod}
-                >
-                  <Text style={styles.deletePeriodText}>삭제</Text>
-                </Pressable>
-              ) : undefined}
-              title="지난 주차"
-            />
-
             <NoticeBanner
               icon="archive-lock-outline"
               style={styles.readOnlyBanner}

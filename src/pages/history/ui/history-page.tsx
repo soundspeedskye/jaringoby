@@ -147,7 +147,28 @@ export function HistoryPage() {
   );
 
   return (
-    <ScreenFrame testID="period-history-screen">
+    <ScreenFrame
+      fixedHeader={
+        <PageHeader
+          bottomSpacing="md"
+          onBack={() => router.back()}
+          right={
+            <View
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              style={styles.archiveIcon}
+            >
+              <MaterialCommunityIcons
+                color={palette.yellow}
+                name="archive-check-outline"
+                size={23}
+              />
+            </View>
+          }
+          title="지난 주차"
+        />
+      }
+      testID="period-history-screen">
       <SectionList
         contentContainerStyle={styles.content}
         ItemSeparatorComponent={HistoryCardSeparator}
@@ -166,25 +187,6 @@ export function HistoryPage() {
         }
         ListHeaderComponent={
           <>
-            <PageHeader
-              bottomSpacing="md"
-              onBack={() => router.back()}
-              right={
-                <View
-                  accessibilityElementsHidden
-                  importantForAccessibility="no"
-                  style={styles.archiveIcon}
-                >
-                  <MaterialCommunityIcons
-                    color={palette.yellow}
-                    name="archive-check-outline"
-                    size={23}
-                  />
-                </View>
-              }
-              title="지난 주차"
-            />
-
             {myStats ? (
               <GlassSurface
                 style={styles.statsCard}

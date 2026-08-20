@@ -29,14 +29,23 @@ type ScreenProps = PropsWithChildren<{
 }>;
 
 type ScreenFrameProps = PropsWithChildren<{
+  /**
+   * 리스트 위에 고정해 둘 콘텐츠다. 스크롤 영역 밖에 있어 목록을 내려도 남는다.
+   * 화면 제목(PageHeader)처럼 항상 보여야 하는 요소에 쓴다.
+   * 목록의 contentContainerStyle과 좌우 여백을 맞춰 두 영역이 같은 세로선에 선다.
+   */
+  fixedHeader?: ReactNode;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }>;
 
-export function ScreenFrame({ children, style, testID }: ScreenFrameProps) {
+export function ScreenFrame({ children, fixedHeader, style, testID }: ScreenFrameProps) {
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} testID={testID}>
-      <View style={[styles.frame, style]}>{children}</View>
+      <View style={[styles.frame, style]}>
+        {fixedHeader ? <View style={styles.frameFixedHeader}>{fixedHeader}</View> : null}
+        {children}
+      </View>
     </SafeAreaView>
   );
 }
@@ -112,5 +121,11 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     flex: 1,
     alignSelf: 'center',
+  },
+  // frame이 이미 폭을 잡아 주므로 좌우 여백과 종이 배경만 더한다.
+  frameFixedHeader: {
+    paddingHorizontal: spacing.xl,
+    backgroundColor: palette.cream,
+    zIndex: 1,
   },
 });
