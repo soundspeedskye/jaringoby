@@ -262,10 +262,6 @@ export function HistoryDetailPage() {
                 value={`${period.holidayDates.length}일`}
               />
               <KeyValueRow
-                label="공휴일 데이터"
-                value={period.holidayVersionId}
-              />
-              <KeyValueRow
                 label="보정 마감"
                 value={formatDateLabel(new Date(timeline.C))}
               />
