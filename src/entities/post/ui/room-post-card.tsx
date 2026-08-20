@@ -30,8 +30,8 @@ export function RoomPostCard({
   const isPreview = variant === "preview";
   const content = (
     <>
-      {isPreview && isNotice ? <NoticeBadge compact /> : null}
-      {variant === "detail" && isNotice ? <NoticeBadge /> : null}
+      {/* 공지는 "고정된 중요 글"이라 눈에 띄는 알약으로 카드 맨 위에 세운다. */}
+      {isNotice ? <NoticeBadge compact={variant !== "detail"} /> : null}
       {!isPreview || !isNotice ? (
         <View style={[
           styles.authorRow,
@@ -44,7 +44,7 @@ export function RoomPostCard({
             value={author?.avatar}
           />
           {variant === "detail" ? (
-            <View>
+            <View style={styles.detailAuthorCopy}>
               <Text style={[styles.author, isPreview && styles.previewAuthor]}>
                 {author?.nickname ?? "알 수 없음"}
               </Text>
@@ -53,13 +53,21 @@ export function RoomPostCard({
           ) : (
             <Text style={styles.author}>{author?.nickname ?? "알 수 없음"}</Text>
           )}
+          {/* 투표글은 종류 표시일 뿐이라 라벨 대신 조용한 아이콘 하나로 둔다.
+              순수 체크(check-circle)는 이 앱에서 "달성"이라 겹치지 않는 글리프를 쓴다. */}
+          {isPoll ? (
+            <MaterialCommunityIcons
+              accessibilityLabel="투표글"
+              color={palette.coralText}
+              name="format-list-checks"
+              size={variant === "detail" ? 22 : 20}
+            />
+          ) : null}
           {variant === "list" && dateLabel ? (
             <Text style={styles.listDate}>{dateLabel}</Text>
           ) : null}
         </View>
       ) : null}
-      {variant === "list" && isNotice ? <NoticeBadge compact /> : null}
-      {isPoll ? <PollBadge compact={isPreview || variant === "list"} /> : null}
       <Text
         numberOfLines={isPreview ? 2 : variant === "list" ? 3 : undefined}
         style={[
@@ -106,14 +114,6 @@ function NoticeBadge({ compact }: { compact?: boolean }) {
   );
 }
 
-function PollBadge({ compact }: { compact?: boolean }) {
-  return (
-    <View style={[styles.pollBadge, compact && styles.compactPollBadge]}>
-      <Text style={[styles.pollBadgeText, compact && styles.compactPollBadgeText]}>투표글</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   card: {
     padding: spacing.lg,
@@ -143,6 +143,7 @@ const styles = StyleSheet.create({
   previewAuthor: { fontSize: 13 },
   listDate: { color: palette.muted, fontFamily: fonts.number, fontSize: 14 },
   detailDate: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, marginTop: 3 },
+  detailAuthorCopy: { flex: 1, minWidth: 0 },
   noticeBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -157,17 +158,6 @@ const styles = StyleSheet.create({
   compactNoticeBadge: { marginBottom: spacing.sm, paddingVertical: 2 },
   noticeBadgeText: { color: palette.cream, fontFamily: fonts.handBold, fontSize: 13, fontWeight: "700" },
   compactNoticeBadgeText: { fontSize: 11 },
-  pollBadge: {
-    alignSelf: "flex-start",
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(233,135,98,0.14)",
-  },
-  compactPollBadge: { marginBottom: spacing.sm, paddingVertical: 2 },
-  pollBadgeText: { color: palette.coralText, fontFamily: fonts.handBold, fontSize: 13, fontWeight: "700" },
-  compactPollBadgeText: { fontSize: 11 },
   body: { color: palette.ink, fontFamily: fonts.hand, fontSize: 18, lineHeight: 27 },
   previewBody: { fontSize: 15, lineHeight: 22 },
   detailBody: { lineHeight: 28, marginBottom: spacing.xl },
