@@ -37,3 +37,24 @@ export function formatFullDate(value: Date): string {
     timeZone: "Asia/Seoul",
   }).format(value);
 }
+
+/** "2026-08-18" → "8월 18일 (화)". LocalDate를 서울 기준 그대로 읽는다. */
+export function formatLocalDateWithWeekday(date: string): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    timeZone: 'Asia/Seoul',
+  }).format(new Date(`${date}T00:00:00+09:00`));
+}
+
+/** 날짜별로 묶인 목록처럼 날짜가 이미 드러난 자리에서 시:분만 보여준다. */
+export function formatTimeLabel(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  return new Intl.DateTimeFormat('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Seoul',
+  }).format(date);
+}

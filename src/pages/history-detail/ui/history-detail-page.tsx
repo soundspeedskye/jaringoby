@@ -1,10 +1,41 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { memo, useCallback, useMemo } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import { Pressable, SectionList, StyleSheet, Text, View } from "react-native";
 
-import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { useExpenseComments } from "@/entities/expense/api/use-expense-comments";
+import { usePeriodExpenses } from "@/entities/expense/api/use-expenses";
 import { ExpenseCard } from "@/entities/expense/ui/expense-card";
+import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
+import {
+  usePeriod,
+  usePeriodMembers,
+  usePeriodResults,
+} from "@/entities/period/api/use-periods";
+import { useRoom } from "@/entities/room/api/use-rooms";
+import type { Expense } from "@/shared/api/types";
+import {
+  fonts,
+  palette,
+  radii,
+  spacing,
+  tabularNums,
+} from "@/shared/config/design";
+import {
+  compareLocalDates,
+  toInstantMs,
+  toSeoulLocalDate,
+} from "@/shared/lib/domain/date-time";
+import { createPeriodTimeline } from "@/shared/lib/domain/period";
+import {
+  formatDateLabel,
+  formatLocalDateWithWeekday,
+  formatTimeLabel,
+  formatWon,
+} from "@/shared/lib/format";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { useAppDialog } from "@/shared/providers/app-dialog-provider";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { GlassSurface } from "@/shared/ui/glass-surface";
 import { KeyValueRow } from "@/shared/ui/key-value-row";
@@ -13,27 +44,6 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { Screen, ScreenFrame } from "@/shared/ui/screen";
 import { SectionHeader } from "@/shared/ui/section-header";
-import {
-  fonts,
-  palette,
-  radii,
-  spacing,
-  tabularNums,
-} from "@/shared/config/design";
-import type { Expense } from "@/shared/api/types";
-import { createPeriodTimeline } from "@/shared/lib/domain/period";
-import { useExpenseComments } from "@/entities/expense/api/use-expense-comments";
-import { usePeriodExpenses } from "@/entities/expense/api/use-expenses";
-import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
-import {
-  usePeriod,
-  usePeriodMembers,
-  usePeriodResults,
-} from "@/entities/period/api/use-periods";
-import { useRoom } from "@/entities/room/api/use-rooms";
-import { useAppActions } from "@/shared/providers/app-actions-provider";
-import { useAppDialog } from "@/shared/providers/app-dialog-provider";
-import { formatDateLabel, formatWon } from "@/shared/lib/format";
 
 export function HistoryDetailPage() {
   const router = useRouter();
@@ -95,6 +105,51 @@ export function HistoryDetailPage() {
         ),
       };
     }, [currentUser?.id, periodMembers, profilesById, results]);
+  // 보관된 지출을 발생일(서울 기준)로 묶는다. 날짜도, 하루 안의 기록도 최신순이다.
+  const expenseDays = useMemo(() => {
+    const byDate = new Map<string, Expense[]>();
+    for (const expense of expenses) {
+      const date = toSeoulLocalDate(expense.occurredAt);
+      const bucket = byDate.get(date);
+      if (bucket) bucket.push(expense);
+      else byDate.set(date, [expense]);
+    }
+    return [...byDate.entries()]
+      .sort(([left], [right]) => compareLocalDates(right, left))
+      .map(([date, dayExpenses]) => ({
+        date,
+        expenses: [...dayExpenses].sort(
+          (left, right) =>
+            toInstantMs(right.occurredAt) - toInstantMs(left.occurredAt) ||
+            toInstantMs(right.createdAt) - toInstantMs(left.createdAt),
+        ),
+        total: dayExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+      }));
+  }, [expenses]);
+  // 기본은 전부 접힘. 날짜 줄을 눌러야 그날의 기록이 펼쳐진다.
+  const [expandedDates, setExpandedDates] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleDate = useCallback((date: string) => {
+    setExpandedDates((current) => {
+      const next = new Set(current);
+      if (!next.delete(date)) next.add(date);
+      return next;
+    });
+  }, []);
+  const expenseSections = useMemo(
+    () =>
+      expenseDays.map((day) => {
+        const expanded = expandedDates.has(day.date);
+        return {
+          ...day,
+          expanded,
+          key: day.date,
+          data: expanded ? day.expenses : [],
+        };
+      }),
+    [expandedDates, expenseDays],
+  );
   const openExpense = useCallback(
     (expenseId: string) => router.push(`/expense/${expenseId}`),
     [router],
@@ -129,6 +184,18 @@ export function HistoryDetailPage() {
     ),
     [crownIdSet, openExpense],
   );
+  const renderArchivedDay = useCallback(
+    ({ section }: { section: ArchivedDaySection }) => (
+      <ArchivedDayHeader
+        count={section.expenses.length}
+        date={section.date}
+        expanded={section.expanded}
+        onToggle={toggleDate}
+        total={section.total}
+      />
+    ),
+    [toggleDate],
+  );
 
   if (!period) {
     return (
@@ -153,9 +220,8 @@ export function HistoryDetailPage() {
 
   return (
     <ScreenFrame testID="history-detail-screen">
-      <FlatList
+      <SectionList
         contentContainerStyle={styles.content}
-        data={expenses}
         ItemSeparatorComponent={ArchivedExpenseSeparator}
         keyExtractor={(expense) => expense.id}
         ListEmptyComponent={
@@ -245,10 +311,7 @@ export function HistoryDetailPage() {
             </View>
 
             <GlassSurface style={styles.rules} testID="archived-rule-snapshot">
-              <SectionHeader
-                style={styles.sectionHeading}
-                title="고정 조건과 정산 기준"
-              />
+              <SectionHeader style={styles.sectionHeading} title="정산 기준" />
               <KeyValueRow
                 label="주당 기준금액"
                 value={formatWon(room?.baseAmount ?? 0)}
@@ -366,11 +429,56 @@ export function HistoryDetailPage() {
           </>
         }
         renderItem={renderArchivedExpense}
+        renderSectionHeader={renderArchivedDay}
+        sections={expenseSections}
         showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
       />
     </ScreenFrame>
   );
 }
+
+type ArchivedDaySection = {
+  date: string;
+  expenses: Expense[];
+  expanded: boolean;
+  total: number;
+};
+
+// 하루치를 접었다 펴는 줄. 접힌 상태에서도 건수와 그날 합계는 읽히게 남긴다.
+const ArchivedDayHeader = memo(function ArchivedDayHeader({
+  count,
+  date,
+  expanded,
+  onToggle,
+  total,
+}: {
+  count: number;
+  date: string;
+  expanded: boolean;
+  onToggle: (date: string) => void;
+  total: number;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      onPress={() => onToggle(date)}
+      style={[styles.dayHeader, expanded && styles.dayHeaderExpanded]}
+    >
+      <View style={styles.dayCopy}>
+        <Text style={styles.dayTitle}>{formatLocalDateWithWeekday(date)}</Text>
+        <Text style={styles.dayCount}>{count}건</Text>
+      </View>
+      <Text style={styles.dayTotal}>{formatWon(total)}</Text>
+      <MaterialCommunityIcons
+        color={palette.muted}
+        name={expanded ? "chevron-up" : "chevron-down"}
+        size={20}
+      />
+    </Pressable>
+  );
+});
 
 const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
   expense,
@@ -401,7 +509,7 @@ const ArchivedExpenseRecord = memo(function ArchivedExpenseRecord({
         id={expense.id}
         memo={expense.memo}
         nickname={`${isCrowned ? "👑 " : ""}${profile?.nickname ?? "알 수 없음"}`}
-        occurredAtLabel={formatDateLabel(expense.occurredAt)}
+        occurredAtLabel={formatTimeLabel(expense.occurredAt)}
         onPress={onOpen}
         photoPath={expense.photoPath}
         photoThumbnailUri={expense.photoThumbnailUri}
@@ -634,7 +742,40 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   expenseSection: { marginTop: spacing.xxxl },
-  expenseSeparator: { height: spacing.xl },
+  expenseSeparator: { height: spacing.md },
+  dayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minHeight: 54,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: palette.line,
+    borderRadius: radii.lg,
+    backgroundColor: palette.paper,
+  },
+  dayHeaderExpanded: { marginBottom: spacing.md },
+  dayCopy: { flex: 1, minWidth: 0 },
+  dayTitle: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  dayCount: {
+    color: palette.muted,
+    fontFamily: fonts.hand,
+    fontSize: 10,
+    marginTop: 3,
+  },
+  dayTotal: {
+    color: palette.ink,
+    fontFamily: fonts.number,
+    fontSize: 14,
+    fontWeight: "700",
+    ...tabularNums,
+  },
   expenseRecord: { gap: 0 },
   commentPreview: {
     padding: spacing.md,
