@@ -18,6 +18,7 @@ import type {
   RoomPost,
   RoomPostComment,
   RoomPostReactionEmoji,
+  ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/shared/api/types';
@@ -34,8 +35,10 @@ export type AppActionsContextValue = {
   closeRoom: (roomId: string) => Promise<void>;
   switchRoom: (input: SwitchRoomInput) => Promise<RoomMember>;
   addExpense: (input: AddExpenseInput) => Promise<Expense>;
-  approveExpenseException: (expenseId: string) => Promise<void>;
-  removeExpenseExceptionApproval: (expenseId: string) => Promise<void>;
+  respondToExpenseException: (
+    expenseId: string,
+    decision: ExpenseExceptionResponseDecision,
+  ) => Promise<void>;
   withdrawExpenseException: (expenseId: string) => Promise<void>;
   updateExpense: (expenseId: string, patch: Partial<AddExpenseInput>) => Promise<Expense>;
   deleteExpense: (expenseId: string) => Promise<void>;
@@ -106,13 +109,9 @@ export function AppActionsProvider({
     (input: AddExpenseInput) => execute(() => repository.addExpense(input)),
     [execute, repository],
   );
-  const approveExpenseException = useCallback(
-    (expenseId: string) => execute(() => repository.approveExpenseException(expenseId)),
-    [execute, repository],
-  );
-  const removeExpenseExceptionApproval = useCallback(
-    (expenseId: string) =>
-      execute(() => repository.removeExpenseExceptionApproval(expenseId)),
+  const respondToExpenseException = useCallback(
+    (expenseId: string, decision: ExpenseExceptionResponseDecision) =>
+      execute(() => repository.respondToExpenseException(expenseId, decision)),
     [execute, repository],
   );
   const withdrawExpenseException = useCallback(
@@ -202,8 +201,7 @@ export function AppActionsProvider({
     closeRoom,
     switchRoom,
     addExpense,
-    approveExpenseException,
-    removeExpenseExceptionApproval,
+    respondToExpenseException,
     withdrawExpenseException,
     updateExpense,
     deleteExpense,
@@ -225,8 +223,7 @@ export function AppActionsProvider({
   }), [
     addComment,
     addExpense,
-    approveExpenseException,
-    removeExpenseExceptionApproval,
+    respondToExpenseException,
     withdrawExpenseException,
     closeRoom,
     createRoom,

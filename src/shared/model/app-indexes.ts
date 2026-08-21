@@ -137,6 +137,7 @@ function createEmptyIndexes(): AppIndexes {
     crownIdsByPeriodId: new Map(),
     exceptionByExpenseId: new Map(),
     approvedUserIdsByExpenseId: new Map(),
+    heldUserIdsByExpenseId: new Map(),
     settlementExcludedExpenseIds: new Set(),
   };
 }

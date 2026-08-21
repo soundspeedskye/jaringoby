@@ -13,6 +13,7 @@ import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useExpenseExceptionSummary } from "@/shared/providers/app-data-hooks";
 import { FormMessage } from "@/shared/ui/form-message";
 import { PrimaryButton } from "@/shared/ui/primary-button";
+import { requestNotificationPermission } from "@/shared/services/notification-service";
 
 export function ExpenseExceptionCard({
   canApprove,
@@ -23,8 +24,7 @@ export function ExpenseExceptionCard({
 }) {
   const summary = useExpenseExceptionSummary(expenseId);
   const {
-    approveExpenseException,
-    removeExpenseExceptionApproval,
+    respondToExpenseException,
     withdrawExpenseException,
   } = useAppActions();
   const [busy, setBusy] = useState(false);
@@ -71,7 +71,7 @@ export function ExpenseExceptionCard({
             size={16}
           />
           <Text style={styles.exceptionDoneText}>
-            전원 승인 · 정산에서 제외돼요
+            동의 완료 · 정산에서 제외돼요
           </Text>
         </View>
       ) : (
@@ -81,11 +81,12 @@ export function ExpenseExceptionCard({
               <View style={[styles.exceptionFill, { width: `${percent}%` }]} />
             </View>
             <Text style={styles.exceptionProgressText}>
-              {summary.approvedCount}/{summary.requiredCount} 승인
+              {summary.approvedCount}/{summary.requiredCount}명 동의
             </Text>
           </View>
           <Text style={styles.exceptionHintText}>
-            정산 마감 전 방 멤버 모두가 승인하면 이 지출은 예산에서 빠져요.
+            제시자를 제외한 방 멤버 모두가 동의하면 이 지출은 예산에서 빠져요.
+            {summary.heldCount ? ` 현재 ${summary.heldCount}명이 보류 중이에요.` : ""}
           </Text>
         </>
       )}
@@ -104,33 +105,36 @@ export function ExpenseExceptionCard({
             style={styles.exceptionButton}
             variant="secondary"
           />
-        ) : summary.amApprover ? (
-          summary.approvedByMe ? (
+        ) : summary.canRespond ? (
+          <View style={styles.responseButtons}>
             <PrimaryButton
-              label="승인 취소"
+              label={summary.responseByMe === "APPROVED" ? "승인됨" : "이 예외 승인하기"}
               loading={busy}
               onPress={() =>
                 run(
-                  () => removeExpenseExceptionApproval(expenseId),
-                  "승인을 취소하지 못했어요.",
-                )
-              }
-              style={styles.exceptionButton}
-              variant="secondary"
-            />
-          ) : (
-            <PrimaryButton
-              label="이 예외 승인하기"
-              loading={busy}
-              onPress={() =>
-                run(
-                  () => approveExpenseException(expenseId),
+                  () => respondToExpenseException(expenseId, "APPROVED"),
                   "예외를 승인하지 못했어요.",
                 )
               }
-              style={styles.exceptionButton}
+              style={styles.responseButton}
+              variant={summary.responseByMe === "APPROVED" ? "secondary" : "primary"}
             />
-          )
+            <PrimaryButton
+              label={summary.responseByMe === "HELD" ? "보류 중" : "보류하기"}
+              loading={busy}
+              onPress={() =>
+                run(
+                  async () => {
+                    await requestNotificationPermission().catch(() => false);
+                    await respondToExpenseException(expenseId, "HELD");
+                  },
+                  "예외를 보류하지 못했어요.",
+                )
+              }
+              style={styles.responseButton}
+              variant="secondary"
+            />
+          </View>
         ) : null
       ) : null}
 
@@ -190,6 +194,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   exceptionButton: { marginTop: 4 },
+  responseButtons: { flexDirection: "row", gap: spacing.sm, marginTop: 4 },
+  responseButton: { flex: 1 },
   threadError: {
     color: palette.danger,
     fontFamily: fonts.hand,

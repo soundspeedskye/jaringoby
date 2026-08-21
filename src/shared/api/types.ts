@@ -239,10 +239,13 @@ export type ExpenseException = {
   requestedAt: string;
 };
 
-/** 예외에 대한 멤버 개별 승인. (expenseId, userId) 단위. */
-export type ExpenseExceptionApproval = {
+export type ExpenseExceptionResponseDecision = "APPROVED" | "HELD";
+
+/** 예외에 대한 멤버 개별 응답. 제시자는 이 목록에 포함하지 않는다. */
+export type ExpenseExceptionResponse = {
   expenseId: string;
   userId: string;
+  decision: ExpenseExceptionResponseDecision;
   createdAt: string;
 };
 
@@ -265,7 +268,7 @@ export type AppSnapshot = {
   roomPostPollVotes: RoomPostPollVote[];
   notifications: AppNotification[];
   expenseExceptions: ExpenseException[];
-  expenseExceptionApprovals: ExpenseExceptionApproval[];
+  expenseExceptionResponses: ExpenseExceptionResponse[];
   processedRequestIds: string[];
 };
 

@@ -119,9 +119,9 @@ function shareAppSnapshot(previous: AppSnapshot | null, incoming: AppSnapshot): 
       incoming.expenseExceptions,
       (value) => value.expenseId,
     ),
-    expenseExceptionApprovals: shareRecords(
-      previous.expenseExceptionApprovals,
-      incoming.expenseExceptionApprovals,
+    expenseExceptionResponses: shareRecords(
+      previous.expenseExceptionResponses,
+      incoming.expenseExceptionResponses,
       (value) => `${value.expenseId}\u0000${value.userId}`,
     ),
     processedRequestIds: structurallyShare(previous.processedRequestIds, incoming.processedRequestIds),

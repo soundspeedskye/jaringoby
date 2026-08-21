@@ -9,28 +9,36 @@ export function buildExceptionIndexes(
   expenseById: Map<string, Expense>,
 ): Pick<
   AppIndexes,
-  'exceptionByExpenseId' | 'approvedUserIdsByExpenseId' | 'settlementExcludedExpenseIds'
+  | 'exceptionByExpenseId'
+  | 'approvedUserIdsByExpenseId'
+  | 'heldUserIdsByExpenseId'
+  | 'settlementExcludedExpenseIds'
 > {
   const exceptionByExpenseId = new Map<string, ExpenseException>();
   const approvedUserIdsByExpenseId = new Map<string, Set<string>>();
+  const heldUserIdsByExpenseId = new Map<string, Set<string>>();
 
   snapshot.expenseExceptions.forEach((exception) => {
     exceptionByExpenseId.set(exception.expenseId, exception);
   });
-  snapshot.expenseExceptionApprovals.forEach((approval) => {
-    let approvers = approvedUserIdsByExpenseId.get(approval.expenseId);
-    if (!approvers) {
-      approvers = new Set<string>();
-      approvedUserIdsByExpenseId.set(approval.expenseId, approvers);
+  snapshot.expenseExceptionResponses.forEach((response) => {
+    const index = response.decision === 'APPROVED'
+      ? approvedUserIdsByExpenseId
+      : heldUserIdsByExpenseId;
+    let userIds = index.get(response.expenseId);
+    if (!userIds) {
+      userIds = new Set<string>();
+      index.set(response.expenseId, userIds);
     }
-    approvers.add(approval.userId);
+    userIds.add(response.userId);
   });
 
   // 라이브 표시는 컷오프 없이 현재까지의 승인으로 판정한다. C 마감 적용은
   // 서버·로컬 finalize에서만(이미 승인은 C 이후 차단되므로 결과는 동일).
   const settlementExcludedExpenseIds = collectSettlementExcludedExpenseIds({
     exceptionExpenseIds: exceptionByExpenseId.keys(),
-    approvals: snapshot.expenseExceptionApprovals,
+    responses: snapshot.expenseExceptionResponses,
+    requesterIdOf: (expenseId) => exceptionByExpenseId.get(expenseId)?.requestedBy,
     activeMemberIdsOf: (expenseId) => {
       const expense = expenseById.get(expenseId);
       if (!expense || !expense.periodId) return undefined;
@@ -40,7 +48,12 @@ export function buildExceptionIndexes(
     },
   });
 
-  return { exceptionByExpenseId, approvedUserIdsByExpenseId, settlementExcludedExpenseIds };
+  return {
+    exceptionByExpenseId,
+    approvedUserIdsByExpenseId,
+    heldUserIdsByExpenseId,
+    settlementExcludedExpenseIds,
+  };
 }
 
 export function exceptionInputsAreShared(
@@ -48,18 +61,22 @@ export function exceptionInputsAreShared(
   previousSnapshot: AppSnapshot,
 ): boolean {
   return snapshot.expenseExceptions === previousSnapshot.expenseExceptions
-    && snapshot.expenseExceptionApprovals === previousSnapshot.expenseExceptionApprovals
+    && snapshot.expenseExceptionResponses === previousSnapshot.expenseExceptionResponses
     && snapshot.periodMembers === previousSnapshot.periodMembers
     && snapshot.expenses === previousSnapshot.expenses;
 }
 
 export function pickExceptionIndexes(indexes: AppIndexes): Pick<
   AppIndexes,
-  'exceptionByExpenseId' | 'approvedUserIdsByExpenseId' | 'settlementExcludedExpenseIds'
+  | 'exceptionByExpenseId'
+  | 'approvedUserIdsByExpenseId'
+  | 'heldUserIdsByExpenseId'
+  | 'settlementExcludedExpenseIds'
 > {
   return {
     exceptionByExpenseId: indexes.exceptionByExpenseId,
     approvedUserIdsByExpenseId: indexes.approvedUserIdsByExpenseId,
+    heldUserIdsByExpenseId: indexes.heldUserIdsByExpenseId,
     settlementExcludedExpenseIds: indexes.settlementExcludedExpenseIds,
   };
 }

@@ -104,9 +104,10 @@ export type ExpenseExceptionSummary = {
   requestedBy: string;
   approvedCount: number;
   requiredCount: number;
-  approvedByMe: boolean;
-  /** 현재 사용자가 이 주차의 활성 멤버라 승인할 수 있는지. */
-  amApprover: boolean;
+  heldCount: number;
+  responseByMe?: "APPROVED" | "HELD";
+  /** 현재 사용자가 이 주차의 활성 멤버이며 제시자가 아니라 응답할 수 있는지. */
+  canRespond: boolean;
   isRequester: boolean;
   isExcluded: boolean;
 };
@@ -127,14 +128,24 @@ export function useExpenseExceptionSummary(
         state.indexes.membersByPeriodId.get(expense.periodId) ?? EMPTY_MEMBERS
       ).filter((member) => member.status === 'ACTIVE');
       const approvers = state.indexes.approvedUserIdsByExpenseId.get(expenseId) ?? EMPTY_APPROVERS;
+      const held = state.indexes.heldUserIdsByExpenseId.get(expenseId) ?? EMPTY_APPROVERS;
+      const eligibleMembers = activeMembers.filter(
+        (member) => member.userId !== exception.requestedBy,
+      );
+      const responseByMe = currentUserId && approvers.has(currentUserId)
+        ? "APPROVED"
+        : currentUserId && held.has(currentUserId)
+          ? "HELD"
+          : undefined;
       return {
         reason: exception.reason,
         requestedBy: exception.requestedBy,
-        approvedCount: activeMembers.filter((member) => approvers.has(member.userId)).length,
-        requiredCount: activeMembers.length,
-        approvedByMe: currentUserId ? approvers.has(currentUserId) : false,
-        amApprover: currentUserId
-          ? activeMembers.some((member) => member.userId === currentUserId)
+        approvedCount: eligibleMembers.filter((member) => approvers.has(member.userId)).length,
+        requiredCount: eligibleMembers.length,
+        heldCount: eligibleMembers.filter((member) => held.has(member.userId)).length,
+        responseByMe,
+        canRespond: currentUserId
+          ? eligibleMembers.some((member) => member.userId === currentUserId)
           : false,
         isRequester: currentUserId === exception.requestedBy,
         isExcluded: state.indexes.settlementExcludedExpenseIds.has(expenseId),
@@ -155,9 +166,10 @@ export type PendingExceptionApproval = {
   category: Expense['category'];
   approvedCount: number;
   requiredCount: number;
+  responseByMe?: "HELD";
 };
 
-/** 현재 사용자가 아직 승인하지 않은, 승인 가능한 예외들(홈 대기함). */
+/** 현재 사용자가 아직 승인하지 않은, 응답 가능한 예외들(홈 대기함). */
 
 export function usePendingExceptionApprovals(): PendingExceptionApproval[] {
   const selector = useCallback((state: AppStoreState): PendingExceptionApproval[] => {
@@ -175,9 +187,13 @@ export function usePendingExceptionApprovals(): PendingExceptionApproval[] {
       const activeMembers = (
         state.indexes.membersByPeriodId.get(expense.periodId) ?? EMPTY_MEMBERS
       ).filter((member) => member.status === 'ACTIVE');
-      if (!activeMembers.some((member) => member.userId === currentUserId)) continue;
+      const eligibleMembers = activeMembers.filter(
+        (member) => member.userId !== exception.requestedBy,
+      );
+      if (!eligibleMembers.some((member) => member.userId === currentUserId)) continue;
       const approvers = state.indexes.approvedUserIdsByExpenseId.get(exception.expenseId) ?? EMPTY_APPROVERS;
       if (approvers.has(currentUserId)) continue;
+      const held = state.indexes.heldUserIdsByExpenseId.get(exception.expenseId) ?? EMPTY_APPROVERS;
       const profile = state.indexes.profileById.get(exception.requestedBy);
       pending.push({
         expenseId: exception.expenseId,
@@ -187,8 +203,9 @@ export function usePendingExceptionApprovals(): PendingExceptionApproval[] {
         requesterAvatarUri: profile?.avatarUri,
         amount: expense.amount,
         category: expense.category,
-        approvedCount: activeMembers.filter((member) => approvers.has(member.userId)).length,
-        requiredCount: activeMembers.length,
+        approvedCount: eligibleMembers.filter((member) => approvers.has(member.userId)).length,
+        requiredCount: eligibleMembers.length,
+        responseByMe: held.has(currentUserId) ? "HELD" : undefined,
       });
     }
     return pending.length ? pending : EMPTY_PENDING_APPROVALS;
@@ -207,8 +224,9 @@ function expenseExceptionSummaryEqual(
     left.requestedBy === right.requestedBy &&
     left.approvedCount === right.approvedCount &&
     left.requiredCount === right.requiredCount &&
-    left.approvedByMe === right.approvedByMe &&
-    left.amApprover === right.amApprover &&
+    left.heldCount === right.heldCount &&
+    left.responseByMe === right.responseByMe &&
+    left.canRespond === right.canRespond &&
     left.isRequester === right.isRequester &&
     left.isExcluded === right.isExcluded
   );
@@ -231,7 +249,8 @@ function pendingExceptionApprovalsEqual(
       value.amount === other.amount &&
       value.category === other.category &&
       value.approvedCount === other.approvedCount &&
-      value.requiredCount === other.requiredCount
+      value.requiredCount === other.requiredCount &&
+      value.responseByMe === other.responseByMe
     );
   });
 }

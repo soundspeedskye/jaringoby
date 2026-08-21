@@ -24,6 +24,7 @@ import type {
   RoomPost,
   RoomPostComment,
   RoomPostReactionEmoji,
+  ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/shared/api/types';
@@ -332,15 +333,13 @@ export class OfflineQueueRepository implements AppRepository {
     return result;
   }
 
-  // Exception approvals settle the exclusion set shared by every member, so they
+  // Exception responses settle the exclusion set shared by every member, so they
   // go straight to the server instead of being queued and replayed offline.
-  async approveExpenseException(expenseId: string): Promise<void> {
-    await this.base.approveExpenseException(expenseId);
-    void this.refreshBase().catch(() => undefined);
-  }
-
-  async removeExpenseExceptionApproval(expenseId: string): Promise<void> {
-    await this.base.removeExpenseExceptionApproval(expenseId);
+  async respondToExpenseException(
+    expenseId: string,
+    decision: ExpenseExceptionResponseDecision,
+  ): Promise<void> {
+    await this.base.respondToExpenseException(expenseId, decision);
     void this.refreshBase().catch(() => undefined);
   }
 

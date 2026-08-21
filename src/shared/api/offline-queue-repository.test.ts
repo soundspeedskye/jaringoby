@@ -609,11 +609,10 @@ class FakeRepository implements AppRepository {
     throw new Error('not implemented');
   }
 
-  async approveExpenseException(_expenseId: string): Promise<void> {
-    throw new Error('not implemented');
-  }
-
-  async removeExpenseExceptionApproval(_expenseId: string): Promise<void> {
+  async respondToExpenseException(
+    _expenseId: string,
+    _decision: 'APPROVED' | 'HELD',
+  ): Promise<void> {
     throw new Error('not implemented');
   }
 
@@ -869,7 +868,7 @@ function snapshotFixture(userId: string, period: Period): AppSnapshot {
   roomPostPollVotes: [],
   notifications: [],
     expenseExceptions: [],
-    expenseExceptionApprovals: [],
+    expenseExceptionResponses: [],
     processedRequestIds: [],
   };
 }

@@ -64,5 +64,5 @@ export function crownInputsAreShared(
     && snapshot.profiles === previousSnapshot.profiles
     && snapshot.expenses === previousSnapshot.expenses
     && snapshot.expenseExceptions === previousSnapshot.expenseExceptions
-    && snapshot.expenseExceptionApprovals === previousSnapshot.expenseExceptionApprovals;
+    && snapshot.expenseExceptionResponses === previousSnapshot.expenseExceptionResponses;
 }

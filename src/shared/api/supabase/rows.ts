@@ -224,8 +224,9 @@ export type ExpenseExceptionRow = {
   requested_at: string;
 };
 
-export type ExpenseExceptionApprovalRow = {
+export type ExpenseExceptionResponseRow = {
   expense_id: string;
   user_id: string;
+  decision: 'approved' | 'held';
   created_at: string;
 };

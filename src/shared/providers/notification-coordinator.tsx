@@ -5,6 +5,7 @@ import { AppState, Platform } from 'react-native';
 
 import {
   usePeriodNotificationTargets,
+  useExceptionHoldNotificationTargets,
   useSocialNotificationSnapshot,
   type SocialNotificationSnapshot,
 } from '@/shared/providers/notification-data-hooks';
@@ -16,11 +17,13 @@ import { useNotificationPreferences } from '@/shared/services/notification-prefe
 import {
   presentPrivacySafeNotification,
   requestPeriodNotificationSchedule,
+  requestExceptionHoldNotificationSchedule,
 } from '@/shared/services/notification-service';
 
 export function NotificationCoordinator({ children }: PropsWithChildren) {
   const router = useRouter();
   const periodTargets = usePeriodNotificationTargets();
+  const exceptionHoldTargets = useExceptionHoldNotificationTargets();
   const socialSnapshot = useSocialNotificationSnapshot();
   const { preferences, ready } = useNotificationPreferences();
   const previousSocialSnapshot = useRef<SocialNotificationSnapshot | null>(null);
@@ -54,6 +57,7 @@ export function NotificationCoordinator({ children }: PropsWithChildren) {
       requestPeriodNotificationSchedule(
         preferences.periodEvents ? periodTargets : [],
       );
+      requestExceptionHoldNotificationSchedule(exceptionHoldTargets);
       socialDeliveryQueue.retryPending();
     };
     reconcile();
@@ -63,6 +67,7 @@ export function NotificationCoordinator({ children }: PropsWithChildren) {
     return () => subscription.remove();
   }, [
     periodTargets,
+    exceptionHoldTargets,
     preferences.periodEvents,
     ready,
     socialDeliveryQueue,

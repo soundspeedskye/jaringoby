@@ -9,11 +9,12 @@ import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { usePendingExceptionApprovals } from "@/shared/providers/app-data-hooks";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { formatWon } from "@/shared/lib/format";
+import { requestNotificationPermission } from "@/shared/services/notification-service";
 
-/** 홈 상단 "예외 승인 대기함"(안 B): 내가 승인해야 할 예외를 모아 보여준다. */
+/** 홈 상단의 예외 응답 대기함. 승인 전까지, 보류면 알림과 함께 남는다. */
 export function ExceptionApprovalInbox() {
   const pending = usePendingExceptionApprovals();
-  const { approveExpenseException } = useAppActions();
+  const { respondToExpenseException } = useAppActions();
   const { showDialog } = useAppDialog();
   const router = useRouter();
   const [expanded, setExpanded] = useState(true);
@@ -21,14 +22,17 @@ export function ExceptionApprovalInbox() {
 
   if (pending.length === 0) return null;
 
-  const approve = (expenseId: string) => {
+  const respond = (expenseId: string, decision: "APPROVED" | "HELD") => {
     setBusyId(expenseId);
     void (async () => {
       try {
-        await approveExpenseException(expenseId);
+        if (decision === "HELD") {
+          await requestNotificationPermission().catch(() => false);
+        }
+        await respondToExpenseException(expenseId, decision);
       } catch (reason) {
         showDialog(
-          "예외를 승인하지 못했어요",
+          "예외 응답을 저장하지 못했어요",
           reason instanceof Error
             ? reason.message
             : "잠시 후 다시 시도해 주세요.",
@@ -53,7 +57,7 @@ export function ExceptionApprovalInbox() {
           size={18}
         />
         <Text style={styles.headerText}>
-          예외 승인 대기 {pending.length}건
+          예외 응답 대기 {pending.length}건
         </Text>
         <MaterialCommunityIcons
           color={palette.coralText}
@@ -79,21 +83,38 @@ export function ExceptionApprovalInbox() {
                   </Text>
                   <Text numberOfLines={1} style={styles.rowMeta}>
                     사유 “{item.reason}” · {item.approvedCount}/
-                    {item.requiredCount} 승인
+                    {item.requiredCount}명 동의
                   </Text>
                 </View>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={busyId === item.expenseId}
-                onPress={() => approve(item.expenseId)}
-                style={[
-                  styles.approveButton,
-                  busyId === item.expenseId && styles.approveButtonBusy,
-                ]}
-              >
-                <Text style={styles.approveButtonText}>승인</Text>
-              </Pressable>
+              <View style={styles.responseActions}>
+                <Pressable
+                  accessibilityLabel="예외 승인"
+                  accessibilityRole="button"
+                  disabled={busyId === item.expenseId}
+                  onPress={() => respond(item.expenseId, "APPROVED")}
+                  style={[
+                    styles.approveButton,
+                    busyId === item.expenseId && styles.responseButtonBusy,
+                  ]}
+                >
+                  <Text style={styles.approveButtonText}>승인</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="예외 보류"
+                  accessibilityRole="button"
+                  disabled={busyId === item.expenseId}
+                  onPress={() => respond(item.expenseId, "HELD")}
+                  style={[
+                    styles.holdButton,
+                    busyId === item.expenseId && styles.responseButtonBusy,
+                  ]}
+                >
+                  <Text style={styles.holdButtonText}>
+                    {item.responseByMe ? "보류 중" : "보류"}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ))}
         </View>
@@ -159,11 +180,28 @@ const styles = StyleSheet.create({
     borderColor: palette.green,
     backgroundColor: palette.paper,
   },
-  approveButtonBusy: { opacity: 0.5 },
+  responseActions: { gap: 5 },
+  responseButtonBusy: { opacity: 0.5 },
   approveButtonText: {
     color: palette.green,
     fontFamily: fonts.handBold,
     fontSize: 12,
+    fontWeight: "700",
+  },
+  holdButton: {
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.paper,
+  },
+  holdButtonText: {
+    color: palette.muted,
+    fontFamily: fonts.handBold,
+    fontSize: 11,
     fontWeight: "700",
   },
 });

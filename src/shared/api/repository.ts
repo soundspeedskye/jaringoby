@@ -15,6 +15,7 @@ import type {
   RoomPost,
   RoomPostComment,
   RoomPostReactionEmoji,
+  ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/shared/api/types';
@@ -38,8 +39,10 @@ export interface AppRepository {
   closeRoom(roomId: string): Promise<void>;
   switchRoom(input: SwitchRoomInput): Promise<RoomMember>;
   addExpense(input: AddExpenseInput): Promise<Expense>;
-  approveExpenseException(expenseId: string): Promise<void>;
-  removeExpenseExceptionApproval(expenseId: string): Promise<void>;
+  respondToExpenseException(
+    expenseId: string,
+    decision: ExpenseExceptionResponseDecision,
+  ): Promise<void>;
   withdrawExpenseException(expenseId: string): Promise<void>;
   updateExpense(
     expenseId: string,

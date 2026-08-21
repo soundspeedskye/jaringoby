@@ -5,7 +5,7 @@ import { rows } from './results';
 import type {
   CommentReactionRow,
   CommentRow,
-  ExpenseExceptionApprovalRow,
+  ExpenseExceptionResponseRow,
   ExpenseExceptionRow,
   ExpenseRow,
   NotificationRow,
@@ -127,12 +127,12 @@ export async function fetchExceptionRows(client: SupabaseClient): Promise<Expens
   return rows<ExpenseExceptionRow>(result.data);
 }
 
-export async function fetchExceptionApprovalRows(client: SupabaseClient): Promise<ExpenseExceptionApprovalRow[]> {
+export async function fetchExceptionResponseRows(client: SupabaseClient): Promise<ExpenseExceptionResponseRow[]> {
   const result = await client
     .from('expense_exception_approvals')
-    .select('expense_id,user_id,created_at');
+    .select('expense_id,user_id,decision,created_at');
   if (result.error) {
     throw translateError(result.error, '예외 승인 데이터를 갱신하지 못했어요.');
   }
-  return rows<ExpenseExceptionApprovalRow>(result.data);
+  return rows<ExpenseExceptionResponseRow>(result.data);
 }

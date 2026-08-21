@@ -10,7 +10,7 @@ import {
   mapCommentReaction,
   mapExpense,
   mapExpenseException,
-  mapExpenseExceptionApproval,
+  mapExpenseExceptionResponse,
   mapInvitePreview,
   mapMemberStatus,
   mapNotification,
@@ -682,14 +682,16 @@ describe('예외 매퍼', () => {
     });
   });
 
-  it('예외 승인을 옮긴다', () => {
-    expect(mapExpenseExceptionApproval({
+  it('예외 응답을 옮긴다', () => {
+    expect(mapExpenseExceptionResponse({
       expense_id: 'expense-1',
       user_id: 'user-b',
+      decision: 'held',
       created_at: '2026-08-05T04:00:00.000Z',
     })).toEqual({
       expenseId: 'expense-1',
       userId: 'user-b',
+      decision: 'HELD',
       createdAt: '2026-08-05T04:00:00.000Z',
     });
   });

@@ -32,6 +32,7 @@ const INDEX_DEPENDENCIES = {
   statsByRoomId: ['memberStats'],
   exceptionByExpenseId: EXCEPTION_INPUTS(),
   approvedUserIdsByExpenseId: EXCEPTION_INPUTS(),
+  heldUserIdsByExpenseId: EXCEPTION_INPUTS(),
   settlementExcludedExpenseIds: EXCEPTION_INPUTS(),
   crownIdsByPeriodId: [
     'periods',
@@ -40,12 +41,12 @@ const INDEX_DEPENDENCIES = {
     'profiles',
     'expenses',
     'expenseExceptions',
-    'expenseExceptionApprovals',
+    'expenseExceptionResponses',
   ],
 } satisfies Record<keyof AppIndexes, readonly (keyof AppSnapshot)[]>;
 
 function EXCEPTION_INPUTS(): readonly (keyof AppSnapshot)[] {
-  return ['expenseExceptions', 'expenseExceptionApprovals', 'periodMembers', 'expenses'];
+  return ['expenseExceptions', 'expenseExceptionResponses', 'periodMembers', 'expenses'];
 }
 
 /** 참조를 갈아끼워 볼 배열 슬라이스 전부. */
@@ -67,7 +68,7 @@ const SLICES = [
   'roomPostPollVotes',
   'notifications',
   'expenseExceptions',
-  'expenseExceptionApprovals',
+  'expenseExceptionResponses',
   'processedRequestIds',
 ] as const satisfies readonly (keyof AppSnapshot)[];
 
@@ -255,8 +256,8 @@ function createDenseSnapshot(): AppSnapshot {
     expenseExceptions: [
       { expenseId: 'expense-live', reason: '기념일', requestedBy: 'user-a', requestedAt: '2026-08-05T03:30:00.000Z' },
     ],
-    expenseExceptionApprovals: [
-      { expenseId: 'expense-live', userId: 'user-a', createdAt: '2026-08-05T04:00:00.000Z' },
+    expenseExceptionResponses: [
+      { expenseId: 'expense-live', userId: 'user-b', decision: 'APPROVED', createdAt: '2026-08-05T04:00:00.000Z' },
     ],
     processedRequestIds: ['req-done'],
   };

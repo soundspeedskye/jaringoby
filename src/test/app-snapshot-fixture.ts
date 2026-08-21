@@ -66,7 +66,7 @@ export function createTestSnapshot(): AppSnapshot {
   roomPostPollVotes: [],
   notifications: [],
     expenseExceptions: [],
-    expenseExceptionApprovals: [],
+    expenseExceptionResponses: [],
     processedRequestIds: [],
   };
 }

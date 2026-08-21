@@ -9,6 +9,13 @@ import {
   PERIOD_NOTIFICATION_SOURCE,
   type PeriodNotificationTarget,
 } from '@/shared/services/period-notification-schedule';
+import {
+  buildDesiredExceptionHoldNotifications,
+  buildExceptionHoldNotificationScheduleDiff,
+  EXCEPTION_HOLD_NOTIFICATION_SOURCE,
+  EXCEPTION_HOLD_NOTIFICATION_SCHEDULE_VERSION,
+  type ExceptionHoldNotificationTarget,
+} from '@/shared/services/exception-hold-notification-schedule';
 
 const CHANNEL_ID = 'period-events';
 const RECONCILE_RETRY_DELAY_MS = 750;
@@ -36,6 +43,60 @@ export function requestPeriodNotificationSchedule(
   targets: readonly PeriodNotificationTarget[],
 ): void {
   periodNotificationScheduler.enqueue([...targets]);
+}
+
+export function requestExceptionHoldNotificationSchedule(
+  targets: readonly ExceptionHoldNotificationTarget[],
+): void {
+  exceptionHoldNotificationScheduler.enqueue([...targets]);
+}
+
+export async function reconcileExceptionHoldNotificationSchedule(
+  targets: readonly ExceptionHoldNotificationTarget[],
+  now = Date.now(),
+): Promise<void> {
+  if (Platform.OS === 'web') return;
+  const desired = buildDesiredExceptionHoldNotifications(targets, now);
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  const managed = scheduled
+    .filter((item) => item.content.data?.source === EXCEPTION_HOLD_NOTIFICATION_SOURCE)
+    .map((item) => ({
+      identifier: item.identifier,
+      scheduleKey: typeof item.content.data?.scheduleKey === 'string'
+        ? item.content.data.scheduleKey
+        : undefined,
+    }));
+  const diff = buildExceptionHoldNotificationScheduleDiff(desired, managed);
+  if (diff.missing.length) {
+    const permission = await Notifications.getPermissionsAsync();
+    if (!allowsNotifications(permission)) return;
+    await ensureNotificationChannel();
+    await Promise.all(diff.missing.map((notification) =>
+      Notifications.scheduleNotificationAsync({
+        identifier: notification.identifier,
+        content: {
+          title: notification.title,
+          body: notification.body,
+          data: {
+            source: EXCEPTION_HOLD_NOTIFICATION_SOURCE,
+            scheduleVersion: EXCEPTION_HOLD_NOTIFICATION_SCHEDULE_VERSION,
+            scheduleKey: notification.scheduleKey,
+            fingerprint: notification.fingerprint,
+            expenseId: notification.expenseId,
+            route: notification.route,
+          },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: notification.at,
+          channelId: CHANNEL_ID,
+        },
+      }),
+    ));
+  }
+  await Promise.all(diff.obsolete.map((notification) =>
+    Notifications.cancelScheduledNotificationAsync(notification.identifier),
+  ));
 }
 
 export async function reconcilePeriodNotificationSchedule(
@@ -122,6 +183,19 @@ const periodNotificationScheduler = new LatestValueScheduler<
     } catch {
       await delay(RECONCILE_RETRY_DELAY_MS);
       await reconcilePeriodNotificationSchedule(targets);
+    }
+  },
+);
+
+const exceptionHoldNotificationScheduler = new LatestValueScheduler<
+  readonly ExceptionHoldNotificationTarget[]
+>(
+  async (targets) => {
+    try {
+      await reconcileExceptionHoldNotificationSchedule(targets);
+    } catch {
+      await delay(RECONCILE_RETRY_DELAY_MS);
+      await reconcileExceptionHoldNotificationSchedule(targets);
     }
   },
 );

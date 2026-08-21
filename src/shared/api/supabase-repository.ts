@@ -19,6 +19,7 @@ import type {
   RoomPost,
   RoomPostComment,
   RoomPostReactionEmoji,
+  ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
 } from '@/shared/api/types';
@@ -42,7 +43,7 @@ import {
   mapCommentReaction,
   mapExpense,
   mapExpenseException,
-  mapExpenseExceptionApproval,
+  mapExpenseExceptionResponse,
   mapInvitePreview,
   mapNotification,
   mapPeriod,
@@ -88,7 +89,7 @@ import {
   fetchRoomPostReactionRows,
   fetchNotificationRows,
   fetchExceptionRows,
-  fetchExceptionApprovalRows,
+  fetchExceptionResponseRows,
 } from './supabase/queries';
 import {
   clone,
@@ -395,23 +396,16 @@ export class SupabaseRepository implements AppRepository {
     return clone(member);
   }
 
-  async approveExpenseException(expenseId: string): Promise<void> {
+  async respondToExpenseException(
+    expenseId: string,
+    decision: ExpenseExceptionResponseDecision,
+  ): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('approve_expense_exception', {
+    const { error } = await this.client.rpc('respond_expense_exception', {
       p_expense_id: expenseId,
+      p_decision: decision === 'HELD' ? 'held' : 'approved',
     });
-    if (error) throw translateError(error, '예외를 승인하지 못했어요.');
-    await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['expense_exception_approvals']),
-    );
-  }
-
-  async removeExpenseExceptionApproval(expenseId: string): Promise<void> {
-    await this.requireUserId();
-    const { error } = await this.client.rpc('remove_expense_exception_approval', {
-      p_expense_id: expenseId,
-    });
-    if (error) throw translateError(error, '승인을 취소하지 못했어요.');
+    if (error) throw translateError(error, '예외 응답을 저장하지 못했어요.');
     await this.reloadRealtimeTablesAndNotify(
       new Set<RealtimeTable>(['expense_exception_approvals']),
     );
@@ -775,7 +769,7 @@ export class SupabaseRepository implements AppRepository {
       roomPostPollVoteRows,
       notificationRows,
       exceptionRows,
-      approvalRows,
+      responseRows,
       preferencesResult,
     ] = await Promise.all([
       this.client.from('profiles').select('id,nickname,avatar_key,avatar_path,nickname_changed_at'),
@@ -813,7 +807,7 @@ export class SupabaseRepository implements AppRepository {
       fetchRoomPostPollVoteRows(this.client),
       fetchNotificationRows(this.client),
       fetchExceptionRows(this.client),
-      fetchExceptionApprovalRows(this.client),
+      fetchExceptionResponseRows(this.client),
       this.client.from('user_room_preferences').select('room_id,is_hidden'),
     ]);
 
@@ -892,7 +886,7 @@ export class SupabaseRepository implements AppRepository {
     const visibleExceptionRows = exceptionRows.filter((row) =>
       visibleExpenseIds.has(row.expense_id),
     );
-    const visibleApprovalRows = approvalRows.filter((row) =>
+    const visibleResponseRows = responseRows.filter((row) =>
       visibleExpenseIds.has(row.expense_id),
     );
 
@@ -933,7 +927,7 @@ export class SupabaseRepository implements AppRepository {
         .map(mapRoomPostPollVote),
       notifications: notificationRows.map(mapNotification),
       expenseExceptions: visibleExceptionRows.map(mapExpenseException),
-      expenseExceptionApprovals: visibleApprovalRows.map(mapExpenseExceptionApproval),
+      expenseExceptionResponses: visibleResponseRows.map(mapExpenseExceptionResponse),
       processedRequestIds: collectProcessedRequestIds(expenseRows, commentRows, userId),
     };
   }
@@ -1135,8 +1129,8 @@ export class SupabaseRepository implements AppRepository {
     const shouldFetchComments = tables.has('comments');
     const shouldFetchCommentReactions = tables.has('comment_reactions');
     const shouldFetchExceptions = tables.has('expense_exceptions');
-    const shouldFetchApprovals = tables.has('expense_exception_approvals');
-    const [expenseRows, commentRows, commentReactionRows, exceptionRows, approvalRows] = await Promise.all([
+    const shouldFetchResponses = tables.has('expense_exception_approvals');
+    const [expenseRows, commentRows, commentReactionRows, exceptionRows, responseRows] = await Promise.all([
       shouldFetchExpenses
         ? fetchExpenseRows(this.client)
         : Promise.resolve(null),
@@ -1149,8 +1143,8 @@ export class SupabaseRepository implements AppRepository {
       shouldFetchExceptions
         ? fetchExceptionRows(this.client)
         : Promise.resolve(null),
-      shouldFetchApprovals
-        ? fetchExceptionApprovalRows(this.client)
+      shouldFetchResponses
+        ? fetchExceptionResponseRows(this.client)
         : Promise.resolve(null),
     ]);
 
@@ -1212,7 +1206,7 @@ export class SupabaseRepository implements AppRepository {
             visibleCommentIds.has(reaction.commentId),
           )
         : previous.commentReactions;
-    // Exceptions/approvals live in their own arrays keyed by expense_id, so a
+    // Exceptions/responses live in their own arrays keyed by expense_id, so a
     // patch either refetches the touched table or re-filters the carried-over
     // rows against the (possibly shrunk) visible expense set.
     const expenseExceptions = exceptionRows
@@ -1222,15 +1216,15 @@ export class SupabaseRepository implements AppRepository {
       : expensesChanged
         ? previous.expenseExceptions.filter((row) => visibleExpenseIds.has(row.expenseId))
         : previous.expenseExceptions;
-    const expenseExceptionApprovals = approvalRows
-      ? approvalRows
+    const expenseExceptionResponses = responseRows
+      ? responseRows
           .filter((row) => visibleExpenseIds.has(row.expense_id))
-          .map(mapExpenseExceptionApproval)
+          .map(mapExpenseExceptionResponse)
       : expensesChanged
-        ? previous.expenseExceptionApprovals.filter((row) =>
+        ? previous.expenseExceptionResponses.filter((row) =>
             visibleExpenseIds.has(row.expenseId),
           )
-        : previous.expenseExceptionApprovals;
+        : previous.expenseExceptionResponses;
     const processedRequestIds = new Set(previous.processedRequestIds);
     collectProcessedRequestIds(expenseRows ?? [], commentRows ?? [], userId)
       .forEach((requestId) => processedRequestIds.add(requestId));
@@ -1242,7 +1236,7 @@ export class SupabaseRepository implements AppRepository {
       comments,
       commentReactions,
       expenseExceptions,
-      expenseExceptionApprovals,
+      expenseExceptionResponses,
       processedRequestIds: [...processedRequestIds],
     };
   }

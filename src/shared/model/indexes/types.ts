@@ -23,6 +23,7 @@ export type AppIndexes = {
   crownIdsByPeriodId: Map<string, string[]>;
   exceptionByExpenseId: Map<string, ExpenseException>;
   approvedUserIdsByExpenseId: Map<string, Set<string>>;
+  heldUserIdsByExpenseId: Map<string, Set<string>>;
   /** 예외가 만장일치로 승인돼 정산에서 빠지는 지출 ID(전 주차 통합). */
   settlementExcludedExpenseIds: Set<string>;
 };

@@ -4,7 +4,7 @@ import type {
   AppSnapshot,
   Expense,
   ExpenseException,
-  ExpenseExceptionApproval,
+  ExpenseExceptionResponse,
   Period,
   PeriodMember,
 } from '@/shared/api/types';
@@ -66,13 +66,16 @@ function exception(): ExpenseException {
   };
 }
 
-function approval(userId: string): ExpenseExceptionApproval {
-  return { expenseId: 'expense-1', userId, createdAt: '2026-08-05T04:00:00.000Z' };
+function response(
+  userId: string,
+  decision: ExpenseExceptionResponse['decision'] = 'APPROVED',
+): ExpenseExceptionResponse {
+  return { expenseId: 'expense-1', userId, decision, createdAt: '2026-08-05T04:00:00.000Z' };
 }
 
 function snapshotWith(input: {
   members: PeriodMember[];
-  approvals: ExpenseExceptionApproval[];
+  responses: ExpenseExceptionResponse[];
 }): AppSnapshot {
   return {
     currentUserId: 'user-a',
@@ -96,17 +99,17 @@ function snapshotWith(input: {
   roomPostPollVotes: [],
   notifications: [],
     expenseExceptions: [exception()],
-    expenseExceptionApprovals: input.approvals,
+    expenseExceptionResponses: input.responses,
     processedRequestIds: [],
   };
 }
 
 describe('settlementExcludedExpenseIds', () => {
-  it('excludes only when every active member has approved', () => {
+  it('excludes only when every active member except the requester has approved', () => {
     const partial = buildAppIndexes(
       snapshotWith({
         members: [member('user-a'), member('user-b')],
-        approvals: [approval('user-a')],
+        responses: [],
       }),
     );
     expect(partial.settlementExcludedExpenseIds.has('expense-1')).toBe(false);
@@ -114,28 +117,39 @@ describe('settlementExcludedExpenseIds', () => {
     const unanimous = buildAppIndexes(
       snapshotWith({
         members: [member('user-a'), member('user-b')],
-        approvals: [approval('user-a'), approval('user-b')],
+        responses: [response('user-b')],
       }),
     );
     expect(unanimous.settlementExcludedExpenseIds.has('expense-1')).toBe(true);
   });
 
   it('ignores approvals from members who have left the room', () => {
-    // user-b left, so only the active requester's approval is required.
+    // user-b left, so no other active member needs to approve.
     const indexes = buildAppIndexes(
       snapshotWith({
         members: [member('user-a'), member('user-b', 'LEFT')],
-        approvals: [approval('user-a')],
+        responses: [],
       }),
     );
     expect(indexes.settlementExcludedExpenseIds.has('expense-1')).toBe(true);
+  });
+
+  it('keeps an exception in the budget while an eligible member has put it on hold', () => {
+    const indexes = buildAppIndexes(
+      snapshotWith({
+        members: [member('user-a'), member('user-b')],
+        responses: [response('user-b', 'HELD')],
+      }),
+    );
+    expect(indexes.settlementExcludedExpenseIds.has('expense-1')).toBe(false);
+    expect(indexes.heldUserIdsByExpenseId.get('expense-1')?.has('user-b')).toBe(true);
   });
 
   it('does not exclude when there are no active members', () => {
     const indexes = buildAppIndexes(
       snapshotWith({
         members: [member('user-a', 'LEFT')],
-        approvals: [approval('user-a')],
+        responses: [],
       }),
     );
     expect(indexes.settlementExcludedExpenseIds.has('expense-1')).toBe(false);
@@ -144,7 +158,7 @@ describe('settlementExcludedExpenseIds', () => {
 
 describe('room post indexes', () => {
   it('keeps visible posts newest-first and counts only visible comments', () => {
-    const snapshot = snapshotWith({ members: [member('user-a')], approvals: [] });
+    const snapshot = snapshotWith({ members: [member('user-a')], responses: [] });
     snapshot.roomPosts = [
       {
         id: 'post-old', clientRequestId: 'post-old-request', roomId: 'room-1', kind: 'POST',

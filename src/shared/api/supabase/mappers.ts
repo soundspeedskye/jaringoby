@@ -4,7 +4,7 @@ import type {
   CommentReaction,
   Expense,
   ExpenseException,
-  ExpenseExceptionApproval,
+  ExpenseExceptionResponse,
   InvitePreview,
   Period,
   PeriodMember,
@@ -23,7 +23,7 @@ import type { LocalDate, MemberStatus, PeriodPhase } from '@/shared/model/types'
 import type {
   CommentReactionRow,
   CommentRow,
-  ExpenseExceptionApprovalRow,
+  ExpenseExceptionResponseRow,
   ExpenseExceptionRow,
   ExpenseRow,
   JsonObject,
@@ -331,12 +331,13 @@ export function mapExpenseException(row: ExpenseExceptionRow): ExpenseException 
   };
 }
 
-export function mapExpenseExceptionApproval(
-  row: ExpenseExceptionApprovalRow,
-): ExpenseExceptionApproval {
+export function mapExpenseExceptionResponse(
+  row: ExpenseExceptionResponseRow,
+): ExpenseExceptionResponse {
   return {
     expenseId: row.expense_id,
     userId: row.user_id,
+    decision: row.decision === 'held' ? 'HELD' : 'APPROVED',
     createdAt: row.created_at,
   };
 }
