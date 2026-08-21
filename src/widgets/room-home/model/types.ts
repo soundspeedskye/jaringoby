@@ -28,6 +28,8 @@ export type RoomHomeData = {
   memberRows: MemberListItem[];
   expensesByUserId: ReadonlyMap<string, Expense[]>;
   commentCounts: ReadonlyMap<string, number>;
+  /** 홈 날짜칩의 빠른 확인 시트용. 최근 피드의 10건 제한을 적용하지 않는다. */
+  feedExpenses: Expense[];
   recentExpenses: Expense[];
   profilesById: ReadonlyMap<string, Profile>;
   error: string | null;

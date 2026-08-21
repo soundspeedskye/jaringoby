@@ -1,10 +1,11 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
-import { memo } from "react";
+import { memo, useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ExceptionApprovalInbox } from "@/features/exception-approval";
 import { RecentExpenseCarousel } from "@/entities/expense/ui/recent-expense-carousel";
+import { DailyExpensePeekSheet } from "@/entities/expense/ui/daily-expense-peek-sheet";
 import { RoomBoardPreview } from "./room-board-preview";
 import { RoomHero } from "@/entities/room/ui/room-hero";
 import { NoticeBanner } from "@/shared/ui/notice-banner";
@@ -44,6 +45,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
     currentUser,
     daysRemaining,
     error,
+    feedExpenses,
     memberRows,
     myPendingCount,
     myPendingDelta,
@@ -65,6 +67,9 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
     onOpenMemberFeed,
   } = actions;
   const isRoomOwner = activeRoom.ownerId === currentUser.id;
+  const [peekDate, setPeekDate] = useState<string | null>(null);
+  const openDailyExpensePeek = useCallback((date: string) => setPeekDate(date), []);
+  const closeDailyExpensePeek = useCallback(() => setPeekDate(null), []);
   // 제목·본문 없이 항목만 보여준다. 다이얼로그가 떴다는 것 자체가 "고르세요"라는 뜻이다.
   const openRoomActions = () => {
     showDialog(undefined, undefined, [
@@ -144,9 +149,17 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         weekMonthLabel={weekMonthLabel}
         weekRangeLabel={weekRangeLabel}
         participants={memberRows}
+        onPressWeekDay={openDailyExpensePeek}
         onPressSettings={
           isRoomOwner ? () => router.push("/room/edit") : undefined
         }
+      />
+
+      <DailyExpensePeekSheet
+        date={peekDate}
+        expenses={feedExpenses}
+        onClose={closeDailyExpensePeek}
+        profilesById={profilesById}
       />
 
       <RoomBoardPreview roomId={activeRoom.id} />

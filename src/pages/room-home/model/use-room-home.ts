@@ -194,6 +194,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     const weekDays: WeekDay[] = createWeekdayCalendarFromPeriod(
       currentPeriod,
     ).days.map((periodDay) => ({
+      date: periodDay.date,
       day: Number(periodDay.date.slice(8, 10)),
       participating:
         participationStart != null &&
@@ -228,6 +229,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
         memberRows,
         expensesByUserId: sectionExpensesByUserId,
         commentCounts,
+        feedExpenses: currentPeriodFeedExpenses,
         recentExpenses: currentPeriodFeedExpenses.slice(0, 10),
         profilesById,
         error,

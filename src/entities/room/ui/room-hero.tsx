@@ -15,6 +15,7 @@ import { formatWon } from "@/shared/lib/format";
 
 // 그 주 평일 한 칸. participating = 참여 기간(합류일~주말) 안이면서 공휴일이 아닌 날.
 export type WeekDay = {
+  date: string;
   day: number;
   participating: boolean;
   isHoliday: boolean;
@@ -38,6 +39,8 @@ type RoomHeroProps = {
     avatarUri?: string;
   }[];
   onPressSettings?: () => void;
+  /** 유효한 날짜를 누르면, 화면을 벗어나지 않고 그날의 지출 요약을 연다. */
+  onPressWeekDay?: (date: string) => void;
 };
 
 const ringSize = 132;
@@ -58,6 +61,7 @@ export function RoomHero({
   weekRangeLabel,
   participants,
   onPressSettings,
+  onPressWeekDay,
 }: RoomHeroProps) {
   const safeLimit = Math.max(appliedLimit, 1);
   const hasPending = pendingDelta !== 0 || pendingCount > 0;
@@ -66,7 +70,7 @@ export function RoomHero({
 
   return (
     <View
-      accessible={!onPressSettings}
+      accessible={!onPressSettings && !onPressWeekDay}
       accessibilityLabel={`${title} ${weekIndex}주차, ${weekRangeLabel}, 적용한도 ${formatWon(appliedLimit)}, 함께하는 멤버 ${participants.length}명, 서버 공식 합계 기준 ${remaining < 0 ? `${formatWon(Math.abs(remaining))} 초과` : `${formatWon(remaining)} 남음`}${hasPending ? `, ${pendingDelta === 0 ? "금액 외 변경" : `동기화 대기 반영분 ${formatSignedWon(pendingDelta)}`}는 공식 합계 제외` : ""}`}
       style={styles.container}
     >
@@ -145,27 +149,48 @@ export function RoomHero({
             {formatWon(appliedLimit)}
           </Text>
           <View accessibilityLabel={weekRangeLabel} style={styles.weekStrip}>
-            {weekDays.map((weekDay) => (
-              <View
-                key={weekDay.day}
-                style={[
-                  styles.weekCell,
-                  weekDay.participating && styles.weekCellIn,
-                  weekDay.isToday && styles.weekCellToday,
-                ]}
-              >
-                <Text
+            {weekDays.map((weekDay) => {
+              const canOpenDay = Boolean(
+                onPressWeekDay && weekDay.participating && !weekDay.isHoliday,
+              );
+              const cell = (
+                <View
                   style={[
-                    styles.weekDayText,
-                    weekDay.participating && styles.weekDayIn,
-                    weekDay.isToday && styles.weekDayToday,
-                    weekDay.isHoliday && styles.weekDayHoliday,
+                    styles.weekCell,
+                    weekDay.participating && styles.weekCellIn,
+                    weekDay.isToday && styles.weekCellToday,
                   ]}
                 >
-                  {weekDay.day}
-                </Text>
-              </View>
-            ))}
+                  <Text
+                    style={[
+                      styles.weekDayText,
+                      weekDay.participating && styles.weekDayIn,
+                      weekDay.isToday && styles.weekDayToday,
+                      weekDay.isHoliday && styles.weekDayHoliday,
+                    ]}
+                  >
+                    {weekDay.day}
+                  </Text>
+                </View>
+              );
+
+              return canOpenDay ? (
+                <Pressable
+                  accessibilityHint="이 날짜의 지출 기록을 빠르게 확인해요"
+                  accessibilityLabel={`${weekDay.day}일 지출 기록 보기`}
+                  accessibilityRole="button"
+                  key={weekDay.date}
+                  onPress={() => onPressWeekDay?.(weekDay.date)}
+                  style={({ pressed }) => [styles.weekDayButton, pressed && styles.weekDayButtonPressed]}
+                >
+                  {cell}
+                </Pressable>
+              ) : (
+                <View key={weekDay.date} style={styles.weekDayButton}>
+                  {cell}
+                </View>
+              );
+            })}
           </View>
           {hasPending ? (
             <Text style={styles.pendingText}>
@@ -269,8 +294,10 @@ const styles = StyleSheet.create({
   },
   limitCopy: { flex: 1, minWidth: 0 },
   weekStrip: { flexDirection: "row", gap: 4, marginTop: spacing.sm },
+  weekDayButton: { flex: 1, borderRadius: radii.md },
+  weekDayButtonPressed: { opacity: 0.78, transform: [{ scale: 0.96 }] },
   weekCell: {
-    flex: 1,
+    width: "100%",
     alignItems: "center",
     paddingVertical: 6,
     borderRadius: radii.md,
