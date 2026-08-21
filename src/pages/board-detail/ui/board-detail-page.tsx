@@ -1,57 +1,69 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useMemo } from "react";
+import { StyleSheet, View } from "react-native";
 
-import { RoomPostReactionPills } from '@/entities/post/ui/post-reaction-pills';
-import { RoomPostCard } from '@/entities/post/ui/room-post-card';
-import { RoomPostPoll } from '@/entities/post/ui/room-post-poll';
-import { EmptyState } from '@/shared/ui/empty-state';
-import { PageHeader } from '@/shared/ui/page-header';
-import { PrimaryButton } from '@/shared/ui/primary-button';
-import { ScreenFrame } from '@/shared/ui/screen';
-import { spacing } from '@/shared/config/design';
-import type { RoomPostReaction, RoomPostReactionEmoji } from '@/shared/api/types';
-import { useAppActions } from '@/shared/providers/app-actions-provider';
-import { useCurrentUser, useProfiles } from '@/entities/member/api/use-members';
-import { useRoom } from '@/entities/room/api/use-rooms';
+import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
 import {
   useReactionsByPostId,
   useRoomPost,
   useRoomPostComments,
   useRoomPostPollOptions,
   useRoomPostPollVotes,
-} from '@/entities/post/api/use-posts';
-import { CommentThread, type ThreadActions, type ThreadFeatures, type ThreadMessage } from '@/widgets/comment-thread';
+} from "@/entities/post/api/use-posts";
+import { RoomPostReactionPills } from "@/entities/post/ui/post-reaction-pills";
+import { RoomPostCard } from "@/entities/post/ui/room-post-card";
+import { RoomPostPoll } from "@/entities/post/ui/room-post-poll";
+import { useRoom } from "@/entities/room/api/use-rooms";
+import type {
+  RoomPostReaction,
+  RoomPostReactionEmoji,
+} from "@/shared/api/types";
+import { spacing } from "@/shared/config/design";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { PageHeader } from "@/shared/ui/page-header";
+import { PrimaryButton } from "@/shared/ui/primary-button";
+import { ScreenFrame } from "@/shared/ui/screen";
+import {
+  CommentThread,
+  type ThreadActions,
+  type ThreadFeatures,
+  type ThreadMessage,
+} from "@/widgets/comment-thread";
 
 const ROOM_POST_COMMENT_FEATURES: ThreadFeatures = {
   replies: false,
   reactions: false,
   maxLength: 300,
-  placeholder: '댓글 남기기…',
+  placeholder: "댓글 남기기…",
 };
 
 const EMPTY_REACTIONS: RoomPostReaction[] = [];
 
 export function BoardDetailPage() {
   const router = useRouter();
-  const { id: postId } = useLocalSearchParams<'/room/board/[id]'>();
+  const { id: postId } = useLocalSearchParams<"/room/board/[id]">();
   const post = useRoomPost(postId);
   const currentUser = useCurrentUser();
   const room = useRoom(post?.roomId);
   const allComments = useRoomPostComments(post?.id);
   const comments = useMemo(
-    () => [...allComments].sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    () =>
+      [...allComments].sort((left, right) =>
+        left.createdAt.localeCompare(right.createdAt),
+      ),
     [allComments],
   );
   const threadMessages = useMemo<ThreadMessage[]>(
-    () => comments.map((comment) => ({
-      id: comment.id,
-      authorId: comment.authorId,
-      body: comment.body,
-      createdAt: comment.createdAt,
-      updatedAt: comment.updatedAt,
-      deletedAt: comment.deletedAt,
-    })),
+    () =>
+      comments.map((comment) => ({
+        id: comment.id,
+        authorId: comment.authorId,
+        body: comment.body,
+        createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
+        deletedAt: comment.deletedAt,
+      })),
     [comments],
   );
   const profileUserIds = useMemo(
@@ -73,10 +85,16 @@ export function BoardDetailPage() {
     voteRoomPostPoll,
   } = useAppActions();
 
-  const returnToBoard = useCallback(() => router.replace('/room/board'), [router]);
+  const returnFromPost = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/room/board");
+  }, [router]);
   const createComment = useCallback(
     (input: { body: string; clientRequestId: string; replyToId?: string }) => {
-      if (!post) throw new Error('게시글을 찾을 수 없어요.');
+      if (!post) throw new Error("게시글을 찾을 수 없어요.");
       return addRoomPostComment({ ...input, postId: post.id });
     },
     [addRoomPostComment, post],
@@ -96,18 +114,27 @@ export function BoardDetailPage() {
     },
     [post, toggleRoomPostReaction],
   );
-  const threadActions = useMemo<ThreadActions>(() => ({
-    create: createComment,
-    update: updateRoomPostComment,
-    remove: deleteRoomPostComment,
-  }), [createComment, deleteRoomPostComment, updateRoomPostComment]);
+  const threadActions = useMemo<ThreadActions>(
+    () => ({
+      create: createComment,
+      update: updateRoomPostComment,
+      remove: deleteRoomPostComment,
+    }),
+    [createComment, deleteRoomPostComment, updateRoomPostComment],
+  );
   if (!post || post.deletedAt) {
     return (
       <ScreenFrame testID="room-board-detail-screen">
         <View style={styles.emptyScreen}>
-          <PageHeader onBack={returnToBoard} title="냥냥톡톡" />
+          <PageHeader onBack={returnFromPost} title="아껴씀 청년방" />
           <EmptyState
-            action={<PrimaryButton label="목록으로 가기" onPress={returnToBoard} variant="secondary" />}
+            action={
+              <PrimaryButton
+                label="목록으로 가기"
+                onPress={returnFromPost}
+                variant="secondary"
+              />
+            }
             icon="chat-remove-outline"
             title="삭제되었거나 없는 냥톡이에요."
           />
@@ -117,12 +144,19 @@ export function BoardDetailPage() {
   }
 
   const author = profiles.get(post.authorId);
-  const canMutateComments = Boolean(currentUser && room?.status === 'OPEN');
+  const canMutateComments = Boolean(currentUser && room?.status === "OPEN");
 
   return (
     <ScreenFrame
-      fixedHeader={<PageHeader bottomSpacing="md" onBack={returnToBoard} title="냥냥톡톡" />}
-      testID="room-board-detail-screen">
+      fixedHeader={
+        <PageHeader
+          bottomSpacing="md"
+          onBack={returnFromPost}
+          title="아껴씀 청년방"
+        />
+      }
+      testID="room-board-detail-screen"
+    >
       <CommentThread
         actions={threadActions}
         canDelete={canDeleteComment}
@@ -136,17 +170,17 @@ export function BoardDetailPage() {
             <RoomPostCard
               author={author}
               dateLabel={formatFullDate(post.createdAt)}
-              footer={(
+              footer={
                 <RoomPostReactionPills
                   currentUserId={currentUser?.id}
                   onToggle={toggleReaction}
                   reactions={reactionsByPostId.get(post.id) ?? EMPTY_REACTIONS}
                 />
-              )}
+              }
               post={post}
               variant="detail"
             />
-            {post.kind === 'POLL' ? (
+            {post.kind === "POLL" ? (
               <RoomPostPoll
                 canVote={canMutateComments}
                 currentUserId={currentUser?.id}
@@ -164,7 +198,11 @@ export function BoardDetailPage() {
 }
 
 function formatFullDate(value: string): string {
-  return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' }).format(new Date(value));
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Seoul",
+  }).format(new Date(value));
 }
 
 const styles = StyleSheet.create({
