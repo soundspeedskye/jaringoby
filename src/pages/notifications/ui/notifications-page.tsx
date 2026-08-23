@@ -13,6 +13,7 @@ import type { AppNotification } from "@/shared/api/types";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useProfiles } from "@/entities/member/api/use-members";
 import { useNotifications } from "@/entities/notification/api/use-notifications";
+import { notificationDestination } from "../model/notification-destination";
 import { formatDateLabel } from "@/shared/lib/format";
 
 export function NotificationsPage() {
@@ -33,9 +34,16 @@ export function NotificationsPage() {
   const openNotification = (notification: AppNotification) => {
     void (async () => {
       if (!notification.readAt) await markNotificationsRead([notification.id]);
-      if (notification.expenseId) router.push(`/expense/${notification.expenseId}`);
-      else if (notification.kind === "room_notice") router.push("/room/board");
-      else router.dismissTo("/");
+      const destination = notificationDestination(notification);
+      if (destination.type === "dismissTo") {
+        router.dismissTo(destination.pathname);
+        return;
+      }
+      router.push(
+        (destination.params
+          ? { pathname: destination.pathname, params: destination.params }
+          : destination.pathname) as never,
+      );
     })();
   };
 

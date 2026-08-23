@@ -42,10 +42,11 @@ const EXPENSE_COMMENT_FEATURES: ThreadFeatures = {
 export function ExpenseDetailPage() {
   const router = useRouter();
   const { showDialog } = useAppDialog();
-  const { id: expenseId, rid: requestId } = useLocalSearchParams<
-    "/expense/[id]",
-    { rid?: string }
-  >();
+  const {
+    id: expenseId,
+    rid: requestId,
+    cid: highlightCommentId,
+  } = useLocalSearchParams<"/expense/[id]", { rid?: string; cid?: string }>();
   const {
     addComment,
     deleteComment,
@@ -203,6 +204,7 @@ export function ExpenseDetailPage() {
         canMutate={canMutateComments}
         comments={threadMessages}
         currentUserId={currentUser?.id}
+        highlightCommentId={highlightCommentId}
         features={EXPENSE_COMMENT_FEATURES}
         reactionsByCommentId={reactionsByCommentId}
         header={

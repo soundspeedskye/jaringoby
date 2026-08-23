@@ -1,7 +1,7 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   FocusEvent,
   LayoutChangeEvent,
@@ -45,6 +45,7 @@ export function CommentThread({
   currentUserId,
   features,
   header,
+  highlightCommentId,
   phase,
   profilesById,
   reactionsByCommentId,
@@ -57,6 +58,8 @@ export function CommentThread({
   currentUserId?: string;
   features: ThreadFeatures;
   header: ReactNode;
+  /** 소식함에서 특정 댓글로 들어온 경우 그 댓글로 스크롤하고 잠시 강조한다. */
+  highlightCommentId?: string;
   phase?: PeriodPhase | null;
   profilesById: ReadonlyMap<string, Profile>;
   reactionsByCommentId?: ReadonlyMap<string, CommentReaction[]>;
@@ -106,6 +109,43 @@ export function CommentThread({
       );
     },
     [composerHeight],
+  );
+  // 소식함에서 특정 댓글로 들어오면 그 댓글까지 데려가고 잠시 강조한다.
+  // 목록이 한 번 그려진 뒤에야 인덱스를 잡을 수 있어 다음 프레임에 실행한다.
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(
+    highlightCommentId ?? null,
+  );
+  const highlightHandled = useRef(false);
+  useEffect(() => {
+    if (!highlightCommentId || highlightHandled.current) return;
+    const index = comments.findIndex((comment) => comment.id === highlightCommentId);
+    // 아직 목록에 없으면(로딩 중) 다음 렌더에서 다시 본다.
+    if (index < 0) return;
+    highlightHandled.current = true;
+    const scrollTimer = setTimeout(() => {
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+    }, 250);
+    // 강조는 잠깐만 둔다. 계속 켜 두면 읽는 데 방해가 된다.
+    const fadeTimer = setTimeout(() => setHighlightedCommentId(null), 2600);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(fadeTimer);
+    };
+  }, [comments, highlightCommentId]);
+  // scrollToIndex는 아직 그려지지 않은 항목으로는 바로 가지 못하고, 이 콜백이
+  // 없으면 조용히 아무 일도 하지 않는다. 대략 위치로 먼저 옮긴 뒤 한 번만
+  // 다시 시도한다.
+  const scrollToIndexFailed = useCallback(
+    ({ index, averageItemLength }: { index: number; averageItemLength: number }) => {
+      listRef.current?.scrollToOffset({
+        animated: true,
+        offset: index * averageItemLength,
+      });
+      setTimeout(() => {
+        listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+      }, 300);
+    },
+    [],
   );
   const focusCommentEditor = useCallback(
     (commentId: string, event: FocusEvent) => {
@@ -174,6 +214,7 @@ export function CommentThread({
           currentUserId={currentUserId}
           editing={editingCommentId === comment.id && editable}
           features={features}
+          highlighted={highlightedCommentId === comment.id}
           onBeginEdit={beginEdit}
           onError={setError}
           onFeedback={setFeedback}
@@ -208,6 +249,7 @@ export function CommentThread({
       features,
       finishEdit,
       focusCommentEditor,
+      highlightedCommentId,
       profilesById,
       reactionsByCommentId,
       selectReply,
@@ -246,6 +288,7 @@ export function CommentThread({
             </>
           }
           ItemSeparatorComponent={CommentSeparator}
+          onScrollToIndexFailed={scrollToIndexFailed}
           renderItem={renderComment}
           renderScrollComponent={renderScrollComponent}
           ref={listRef}

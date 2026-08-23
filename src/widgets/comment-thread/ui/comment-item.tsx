@@ -29,6 +29,7 @@ export const CommentItem = memo(function CommentItem({
   comment,
   currentUserId,
   editing,
+  highlighted,
   onBeginEdit,
   onError,
   onFeedback,
@@ -48,6 +49,7 @@ export const CommentItem = memo(function CommentItem({
   canEdit: boolean;
   canMutate: boolean;
   comment: ThreadMessage;
+  highlighted?: boolean;
   currentUserId?: string;
   editing: boolean;
   features: ThreadFeatures;
@@ -163,7 +165,13 @@ export const CommentItem = memo(function CommentItem({
   };
 
   return (
-    <View style={[styles.messageRow, mine && styles.messageRowMine]}>
+    <View
+      style={[
+        styles.messageRow,
+        mine && styles.messageRowMine,
+        highlighted && styles.messageRowHighlighted,
+      ]}
+    >
       {!mine ? (
         <AnimalAvatar
           photoUri={profile?.avatarUri}
@@ -304,6 +312,17 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: spacing.sm,
     paddingRight: 54,
+  },
+  // 소식함에서 이 댓글로 들어왔을 때 잠깐 켜지는 강조. 종이 위에 형광펜을
+  // 그은 느낌으로, 말풍선 색은 건드리지 않고 줄 전체를 감싼다.
+  messageRowHighlighted: {
+    backgroundColor: palette.paper,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.yellow,
+    marginHorizontal: -spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   messageRowMine: {
     justifyContent: "flex-end",
