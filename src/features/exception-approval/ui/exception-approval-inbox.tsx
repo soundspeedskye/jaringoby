@@ -9,7 +9,6 @@ import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { usePendingExceptionApprovals } from "@/shared/providers/app-data-hooks";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { formatWon } from "@/shared/lib/format";
-import { requestNotificationPermission } from "@/shared/services/notification-service";
 
 /** 홈 상단의 예외 응답 대기함. 승인 전까지, 보류면 알림과 함께 남는다. */
 export function ExceptionApprovalInbox() {
@@ -26,9 +25,6 @@ export function ExceptionApprovalInbox() {
     setBusyId(expenseId);
     void (async () => {
       try {
-        if (decision === "HELD") {
-          await requestNotificationPermission().catch(() => false);
-        }
         await respondToExpenseException(expenseId, decision);
       } catch (reason) {
         showDialog(

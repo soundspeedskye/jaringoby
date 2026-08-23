@@ -13,7 +13,6 @@ import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useExpenseExceptionSummary } from "@/shared/providers/app-data-hooks";
 import { FormMessage } from "@/shared/ui/form-message";
 import { PrimaryButton } from "@/shared/ui/primary-button";
-import { requestNotificationPermission } from "@/shared/services/notification-service";
 
 export function ExpenseExceptionCard({
   canApprove,
@@ -124,10 +123,7 @@ export function ExpenseExceptionCard({
               loading={busy}
               onPress={() =>
                 run(
-                  async () => {
-                    await requestNotificationPermission().catch(() => false);
-                    await respondToExpenseException(expenseId, "HELD");
-                  },
+                  () => respondToExpenseException(expenseId, "HELD"),
                   "예외를 보류하지 못했어요.",
                 )
               }
