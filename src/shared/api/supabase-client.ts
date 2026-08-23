@@ -4,8 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
+import { createClockSkewRetryFetch } from '@/shared/api/supabase/clock-skew-retry';
+
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+
+// 시계 편차로 거부된 요청만 짧게 기다렸다 다시 보낸다. 자세한 배경은 모듈 주석 참고.
+const skewAwareFetch = createClockSkewRetryFetch((input, init) => fetch(input, init));
 
 let singleton: SupabaseClient | null = null;
 let hasInstalledAppStateListener = false;
@@ -39,6 +44,7 @@ export function getSupabaseClient(): SupabaseClient {
       detectSessionInUrl: false,
       lock: processLock,
     },
+    global: { fetch: skewAwareFetch },
   });
 
   if (Platform.OS !== 'web' && !hasInstalledAppStateListener) {
@@ -61,6 +67,7 @@ export function createSupabaseClientForAccessToken(accessToken: string): Supabas
   }
   return createClient(supabaseUrl, supabasePublishableKey, {
     accessToken: async () => accessToken,
+    global: { fetch: skewAwareFetch },
   });
 }
 

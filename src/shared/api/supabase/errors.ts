@@ -23,7 +23,20 @@ export function translateError(error: unknown, fallback: string): RepositoryErro
   const normalized = message.toLowerCase();
   const status = value?.status ?? value?.statusCode;
 
-  if (Number(status) === 401 || normalized.includes('jwt expired') || normalized.includes('invalid jwt')) {
+  // PostgREST의 JWT 오류는 error 객체에 status가 실리지 않아 위 status 검사에
+  // 걸리지 않는다(PostgrestError는 code·message·details·hint만 가진다).
+  // PGRST301은 디코딩·서명 실패, PGRST302는 익명 접근 차단으로 둘 다 다시
+  // 로그인해야 풀린다. PGRST303(클레임 검증 실패)은 여기 넣지 않는다 —
+  // 서버 간 시계 편차로 갓 발급된 토큰이 잠깐 거부되는 경우가 섞여 있고,
+  // AUTH_REQUIRED는 오프라인 큐에서 영구 실패로 취급돼 쌓인 변경이 버려진다.
+  // 그 편차는 clock-skew-retry의 재시도가 흡수한다.
+  const jwtErrorCode = code === 'PGRST301' || code === 'PGRST302';
+  if (
+    Number(status) === 401 ||
+    jwtErrorCode ||
+    normalized.includes('jwt expired') ||
+    normalized.includes('invalid jwt')
+  ) {
     return new RepositoryError('AUTH_REQUIRED', '로그인이 만료됐어요. 다시 로그인해 주세요.', { cause: error });
   }
   if (message === 'NICKNAME_COOLDOWN') {
