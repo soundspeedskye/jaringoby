@@ -1,17 +1,22 @@
-import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 
-import type { AppRepository, Unsubscribe, UpdateExpenseOptions } from '@/shared/api/repository';
-import { createSupabaseClientForAccessToken } from '@/shared/api/supabase-client';
+import type {
+  AppRepository,
+  Unsubscribe,
+  UpdateExpenseOptions,
+} from "@/shared/api/repository";
+import { createSupabaseClientForAccessToken } from "@/shared/api/supabase-client";
 import type {
   AddCommentInput,
+  AddExpenseInput,
   AddRoomPostCommentInput,
   AddRoomPostInput,
-  AddExpenseInput,
   AppSnapshot,
   Comment,
   CommentReactionEmoji,
   CreateRoomInput,
   Expense,
+  ExpenseExceptionResponseDecision,
   InvitePreview,
   Profile,
   Room,
@@ -19,23 +24,26 @@ import type {
   RoomPost,
   RoomPostComment,
   RoomPostReactionEmoji,
-  ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
-} from '@/shared/api/types';
-import type {
-  InviteCodeRow,
-  PeriodDayRow,
-  PeriodMemberRow,
-  PeriodResultRow,
-  PeriodStatusRow,
-  PreferenceRow,
-  ProfileRow,
-  RoomMemberRow,
-  RoomMemberStatsRow,
-  RoomRow,
-} from './supabase/rows';
-import { CATEGORY_TO_DATABASE } from './supabase/rows';
+} from "@/shared/api/types";
+import {
+  RepositoryError,
+  inviteError,
+  isAlreadyExistsError,
+  switchRoomError,
+  translateError,
+} from "./supabase/errors";
+import {
+  requireComment,
+  requireExpense,
+  requireProfile,
+  requireRoom,
+  requireRoomPost,
+  requireRoomPostComment,
+  requireVersion,
+} from "./supabase/guards";
+import { asObject, firstObject, isString } from "./supabase/json";
 import {
   expenseThumbnailPath,
   hash32,
@@ -59,38 +67,21 @@ import {
   mapRoomPostReaction,
   mapStats,
   requiredString,
-} from './supabase/mappers';
+} from "./supabase/mappers";
+import { readPhoto, safeObjectStem } from "./supabase/photos";
 import {
-  RepositoryError,
-  inviteError,
-  isAlreadyExistsError,
-  switchRoomError,
-  translateError,
-} from './supabase/errors';
-import {
-  requireComment,
-  requireExpense,
-  requireProfile,
-  requireRoom,
-  requireRoomPost,
-  requireRoomPostComment,
-  requireVersion,
-} from './supabase/guards';
-import { asObject, firstObject, isString } from './supabase/json';
-import { readPhoto, safeObjectStem } from './supabase/photos';
-import {
-  fetchExpenseRows,
-  fetchCommentRows,
   fetchCommentReactionRows,
-  fetchRoomPostRows,
+  fetchCommentRows,
+  fetchExceptionResponseRows,
+  fetchExceptionRows,
+  fetchExpenseRows,
+  fetchNotificationRows,
   fetchRoomPostCommentRows,
   fetchRoomPostPollOptionRows,
   fetchRoomPostPollVoteRows,
   fetchRoomPostReactionRows,
-  fetchNotificationRows,
-  fetchExceptionRows,
-  fetchExceptionResponseRows,
-} from './supabase/queries';
+  fetchRoomPostRows,
+} from "./supabase/queries";
 import {
   clone,
   collectProcessedRequestIds,
@@ -100,30 +91,43 @@ import {
   makeUuid,
   rows,
   toRequestUuid,
-} from './supabase/results';
+} from "./supabase/results";
+import type {
+  InviteCodeRow,
+  PeriodDayRow,
+  PeriodMemberRow,
+  PeriodResultRow,
+  PeriodStatusRow,
+  PreferenceRow,
+  ProfileRow,
+  RoomMemberRow,
+  RoomMemberStatsRow,
+  RoomRow,
+} from "./supabase/rows";
+import { CATEGORY_TO_DATABASE } from "./supabase/rows";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
 const MAX_EXPENSE_PHOTO_BYTES = 10 * 1024 * 1024;
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
 const REALTIME_TABLES = [
-  'profiles',
-  'rooms',
-  'room_members',
-  'periods',
-  'period_members',
-  'period_results',
-  'expenses',
-  'comments',
-  'comment_reactions',
-  'room_posts',
-  'room_post_comments',
-  'room_post_reactions',
-  'room_post_poll_options',
-  'room_post_poll_votes',
-  'notifications',
-  'expense_exceptions',
-  'expense_exception_approvals',
+  "profiles",
+  "rooms",
+  "room_members",
+  "periods",
+  "period_members",
+  "period_results",
+  "expenses",
+  "comments",
+  "comment_reactions",
+  "room_posts",
+  "room_post_comments",
+  "room_post_reactions",
+  "room_post_poll_options",
+  "room_post_poll_votes",
+  "notifications",
+  "expense_exceptions",
+  "expense_exception_approvals",
 ] as const;
 type RealtimeTable = (typeof REALTIME_TABLES)[number];
 
@@ -178,7 +182,8 @@ export class SupabaseRepository implements AppRepository {
     if (options.observeAuth === false) return;
     this.client.auth.onAuthStateChange((event, session) => {
       const nextUserId = session?.user.id ?? null;
-      const userChanged = this.authUserId !== undefined && this.authUserId !== nextUserId;
+      const userChanged =
+        this.authUserId !== undefined && this.authUserId !== nextUserId;
       this.authUserId = nextUserId;
       if (!session || userChanged) {
         this.authGeneration += 1;
@@ -186,7 +191,7 @@ export class SupabaseRepository implements AppRepository {
         this.loading = null;
         this.reloadJob = null;
         void this.teardownRealtime();
-      } else if (event === 'SIGNED_IN' && this.listeners.size > 0) {
+      } else if (event === "SIGNED_IN" && this.listeners.size > 0) {
         this.scheduleRealtimeReload();
       }
     });
@@ -198,14 +203,20 @@ export class SupabaseRepository implements AppRepository {
   ): Promise<T> {
     if (this.fixedUserId) {
       if (this.fixedUserId !== userId) {
-        throw new RepositoryError('SESSION_CHANGED', '로그인 사용자가 바뀌었어요.');
+        throw new RepositoryError(
+          "SESSION_CHANGED",
+          "로그인 사용자가 바뀌었어요.",
+        );
       }
       return work(this);
     }
     const { data, error } = await this.client.auth.getSession();
-    if (error) throw translateError(error, '로그인 상태를 확인하지 못했어요.');
+    if (error) throw translateError(error, "로그인 상태를 확인하지 못했어요.");
     if (!data.session || data.session.user.id !== userId) {
-      throw new RepositoryError('SESSION_CHANGED', '로그인 사용자가 바뀌었어요.');
+      throw new RepositoryError(
+        "SESSION_CHANGED",
+        "로그인 사용자가 바뀌었어요.",
+      );
     }
     const scoped = new SupabaseRepository(
       createSupabaseClientForAccessToken(data.session.access_token),
@@ -216,9 +227,10 @@ export class SupabaseRepository implements AppRepository {
 
   async cleanupExpensePhoto(path: string): Promise<void> {
     const { error } = await this.client.storage
-      .from('expense-photos')
+      .from("expense-photos")
       .remove([path, expenseThumbnailPath(path)]);
-    if (error) throw translateError(error, '교체 또는 삭제된 사진을 정리하지 못했어요.');
+    if (error)
+      throw translateError(error, "교체 또는 삭제된 사진을 정리하지 못했어요.");
   }
 
   async load(): Promise<AppSnapshot> {
@@ -231,12 +243,11 @@ export class SupabaseRepository implements AppRepository {
     }
     if (!this.loading) {
       const generation = this.authGeneration;
-      const request = this.fetchSnapshot()
-        .then((snapshot) => {
-          this.assertCurrentAuthSnapshot(snapshot, generation);
-          this.lastSnapshot = snapshot;
-          return snapshot;
-        });
+      const request = this.fetchSnapshot().then((snapshot) => {
+        this.assertCurrentAuthSnapshot(snapshot, generation);
+        this.lastSnapshot = snapshot;
+        return snapshot;
+      });
       this.loading = request;
       void request.then(
         () => {
@@ -252,17 +263,20 @@ export class SupabaseRepository implements AppRepository {
 
   async updateNickname(nickname: string): Promise<Profile> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('update_my_nickname', {
+    const { error } = await this.client.rpc("update_my_nickname", {
       p_nickname: nickname.trim(),
     });
-    if (error) throw translateError(error, '닉네임을 변경하지 못했어요.');
+    if (error) throw translateError(error, "닉네임을 변경하지 못했어요.");
     const snapshot = await this.reloadAndNotify();
     return clone(requireProfile(snapshot, snapshot.currentUserId));
   }
 
-  async updateAvatar(input: { avatarKey?: string; photoUri?: string | null }): Promise<Profile> {
+  async updateAvatar(input: {
+    avatarKey?: string;
+    photoUri?: string | null;
+  }): Promise<Profile> {
     const userId = await this.requireUserId();
-    const snapshot = this.lastSnapshot ?? await this.load();
+    const snapshot = this.lastSnapshot ?? (await this.load());
     const current = requireProfile(snapshot, userId);
     const avatarKey = input.avatarKey ?? current.avatarKey ?? current.avatar;
     let avatarPath = current.avatarPath ?? null;
@@ -275,13 +289,13 @@ export class SupabaseRepository implements AppRepository {
         avatarPath = null;
       }
     }
-    const { error } = await this.client.rpc('update_my_avatar', {
+    const { error } = await this.client.rpc("update_my_avatar", {
       p_avatar_key: avatarKey,
       p_avatar_path: avatarPath,
     });
     if (error) {
       if (uploadedPath) await this.removeOrphanProfilePhoto(uploadedPath);
-      throw translateError(error, '프로필 사진을 변경하지 못했어요.');
+      throw translateError(error, "프로필 사진을 변경하지 못했어요.");
     }
     if (current.avatarPath && current.avatarPath !== avatarPath) {
       await this.removeOrphanProfilePhoto(current.avatarPath);
@@ -293,29 +307,29 @@ export class SupabaseRepository implements AppRepository {
   async createRoom(input: CreateRoomInput): Promise<Room> {
     await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId ?? makeUuid());
-    const { data, error } = await this.client.rpc('create_room', {
+    const { data, error } = await this.client.rpc("create_room", {
       p_name: input.name.trim(),
       p_base_amount: input.baseAmount,
       p_capacity: input.capacity,
       p_client_request_id: requestId,
     });
-    if (error) throw translateError(error, '방을 만들지 못했어요.');
+    if (error) throw translateError(error, "방을 만들지 못했어요.");
 
     const payload = firstObject(data);
     const roomPayload = asObject(payload?.room);
-    const id = requiredString(roomPayload?.id, '생성된 방 ID');
+    const id = requiredString(roomPayload?.id, "생성된 방 ID");
     const snapshot = await this.reloadAndNotify();
     return clone(requireRoom(snapshot, id));
   }
 
   async updateRoomSettings(input: UpdateRoomSettingsInput): Promise<Room> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('update_room_settings', {
+    const { error } = await this.client.rpc("update_room_settings", {
       p_room_id: input.roomId,
       p_name: input.name.trim(),
       p_capacity: input.capacity,
     });
-    if (error) throw translateError(error, '방 설정을 저장하지 못했어요.');
+    if (error) throw translateError(error, "방 설정을 저장하지 못했어요.");
     const snapshot = await this.reloadAndNotify();
     return clone(requireRoom(snapshot, input.roomId));
   }
@@ -323,12 +337,18 @@ export class SupabaseRepository implements AppRepository {
   async previewInvite(inviteCode: string): Promise<InvitePreview> {
     await this.requireUserId();
     const normalized = inviteCode.trim().toUpperCase();
-    const { data, error } = await this.client.rpc('preview_room_invite', { p_invite_code: normalized });
-    if (error) throw translateError(error, '참여 코드를 확인하지 못했어요.');
+    const { data, error } = await this.client.rpc("preview_room_invite", {
+      p_invite_code: normalized,
+    });
+    if (error) throw translateError(error, "참여 코드를 확인하지 못했어요.");
 
     const payload = firstObject(data);
     if (!payload || payload.ok !== true) {
-      throw inviteError(typeof payload?.error_code === 'string' ? payload.error_code : 'INVALID_CODE');
+      throw inviteError(
+        typeof payload?.error_code === "string"
+          ? payload.error_code
+          : "INVALID_CODE",
+      );
     }
     return mapInvitePreview(normalized, payload);
   }
@@ -336,45 +356,57 @@ export class SupabaseRepository implements AppRepository {
   async joinRoom(inviteCode: string): Promise<RoomMember> {
     await this.requireUserId();
     const normalized = inviteCode.trim().toUpperCase();
-    const { data, error } = await this.client.rpc('join_room', { p_invite_code: normalized });
-    if (error) throw translateError(error, '방에 참여하지 못했어요.');
+    const { data, error } = await this.client.rpc("join_room", {
+      p_invite_code: normalized,
+    });
+    if (error) throw translateError(error, "방에 참여하지 못했어요.");
 
     const payload = firstObject(data);
     if (!payload || payload.ok !== true) {
-      throw inviteError(typeof payload?.error_code === 'string' ? payload.error_code : 'INVALID_CODE');
+      throw inviteError(
+        typeof payload?.error_code === "string"
+          ? payload.error_code
+          : "INVALID_CODE",
+      );
     }
     const memberPayload = asObject(payload.member);
-    const roomId = requiredString(memberPayload?.room_id, '참여 방 ID');
-    const userId = requiredString(memberPayload?.user_id, '참여 사용자 ID');
+    const roomId = requiredString(memberPayload?.room_id, "참여 방 ID");
+    const userId = requiredString(memberPayload?.user_id, "참여 사용자 ID");
     const snapshot = await this.reloadAndNotify();
     const member = snapshot.roomMembers.find(
       (item) => item.roomId === roomId && item.userId === userId,
     );
-    if (!member) throw new RepositoryError('INVALID_RESPONSE', '참여 결과를 다시 불러오지 못했어요.');
+    if (!member)
+      throw new RepositoryError(
+        "INVALID_RESPONSE",
+        "참여 결과를 다시 불러오지 못했어요.",
+      );
     return clone(member);
   }
 
   async leaveRoom(roomId: string, successorId?: string): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('leave_room', {
+    const { error } = await this.client.rpc("leave_room", {
       p_room_id: roomId,
       p_successor_user_id: successorId ?? null,
     });
-    if (error) throw translateError(error, '방을 나가지 못했어요.');
+    if (error) throw translateError(error, "방을 나가지 못했어요.");
     await this.reloadAndNotify();
   }
 
   async closeRoom(roomId: string): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('close_room', { p_room_id: roomId });
-    if (error) throw translateError(error, '방을 닫지 못했어요.');
+    const { error } = await this.client.rpc("close_room", {
+      p_room_id: roomId,
+    });
+    if (error) throw translateError(error, "방을 닫지 못했어요.");
     await this.reloadAndNotify();
   }
 
   async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
     await this.requireUserId();
     const joinCode = input.joinCode.trim().toUpperCase();
-    const { data, error } = await this.client.rpc('switch_room', {
+    const { data, error } = await this.client.rpc("switch_room", {
       p_leave_room_id: input.leaveRoomId,
       p_successor_user_id: input.successorId ?? null,
       p_join_code: joinCode,
@@ -386,13 +418,17 @@ export class SupabaseRepository implements AppRepository {
     const payload = firstObject(data);
     const joinPayload = asObject(payload?.join);
     const memberPayload = asObject(joinPayload?.member);
-    const roomId = requiredString(memberPayload?.room_id, '참여 방 ID');
-    const userId = requiredString(memberPayload?.user_id, '참여 사용자 ID');
+    const roomId = requiredString(memberPayload?.room_id, "참여 방 ID");
+    const userId = requiredString(memberPayload?.user_id, "참여 사용자 ID");
     const snapshot = await this.reloadAndNotify();
     const member = snapshot.roomMembers.find(
       (item) => item.roomId === roomId && item.userId === userId,
     );
-    if (!member) throw new RepositoryError('INVALID_RESPONSE', '참여 결과를 다시 불러오지 못했어요.');
+    if (!member)
+      throw new RepositoryError(
+        "INVALID_RESPONSE",
+        "참여 결과를 다시 불러오지 못했어요.",
+      );
     return clone(member);
   }
 
@@ -401,25 +437,28 @@ export class SupabaseRepository implements AppRepository {
     decision: ExpenseExceptionResponseDecision,
   ): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('respond_expense_exception', {
+    const { error } = await this.client.rpc("respond_expense_exception", {
       p_expense_id: expenseId,
-      p_decision: decision === 'HELD' ? 'held' : 'approved',
+      p_decision: decision === "HELD" ? "held" : "approved",
     });
-    if (error) throw translateError(error, '예외 응답을 저장하지 못했어요.');
+    if (error) throw translateError(error, "예외 응답을 저장하지 못했어요.");
     await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['expense_exception_approvals']),
+      new Set<RealtimeTable>(["expense_exception_approvals"]),
     );
   }
 
   async withdrawExpenseException(expenseId: string): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('withdraw_expense_exception', {
+    const { error } = await this.client.rpc("withdraw_expense_exception", {
       p_expense_id: expenseId,
     });
-    if (error) throw translateError(error, '예외를 취소하지 못했어요.');
+    if (error) throw translateError(error, "예외를 취소하지 못했어요.");
     // Withdrawing drops the exception row and cascades its approvals.
     await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['expense_exceptions', 'expense_exception_approvals']),
+      new Set<RealtimeTable>([
+        "expense_exceptions",
+        "expense_exception_approvals",
+      ]),
     );
   }
 
@@ -427,9 +466,14 @@ export class SupabaseRepository implements AppRepository {
     const userId = await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId);
     const photoPath = input.photoUri
-      ? await this.uploadExpensePhoto(input.photoUri, input.periodId, userId, requestId)
+      ? await this.uploadExpensePhoto(
+          input.photoUri,
+          input.periodId,
+          userId,
+          requestId,
+        )
       : null;
-    const { data, error } = await this.client.rpc('add_expense', {
+    const { data, error } = await this.client.rpc("add_expense", {
       p_period_id: input.periodId ?? null,
       p_amount: input.amount,
       p_point_amount: input.pointAmount,
@@ -442,13 +486,13 @@ export class SupabaseRepository implements AppRepository {
     });
     if (error) {
       if (photoPath) await this.removeOrphanPhoto(photoPath);
-      throw translateError(error, '지출을 저장하지 못했어요.');
+      throw translateError(error, "지출을 저장하지 못했어요.");
     }
 
-    const id = requiredString(firstObject(data)?.id, '생성된 지출 ID');
+    const id = requiredString(firstObject(data)?.id, "생성된 지출 ID");
     // add_expense can also insert an exception row, so patch both tables.
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['expenses', 'expense_exceptions']),
+      new Set<RealtimeTable>(["expenses", "expense_exceptions"]),
     );
     return clone(requireExpense(snapshot, id));
   }
@@ -461,12 +505,21 @@ export class SupabaseRepository implements AppRepository {
     const userId = await this.requireUserId();
     const current = await this.findCurrentExpense(expenseId);
     if (patch.periodId !== undefined && patch.periodId !== current.periodId) {
-      throw new RepositoryError('IMMUTABLE_FIELD', '등록한 주차는 변경할 수 없어요.');
+      throw new RepositoryError(
+        "IMMUTABLE_FIELD",
+        "등록한 주차는 변경할 수 없어요.",
+      );
     }
-    if (patch.clientRequestId !== undefined && patch.clientRequestId !== current.clientRequestId) {
-      throw new RepositoryError('IMMUTABLE_FIELD', '요청 식별자는 변경할 수 없어요.');
+    if (
+      patch.clientRequestId !== undefined &&
+      patch.clientRequestId !== current.clientRequestId
+    ) {
+      throw new RepositoryError(
+        "IMMUTABLE_FIELD",
+        "요청 식별자는 변경할 수 없어요.",
+      );
     }
-    const expectedVersion = requireVersion(current.version, '지출');
+    const expectedVersion = requireVersion(current.version, "지출");
     const next = { ...current, ...patch };
     let photoPath = current.photoPath ?? null;
     let uploadedNewPhoto = false;
@@ -485,7 +538,7 @@ export class SupabaseRepository implements AppRepository {
       }
     }
 
-    const { error } = await this.client.rpc('update_expense', {
+    const { error } = await this.client.rpc("update_expense", {
       p_expense_id: expenseId,
       p_amount: next.amount,
       p_point_amount: next.pointAmount,
@@ -496,15 +549,20 @@ export class SupabaseRepository implements AppRepository {
       p_expected_version: expectedVersion,
     });
     if (error) {
-      if (uploadedNewPhoto && photoPath) await this.removeOrphanPhoto(photoPath);
-      throw translateError(error, '지출을 수정하지 못했어요.');
+      if (uploadedNewPhoto && photoPath)
+        await this.removeOrphanPhoto(photoPath);
+      throw translateError(error, "지출을 수정하지 못했어요.");
     }
 
-    if (uploadedNewPhoto && current.photoPath && current.photoPath !== photoPath) {
+    if (
+      uploadedNewPhoto &&
+      current.photoPath &&
+      current.photoPath !== photoPath
+    ) {
       await this.removeOrphanPhoto(current.photoPath);
     }
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['expenses']),
+      new Set<RealtimeTable>(["expenses"]),
     );
     return clone(requireExpense(snapshot, expenseId));
   }
@@ -512,32 +570,35 @@ export class SupabaseRepository implements AppRepository {
   async deleteExpense(expenseId: string): Promise<void> {
     await this.requireUserId();
     const current = await this.findCurrentExpense(expenseId);
-    const { error } = await this.client.rpc('delete_expense', {
+    const { error } = await this.client.rpc("delete_expense", {
       p_expense_id: expenseId,
-      p_expected_version: requireVersion(current.version, '지출'),
+      p_expected_version: requireVersion(current.version, "지출"),
     });
-    if (error) throw translateError(error, '지출을 삭제하지 못했어요.');
+    if (error) throw translateError(error, "지출을 삭제하지 못했어요.");
     if (current.photoPath) await this.removeOrphanPhoto(current.photoPath);
-    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['expenses']));
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["expenses"]),
+    );
   }
 
   async deleteArchivedPeriod(periodId: string): Promise<void> {
     await this.requireUserId();
-    const snapshot = this.lastSnapshot ?? await this.load();
+    const snapshot = this.lastSnapshot ?? (await this.load());
     const photoPaths = snapshot.expenses
       .filter((expense) => expense.periodId === periodId)
       .map((expense) => expense.photoPath)
-      .filter((path): path is string => typeof path === 'string')
+      .filter((path): path is string => typeof path === "string")
       .flatMap((path) => [path, expenseThumbnailPath(path)]);
-    const { error } = await this.client.rpc('delete_archived_period', {
+    const { error } = await this.client.rpc("delete_archived_period", {
       p_period_id: periodId,
     });
-    if (error) throw translateError(error, '지난 주차를 삭제하지 못했어요.');
+    if (error) throw translateError(error, "지난 주차를 삭제하지 못했어요.");
     if (photoPaths.length) {
       const { error: storageError } = await this.client.storage
-        .from('expense-photos')
+        .from("expense-photos")
         .remove(photoPaths);
-      if (storageError) console.warn('삭제된 지난 주차의 사진 정리 오류', storageError);
+      if (storageError)
+        console.warn("삭제된 지난 주차의 사진 정리 오류", storageError);
     }
     await this.reloadAndNotify();
   }
@@ -545,17 +606,17 @@ export class SupabaseRepository implements AppRepository {
   async addComment(input: AddCommentInput): Promise<Comment> {
     await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId);
-    const { data, error } = await this.client.rpc('add_comment', {
+    const { data, error } = await this.client.rpc("add_comment", {
       p_expense_id: input.expenseId,
       p_body: input.body,
       p_reply_to_comment_id: input.replyToId ?? null,
       p_client_request_id: requestId,
     });
-    if (error) throw translateError(error, '댓글을 보내지 못했어요.');
+    if (error) throw translateError(error, "댓글을 보내지 못했어요.");
 
-    const id = requiredString(firstObject(data)?.id, '생성된 댓글 ID');
+    const id = requiredString(firstObject(data)?.id, "생성된 댓글 ID");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['comments']),
+      new Set<RealtimeTable>(["comments"]),
     );
     return clone(requireComment(snapshot, id));
   }
@@ -563,14 +624,14 @@ export class SupabaseRepository implements AppRepository {
   async updateComment(commentId: string, body: string): Promise<Comment> {
     await this.requireUserId();
     const current = await this.findCurrentComment(commentId);
-    const { error } = await this.client.rpc('update_comment', {
+    const { error } = await this.client.rpc("update_comment", {
       p_comment_id: commentId,
       p_body: body,
-      p_expected_version: requireVersion(current.version, '댓글'),
+      p_expected_version: requireVersion(current.version, "댓글"),
     });
-    if (error) throw translateError(error, '댓글을 수정하지 못했어요.');
+    if (error) throw translateError(error, "댓글을 수정하지 못했어요.");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['comments']),
+      new Set<RealtimeTable>(["comments"]),
     );
     return clone(requireComment(snapshot, commentId));
   }
@@ -578,12 +639,14 @@ export class SupabaseRepository implements AppRepository {
   async deleteComment(commentId: string): Promise<void> {
     await this.requireUserId();
     const current = await this.findCurrentComment(commentId);
-    const { error } = await this.client.rpc('delete_comment', {
+    const { error } = await this.client.rpc("delete_comment", {
       p_comment_id: commentId,
-      p_expected_version: requireVersion(current.version, '댓글'),
+      p_expected_version: requireVersion(current.version, "댓글"),
     });
-    if (error) throw translateError(error, '댓글을 삭제하지 못했어요.');
-    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['comments']));
+    if (error) throw translateError(error, "댓글을 삭제하지 못했어요.");
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["comments"]),
+    );
   }
 
   async toggleCommentReaction(
@@ -591,29 +654,37 @@ export class SupabaseRepository implements AppRepository {
     emoji: CommentReactionEmoji,
   ): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('toggle_comment_reaction', {
+    const { error } = await this.client.rpc("toggle_comment_reaction", {
       p_comment_id: commentId,
       p_emoji: emoji,
     });
-    if (error) throw translateError(error, '댓글 반응을 변경하지 못했어요.');
+    if (error) throw translateError(error, "댓글 반응을 변경하지 못했어요.");
     await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['comment_reactions']),
+      new Set<RealtimeTable>(["comment_reactions"]),
     );
   }
 
   async addRoomPost(input: AddRoomPostInput): Promise<RoomPost> {
     await this.requireUserId();
-    const { data, error } = await this.client.rpc('add_room_post', {
+    const { data, error } = await this.client.rpc("add_room_post", {
       p_room_id: input.roomId,
-      p_kind: input.kind === 'NOTICE' ? 'notice' : input.kind === 'POLL' ? 'poll' : 'post',
+      p_kind:
+        input.kind === "NOTICE"
+          ? "notice"
+          : input.kind === "POLL"
+            ? "poll"
+            : "post",
       p_body: input.body,
-      p_options: input.kind === 'POLL' ? input.options?.map((option) => option.trim()) ?? [] : null,
+      p_options:
+        input.kind === "POLL"
+          ? (input.options?.map((option) => option.trim()) ?? [])
+          : null,
       p_client_request_id: toRequestUuid(input.clientRequestId),
     });
-    if (error) throw translateError(error, '냥톡을 남기지 못했어요.');
-    const id = requiredString(firstObject(data)?.id, '생성된 냥톡 ID');
+    if (error) throw translateError(error, "기록을 남기지 못했어요.");
+    const id = requiredString(firstObject(data)?.id, "생성된 기록 ID");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['room_posts']),
+      new Set<RealtimeTable>(["room_posts"]),
     );
     return clone(requireRoomPost(snapshot, id));
   }
@@ -621,14 +692,14 @@ export class SupabaseRepository implements AppRepository {
   async updateRoomPost(postId: string, body: string): Promise<RoomPost> {
     await this.requireUserId();
     const current = await this.findCurrentRoomPost(postId);
-    const { error } = await this.client.rpc('update_room_post', {
+    const { error } = await this.client.rpc("update_room_post", {
       p_post_id: postId,
       p_body: body,
-      p_expected_version: requireVersion(current.version, '냥톡'),
+      p_expected_version: requireVersion(current.version, "기록"),
     });
-    if (error) throw translateError(error, '냥톡을 수정하지 못했어요.');
+    if (error) throw translateError(error, "기록을 수정하지 못했어요.");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['room_posts']),
+      new Set<RealtimeTable>(["room_posts"]),
     );
     return clone(requireRoomPost(snapshot, postId));
   }
@@ -636,40 +707,47 @@ export class SupabaseRepository implements AppRepository {
   async deleteRoomPost(postId: string): Promise<void> {
     await this.requireUserId();
     const current = await this.findCurrentRoomPost(postId);
-    const { error } = await this.client.rpc('delete_room_post', {
+    const { error } = await this.client.rpc("delete_room_post", {
       p_post_id: postId,
-      p_expected_version: requireVersion(current.version, '냥톡'),
+      p_expected_version: requireVersion(current.version, "기록"),
     });
-    if (error) throw translateError(error, '냥톡을 삭제하지 못했어요.');
-    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['room_posts']));
+    if (error) throw translateError(error, "기록을 삭제하지 못했어요.");
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["room_posts"]),
+    );
   }
 
-  async addRoomPostComment(input: AddRoomPostCommentInput): Promise<RoomPostComment> {
+  async addRoomPostComment(
+    input: AddRoomPostCommentInput,
+  ): Promise<RoomPostComment> {
     await this.requireUserId();
-    const { data, error } = await this.client.rpc('add_room_post_comment', {
+    const { data, error } = await this.client.rpc("add_room_post_comment", {
       p_post_id: input.postId,
       p_body: input.body,
       p_client_request_id: toRequestUuid(input.clientRequestId),
     });
-    if (error) throw translateError(error, '댓글을 남기지 못했어요.');
-    const id = requiredString(firstObject(data)?.id, '생성된 댓글 ID');
+    if (error) throw translateError(error, "댓글을 남기지 못했어요.");
+    const id = requiredString(firstObject(data)?.id, "생성된 댓글 ID");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['room_post_comments']),
+      new Set<RealtimeTable>(["room_post_comments"]),
     );
     return clone(requireRoomPostComment(snapshot, id));
   }
 
-  async updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment> {
+  async updateRoomPostComment(
+    commentId: string,
+    body: string,
+  ): Promise<RoomPostComment> {
     await this.requireUserId();
     const current = await this.findCurrentRoomPostComment(commentId);
-    const { error } = await this.client.rpc('update_room_post_comment', {
+    const { error } = await this.client.rpc("update_room_post_comment", {
       p_comment_id: commentId,
       p_body: body,
-      p_expected_version: requireVersion(current.version, '댓글'),
+      p_expected_version: requireVersion(current.version, "댓글"),
     });
-    if (error) throw translateError(error, '댓글을 수정하지 못했어요.');
+    if (error) throw translateError(error, "댓글을 수정하지 못했어요.");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['room_post_comments']),
+      new Set<RealtimeTable>(["room_post_comments"]),
     );
     return clone(requireRoomPostComment(snapshot, commentId));
   }
@@ -677,60 +755,72 @@ export class SupabaseRepository implements AppRepository {
   async deleteRoomPostComment(commentId: string): Promise<void> {
     await this.requireUserId();
     const current = await this.findCurrentRoomPostComment(commentId);
-    const { error } = await this.client.rpc('delete_room_post_comment', {
+    const { error } = await this.client.rpc("delete_room_post_comment", {
       p_comment_id: commentId,
-      p_expected_version: requireVersion(current.version, '댓글'),
+      p_expected_version: requireVersion(current.version, "댓글"),
     });
-    if (error) throw translateError(error, '댓글을 삭제하지 못했어요.');
-    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['room_post_comments']));
+    if (error) throw translateError(error, "댓글을 삭제하지 못했어요.");
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["room_post_comments"]),
+    );
   }
 
-  async toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void> {
+  async toggleRoomPostReaction(
+    postId: string,
+    emoji: RoomPostReactionEmoji,
+  ): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('toggle_room_post_reaction', {
+    const { error } = await this.client.rpc("toggle_room_post_reaction", {
       p_post_id: postId,
       p_emoji: emoji,
     });
-    if (error) throw translateError(error, '반응을 변경하지 못했어요.');
+    if (error) throw translateError(error, "반응을 변경하지 못했어요.");
     await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['room_post_reactions']),
+      new Set<RealtimeTable>(["room_post_reactions"]),
     );
   }
 
   async voteRoomPostPoll(postId: string, optionId: string): Promise<void> {
     await this.requireUserId();
-    const { error } = await this.client.rpc('vote_room_post_poll', {
+    const { error } = await this.client.rpc("vote_room_post_poll", {
       p_post_id: postId,
       p_option_id: optionId,
     });
-    if (error) throw translateError(error, '투표하지 못했어요.');
+    if (error) throw translateError(error, "투표하지 못했어요.");
     await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(['room_post_poll_votes']),
+      new Set<RealtimeTable>(["room_post_poll_votes"]),
     );
   }
 
-  async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
+  async markNotificationsRead(
+    notificationIds: readonly string[],
+  ): Promise<void> {
     await this.requireUserId();
     const ids = [...new Set(notificationIds)].filter((id) => id.length > 0);
     if (ids.length === 0) return;
     const { error } = await this.client
-      .from('notifications')
+      .from("notifications")
       .update({ read_at: new Date().toISOString() })
-      .in('id', ids)
-      .is('read_at', null);
-    if (error) throw translateError(error, '소식을 읽음 처리하지 못했어요.');
-    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['notifications']));
+      .in("id", ids)
+      .is("read_at", null);
+    if (error) throw translateError(error, "소식을 읽음 처리하지 못했어요.");
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["notifications"]),
+    );
   }
 
   async markAllNotificationsRead(): Promise<void> {
     const userId = await this.requireUserId();
     const { error } = await this.client
-      .from('notifications')
+      .from("notifications")
       .update({ read_at: new Date().toISOString() })
-      .eq('user_id', userId)
-      .is('read_at', null);
-    if (error) throw translateError(error, '모든 소식을 읽음 처리하지 못했어요.');
-    await this.reloadRealtimeTablesAndNotify(new Set<RealtimeTable>(['notifications']));
+      .eq("user_id", userId)
+      .is("read_at", null);
+    if (error)
+      throw translateError(error, "모든 소식을 읽음 처리하지 못했어요.");
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["notifications"]),
+    );
   }
 
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {
@@ -772,31 +862,46 @@ export class SupabaseRepository implements AppRepository {
       responseRows,
       preferencesResult,
     ] = await Promise.all([
-      this.client.from('profiles').select('id,nickname,avatar_key,avatar_path,nickname_changed_at'),
       this.client
-        .from('rooms')
-        .select('id,name,owner_id,base_amount,capacity,status,created_at,closed_at')
-        .order('created_at', { ascending: false }),
+        .from("profiles")
+        .select("id,nickname,avatar_key,avatar_path,nickname_changed_at"),
       this.client
-        .from('room_members')
-        .select('room_id,user_id,role,status,joined_at')
-        .order('joined_at', { ascending: true }),
+        .from("rooms")
+        .select(
+          "id,name,owner_id,base_amount,capacity,status,created_at,closed_at",
+        )
+        .order("created_at", { ascending: false }),
       this.client
-        .from('period_status_view')
-        .select('id,room_id,week_index,week_start,week_end,selected_day_count,valid_day_count,holiday_version_id,finalized_at,created_at,state')
-        .order('week_start', { ascending: false }),
-      this.client.from('period_days').select('period_id,day_on,is_holiday'),
+        .from("room_members")
+        .select("room_id,user_id,role,status,joined_at")
+        .order("joined_at", { ascending: true }),
       this.client
-        .from('period_members')
-        .select('period_id,user_id,status,joined_at,joined_on,is_late_join,eligible_day_count,applied_limit')
-        .order('joined_at', { ascending: true }),
+        .from("period_status_view")
+        .select(
+          "id,room_id,week_index,week_start,week_end,selected_day_count,valid_day_count,holiday_version_id,finalized_at,created_at,state",
+        )
+        .order("week_start", { ascending: false }),
+      this.client.from("period_days").select("period_id,day_on,is_holiday"),
       this.client
-        .from('period_results')
-        .select('period_id,room_id,user_id,nickname_snapshot,applied_limit,spent_amount,remaining_amount,achieved,is_crown,finalized_at'),
+        .from("period_members")
+        .select(
+          "period_id,user_id,status,joined_at,joined_on,is_late_join,eligible_day_count,applied_limit",
+        )
+        .order("joined_at", { ascending: true }),
       this.client
-        .from('room_member_stats')
-        .select('room_id,user_id,participated_week_count,achieved_week_count,crown_count,current_streak'),
-      this.client.from('invite_codes').select('room_id,code,is_active').eq('is_active', true),
+        .from("period_results")
+        .select(
+          "period_id,room_id,user_id,nickname_snapshot,applied_limit,spent_amount,remaining_amount,achieved,is_crown,finalized_at",
+        ),
+      this.client
+        .from("room_member_stats")
+        .select(
+          "room_id,user_id,participated_week_count,achieved_week_count,crown_count,current_streak",
+        ),
+      this.client
+        .from("invite_codes")
+        .select("room_id,code,is_active")
+        .eq("is_active", true),
       fetchExpenseRows(this.client),
       fetchCommentRows(this.client),
       fetchCommentReactionRows(this.client),
@@ -808,7 +913,7 @@ export class SupabaseRepository implements AppRepository {
       fetchNotificationRows(this.client),
       fetchExceptionRows(this.client),
       fetchExceptionResponseRows(this.client),
-      this.client.from('user_room_preferences').select('room_id,is_hidden'),
+      this.client.from("user_room_preferences").select("room_id,is_hidden"),
     ]);
 
     const results = [
@@ -824,7 +929,8 @@ export class SupabaseRepository implements AppRepository {
       preferencesResult,
     ];
     const failed = results.find((result) => result.error);
-    if (failed?.error) throw translateError(failed.error, '앱 데이터를 불러오지 못했어요.');
+    if (failed?.error)
+      throw translateError(failed.error, "앱 데이터를 불러오지 못했어요.");
 
     const profileRows = rows<ProfileRow>(profilesResult.data);
     const roomRows = rows<RoomRow>(roomsResult.data);
@@ -841,32 +947,35 @@ export class SupabaseRepository implements AppRepository {
       .filter((row) => row.deleted_at === null)
       .map((row) => row.photo_path)
       .filter(isString);
-    const [expenseSignedUrls, expenseThumbnailSignedUrls, avatarSignedUrls] = await Promise.all([
-      this.createSignedUrlMap(
-        'expense-photos',
-        expensePhotoPaths,
-      ),
-      this.createSignedUrlMap(
-        'expense-photos',
-        expensePhotoPaths.map(expenseThumbnailPath),
-      ),
-      this.createSignedUrlMap(
-        'profile-images',
-        profileRows.map((row) => row.avatar_path).filter(isString),
-      ),
-    ]);
+    const [expenseSignedUrls, expenseThumbnailSignedUrls, avatarSignedUrls] =
+      await Promise.all([
+        this.createSignedUrlMap("expense-photos", expensePhotoPaths),
+        this.createSignedUrlMap(
+          "expense-photos",
+          expensePhotoPaths.map(expenseThumbnailPath),
+        ),
+        this.createSignedUrlMap(
+          "profile-images",
+          profileRows.map((row) => row.avatar_path).filter(isString),
+        ),
+      ]);
     this.scheduleSignedUrlRefresh(
-      expenseSignedUrls.size + expenseThumbnailSignedUrls.size + avatarSignedUrls.size > 0,
+      expenseSignedUrls.size +
+        expenseThumbnailSignedUrls.size +
+        avatarSignedUrls.size >
+        0,
     );
 
     const hiddenClosedIds = new Set(
       preferenceRows.filter((row) => row.is_hidden).map((row) => row.room_id),
     );
     const inviteByRoom = new Map(
-      inviteRows.filter((row) => row.is_active).map((row) => [row.room_id, row.code]),
+      inviteRows
+        .filter((row) => row.is_active)
+        .map((row) => [row.room_id, row.code]),
     );
     const rooms = roomRows
-      .filter((row) => row.status !== 'closed' || !hiddenClosedIds.has(row.id))
+      .filter((row) => row.status !== "closed" || !hiddenClosedIds.has(row.id))
       .map((row) => mapRoom(row, inviteByRoom.get(row.id)));
     const visibleRoomIds = new Set(rooms.map((room) => room.id));
     const daysByPeriod = groupBy(periodDayRows, (row) => row.period_id);
@@ -874,12 +983,22 @@ export class SupabaseRepository implements AppRepository {
       .filter((row) => visibleRoomIds.has(row.room_id))
       .map((row) => mapPeriod(row, daysByPeriod.get(row.id) ?? []));
     const visiblePeriodIds = new Set(periods.map((period) => period.id));
-    const visibleExpenseRows = filterVisibleExpenseRows(expenseRows, visiblePeriodIds);
+    const visibleExpenseRows = filterVisibleExpenseRows(
+      expenseRows,
+      visiblePeriodIds,
+    );
     const visibleExpenseIds = new Set(visibleExpenseRows.map((row) => row.id));
-    const visibleCommentRows = filterVisibleCommentRows(commentRows, visibleExpenseIds);
+    const visibleCommentRows = filterVisibleCommentRows(
+      commentRows,
+      visibleExpenseIds,
+    );
     const visibleCommentIds = new Set(visibleCommentRows.map((row) => row.id));
-    const visibleRoomPostRows = roomPostRows.filter((row) => visibleRoomIds.has(row.room_id));
-    const visibleRoomPostIds = new Set(visibleRoomPostRows.map((row) => row.id));
+    const visibleRoomPostRows = roomPostRows.filter((row) =>
+      visibleRoomIds.has(row.room_id),
+    );
+    const visibleRoomPostIds = new Set(
+      visibleRoomPostRows.map((row) => row.id),
+    );
     const visibleRoomPostCommentRows = roomPostCommentRows.filter((row) =>
       visibleRoomPostIds.has(row.post_id),
     );
@@ -927,26 +1046,23 @@ export class SupabaseRepository implements AppRepository {
         .map(mapRoomPostPollVote),
       notifications: notificationRows.map(mapNotification),
       expenseExceptions: visibleExceptionRows.map(mapExpenseException),
-      expenseExceptionResponses: visibleResponseRows.map(mapExpenseExceptionResponse),
-      processedRequestIds: collectProcessedRequestIds(expenseRows, commentRows, userId),
+      expenseExceptionResponses: visibleResponseRows.map(
+        mapExpenseExceptionResponse,
+      ),
+      processedRequestIds: collectProcessedRequestIds(
+        expenseRows,
+        commentRows,
+        userId,
+      ),
     };
   }
-
-
-
-
-
-
-
-
-
 
   private async requireUserId(): Promise<string> {
     if (this.fixedUserId) return this.fixedUserId;
     const { data, error } = await this.client.auth.getSession();
-    if (error) throw translateError(error, '로그인 상태를 확인하지 못했어요.');
+    if (error) throw translateError(error, "로그인 상태를 확인하지 못했어요.");
     if (!data.session?.user.id) {
-      throw new RepositoryError('AUTH_REQUIRED', '로그인이 필요해요.');
+      throw new RepositoryError("AUTH_REQUIRED", "로그인이 필요해요.");
     }
     return data.session.user.id;
   }
@@ -954,21 +1070,22 @@ export class SupabaseRepository implements AppRepository {
   private async ensureRealtime(userId: string): Promise<void> {
     if (this.listeners.size === 0) return;
     if (this.realtimeChannel && this.realtimeUserId === userId) return;
-    if (this.realtimeChannel) await this.client.removeChannel(this.realtimeChannel);
+    if (this.realtimeChannel)
+      await this.client.removeChannel(this.realtimeChannel);
 
     let channel = this.client.channel(`jaringoby:${userId}`);
     for (const table of REALTIME_TABLES) {
       channel = channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table },
+        "postgres_changes",
+        { event: "*", schema: "public", table },
         () => this.scheduleRealtimeReload(table),
       );
     }
     this.realtimeChannel = channel;
     this.realtimeUserId = userId;
     channel.subscribe((status, error) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        console.warn('Supabase realtime 연결 오류', error);
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.warn("Supabase realtime 연결 오류", error);
       }
     });
   }
@@ -987,7 +1104,7 @@ export class SupabaseRepository implements AppRepository {
       try {
         await this.client.removeChannel(channel);
       } catch (error) {
-        console.warn('Supabase realtime 채널 정리 오류', error);
+        console.warn("Supabase realtime 채널 정리 오류", error);
       }
     }
   }
@@ -1006,7 +1123,7 @@ export class SupabaseRepository implements AppRepository {
         ? this.reloadAndNotify()
         : this.reloadRealtimeTablesAndNotify(dirtyTables);
       void reload.catch((error: unknown) => {
-        console.warn('Supabase realtime 데이터 갱신 오류', error);
+        console.warn("Supabase realtime 데이터 갱신 오류", error);
       });
     }, 120);
   }
@@ -1019,7 +1136,7 @@ export class SupabaseRepository implements AppRepository {
       this.signedUrlRefreshTimer = null;
       if (this.listeners.size === 0) return;
       void this.reloadAndNotify().catch((error: unknown) => {
-        console.warn('비공개 사진 URL 갱신 오류', error);
+        console.warn("비공개 사진 URL 갱신 오류", error);
       });
     }, SIGNED_URL_REFRESH_MS);
   }
@@ -1087,8 +1204,8 @@ export class SupabaseRepository implements AppRepository {
       this.assertCurrentAuthSnapshot(snapshot, generation);
       if (this.reloadJob !== job) {
         throw new RepositoryError(
-          'SESSION_CHANGED',
-          '로그인 사용자가 바뀌었어요. 현재 계정의 데이터를 다시 불러와 주세요.',
+          "SESSION_CHANGED",
+          "로그인 사용자가 바뀌었어요. 현재 계정의 데이터를 다시 불러와 주세요.",
         );
       }
       latestSnapshot = snapshot;
@@ -1102,7 +1219,10 @@ export class SupabaseRepository implements AppRepository {
       this.listeners.forEach((listener) => listener(clone(snapshot)));
     }
     if (!latestSnapshot) {
-      throw new RepositoryError('RELOAD_CANCELLED', '데이터 갱신 요청이 취소됐어요.');
+      throw new RepositoryError(
+        "RELOAD_CANCELLED",
+        "데이터 갱신 요청이 취소됐어요.",
+      );
     }
     return latestSnapshot;
   }
@@ -1113,11 +1233,11 @@ export class SupabaseRepository implements AppRepository {
   ): Promise<AppSnapshot> {
     const canPatchSnapshot = [...tables].every(
       (table) =>
-        table === 'expenses' ||
-        table === 'comments' ||
-        table === 'comment_reactions' ||
-        table === 'expense_exceptions' ||
-        table === 'expense_exception_approvals',
+        table === "expenses" ||
+        table === "comments" ||
+        table === "comment_reactions" ||
+        table === "expense_exceptions" ||
+        table === "expense_exception_approvals",
     );
     const previous = baseSnapshot;
     if (!previous || !canPatchSnapshot || tables.size === 0) {
@@ -1125,12 +1245,18 @@ export class SupabaseRepository implements AppRepository {
     }
 
     const userId = await this.requireUserId();
-    const shouldFetchExpenses = tables.has('expenses');
-    const shouldFetchComments = tables.has('comments');
-    const shouldFetchCommentReactions = tables.has('comment_reactions');
-    const shouldFetchExceptions = tables.has('expense_exceptions');
-    const shouldFetchResponses = tables.has('expense_exception_approvals');
-    const [expenseRows, commentRows, commentReactionRows, exceptionRows, responseRows] = await Promise.all([
+    const shouldFetchExpenses = tables.has("expenses");
+    const shouldFetchComments = tables.has("comments");
+    const shouldFetchCommentReactions = tables.has("comment_reactions");
+    const shouldFetchExceptions = tables.has("expense_exceptions");
+    const shouldFetchResponses = tables.has("expense_exception_approvals");
+    const [
+      expenseRows,
+      commentRows,
+      commentReactionRows,
+      exceptionRows,
+      responseRows,
+    ] = await Promise.all([
       shouldFetchExpenses
         ? fetchExpenseRows(this.client)
         : Promise.resolve(null),
@@ -1148,7 +1274,9 @@ export class SupabaseRepository implements AppRepository {
         : Promise.resolve(null),
     ]);
 
-    const visiblePeriodIds = new Set(previous.periods.map((period) => period.id));
+    const visiblePeriodIds = new Set(
+      previous.periods.map((period) => period.id),
+    );
     const visibleExpenseRows = expenseRows
       ? filterVisibleExpenseRows(expenseRows, visiblePeriodIds)
       : null;
@@ -1161,7 +1289,10 @@ export class SupabaseRepository implements AppRepository {
           expenseSignedUrls.set(expense.photoPath, expense.photoUri);
         }
         if (expense.photoPath && expense.photoThumbnailUri) {
-          expenseThumbnailSignedUrls.set(expenseThumbnailPath(expense.photoPath), expense.photoThumbnailUri);
+          expenseThumbnailSignedUrls.set(
+            expenseThumbnailPath(expense.photoPath),
+            expense.photoThumbnailUri,
+          );
         }
       });
       const unsignedPaths = visibleExpenseRows
@@ -1176,11 +1307,13 @@ export class SupabaseRepository implements AppRepository {
         .map(expenseThumbnailPath)
         .filter((path) => !expenseThumbnailSignedUrls.has(path));
       const [newSignedUrls, newThumbnailSignedUrls] = await Promise.all([
-        this.createSignedUrlMap('expense-photos', unsignedPaths),
-        this.createSignedUrlMap('expense-photos', unsignedThumbnailPaths),
+        this.createSignedUrlMap("expense-photos", unsignedPaths),
+        this.createSignedUrlMap("expense-photos", unsignedThumbnailPaths),
       ]);
       newSignedUrls.forEach((url, path) => expenseSignedUrls.set(path, url));
-      newThumbnailSignedUrls.forEach((url, path) => expenseThumbnailSignedUrls.set(path, url));
+      newThumbnailSignedUrls.forEach((url, path) =>
+        expenseThumbnailSignedUrls.set(path, url),
+      );
       expenses = visibleExpenseRows.map((row) =>
         mapExpense(row, expenseSignedUrls, expenseThumbnailSignedUrls),
       );
@@ -1194,7 +1327,9 @@ export class SupabaseRepository implements AppRepository {
     const comments = commentRows
       ? filterVisibleCommentRows(commentRows, visibleExpenseIds).map(mapComment)
       : expensesChanged
-        ? previous.comments.filter((comment) => visibleExpenseIds.has(comment.expenseId))
+        ? previous.comments.filter((comment) =>
+            visibleExpenseIds.has(comment.expenseId),
+          )
         : previous.comments;
     const visibleCommentIds = new Set(comments.map((comment) => comment.id));
     const commentReactions = commentReactionRows
@@ -1214,7 +1349,9 @@ export class SupabaseRepository implements AppRepository {
           .filter((row) => visibleExpenseIds.has(row.expense_id))
           .map(mapExpenseException)
       : expensesChanged
-        ? previous.expenseExceptions.filter((row) => visibleExpenseIds.has(row.expenseId))
+        ? previous.expenseExceptions.filter((row) =>
+            visibleExpenseIds.has(row.expenseId),
+          )
         : previous.expenseExceptions;
     const expenseExceptionResponses = responseRows
       ? responseRows
@@ -1226,8 +1363,11 @@ export class SupabaseRepository implements AppRepository {
           )
         : previous.expenseExceptionResponses;
     const processedRequestIds = new Set(previous.processedRequestIds);
-    collectProcessedRequestIds(expenseRows ?? [], commentRows ?? [], userId)
-      .forEach((requestId) => processedRequestIds.add(requestId));
+    collectProcessedRequestIds(
+      expenseRows ?? [],
+      commentRows ?? [],
+      userId,
+    ).forEach((requestId) => processedRequestIds.add(requestId));
 
     return {
       ...previous,
@@ -1241,15 +1381,19 @@ export class SupabaseRepository implements AppRepository {
     };
   }
 
-  private assertCurrentAuthSnapshot(snapshot: AppSnapshot, generation: number): void {
+  private assertCurrentAuthSnapshot(
+    snapshot: AppSnapshot,
+    generation: number,
+  ): void {
     if (
       generation !== this.authGeneration ||
       this.authUserId === null ||
-      (this.authUserId !== undefined && snapshot.currentUserId !== this.authUserId)
+      (this.authUserId !== undefined &&
+        snapshot.currentUserId !== this.authUserId)
     ) {
       throw new RepositoryError(
-        'SESSION_CHANGED',
-        '로그인 사용자가 바뀌었어요. 현재 계정의 데이터를 다시 불러와 주세요.',
+        "SESSION_CHANGED",
+        "로그인 사용자가 바뀌었어요. 현재 계정의 데이터를 다시 불러와 주세요.",
       );
     }
   }
@@ -1269,7 +1413,9 @@ export class SupabaseRepository implements AppRepository {
     return requireRoomPost(snapshot, postId);
   }
 
-  private async findCurrentRoomPostComment(commentId: string): Promise<RoomPostComment> {
+  private async findCurrentRoomPostComment(
+    commentId: string,
+  ): Promise<RoomPostComment> {
     const snapshot = this.lastSnapshot ?? (await this.load());
     return requireRoomPostComment(snapshot, commentId);
   }
@@ -1283,32 +1429,42 @@ export class SupabaseRepository implements AppRepository {
   ): Promise<string> {
     const file = await readPhoto(uri);
     if (file.buffer.byteLength > MAX_EXPENSE_PHOTO_BYTES) {
-      throw new RepositoryError('PHOTO_TOO_LARGE', '지출 사진은 10MB 이하여야 해요.');
+      throw new RepositoryError(
+        "PHOTO_TOO_LARGE",
+        "지출 사진은 10MB 이하여야 해요.",
+      );
     }
-    const path = expectedPath ??
-      `${periodId ?? 'personal'}/${userId}/${safeObjectStem(objectStem)}.${file.extension}`;
-    const { error } = await this.client.storage.from('expense-photos').upload(path, file.buffer, {
-      cacheControl: '3600',
-      contentType: file.contentType,
-      upsert: false,
-    });
+    const path =
+      expectedPath ??
+      `${periodId ?? "personal"}/${userId}/${safeObjectStem(objectStem)}.${file.extension}`;
+    const { error } = await this.client.storage
+      .from("expense-photos")
+      .upload(path, file.buffer, {
+        cacheControl: "3600",
+        contentType: file.contentType,
+        upsert: false,
+      });
     if (error && !isAlreadyExistsError(error)) {
-      throw translateError(error, '사진을 업로드하지 못했어요.');
+      throw translateError(error, "사진을 업로드하지 못했어요.");
     }
     try {
-      const { createExpensePhotoThumbnail } = await import('@/shared/services/expense-photo-transform');
+      const { createExpensePhotoThumbnail } =
+        await import("@/shared/services/expense-photo-transform");
       const thumbnailUri = await createExpensePhotoThumbnail(uri);
       const thumbnail = await readPhoto(thumbnailUri);
       const thumbnailPath = expenseThumbnailPath(path);
       const { error: thumbnailError } = await this.client.storage
-        .from('expense-photos')
+        .from("expense-photos")
         .upload(thumbnailPath, thumbnail.buffer, {
-          cacheControl: '3600',
+          cacheControl: "3600",
           contentType: thumbnail.contentType,
           upsert: false,
         });
       if (thumbnailError && !isAlreadyExistsError(thumbnailError)) {
-        throw translateError(thumbnailError, '목록용 사진을 업로드하지 못했어요.');
+        throw translateError(
+          thumbnailError,
+          "목록용 사진을 업로드하지 못했어요.",
+        );
       }
     } catch (error) {
       await this.removeOrphanPhoto(path);
@@ -1317,18 +1473,27 @@ export class SupabaseRepository implements AppRepository {
     return path;
   }
 
-  private async uploadProfilePhoto(uri: string, userId: string): Promise<string> {
+  private async uploadProfilePhoto(
+    uri: string,
+    userId: string,
+  ): Promise<string> {
     const file = await readPhoto(uri);
     if (file.buffer.byteLength > MAX_PROFILE_PHOTO_BYTES) {
-      throw new RepositoryError('PHOTO_TOO_LARGE', '프로필 사진은 5MB 이하여야 해요.');
+      throw new RepositoryError(
+        "PHOTO_TOO_LARGE",
+        "프로필 사진은 5MB 이하여야 해요.",
+      );
     }
     const path = `${userId}/${makeUuid()}.${file.extension}`;
-    const { error } = await this.client.storage.from('profile-images').upload(path, file.buffer, {
-      cacheControl: '3600',
-      contentType: file.contentType,
-      upsert: false,
-    });
-    if (error) throw translateError(error, '프로필 사진을 업로드하지 못했어요.');
+    const { error } = await this.client.storage
+      .from("profile-images")
+      .upload(path, file.buffer, {
+        cacheControl: "3600",
+        contentType: file.contentType,
+        upsert: false,
+      });
+    if (error)
+      throw translateError(error, "프로필 사진을 업로드하지 못했어요.");
     return path;
   }
 
@@ -1336,20 +1501,25 @@ export class SupabaseRepository implements AppRepository {
     try {
       await this.cleanupExpensePhoto(path);
     } catch (error) {
-      console.warn('교체 또는 삭제된 사진 정리 오류', error);
+      console.warn("교체 또는 삭제된 사진 정리 오류", error);
     }
   }
 
   private async removeOrphanProfilePhoto(path: string): Promise<void> {
     try {
-      const { error } = await this.client.storage.from('profile-images').remove([path]);
+      const { error } = await this.client.storage
+        .from("profile-images")
+        .remove([path]);
       if (error) throw error;
     } catch (error) {
-      console.warn('교체 또는 삭제된 프로필 사진 정리 오류', error);
+      console.warn("교체 또는 삭제된 프로필 사진 정리 오류", error);
     }
   }
 
-  private async createSignedUrlMap(bucket: string, paths: string[]): Promise<Map<string, string>> {
+  private async createSignedUrlMap(
+    bucket: string,
+    paths: string[],
+  ): Promise<Map<string, string>> {
     const uniquePaths = [...new Set(paths)];
     if (uniquePaths.length === 0) return new Map();
     const signedUrls = new Map<string, string>();
@@ -1363,7 +1533,8 @@ export class SupabaseRepository implements AppRepository {
         continue;
       }
       data?.forEach((entry, index) => {
-        if (entry.signedUrl) signedUrls.set(entry.path || chunk[index], entry.signedUrl);
+        if (entry.signedUrl)
+          signedUrls.set(entry.path || chunk[index], entry.signedUrl);
       });
     }
     return signedUrls;

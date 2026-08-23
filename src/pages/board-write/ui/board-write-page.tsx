@@ -2,15 +2,15 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
-import { Field } from "@/shared/ui/field";
-import { FormMessage } from "@/shared/ui/form-message";
-import { PrimaryButton } from "@/shared/ui/primary-button";
-import { fonts, palette, radii, spacing } from "@/shared/config/design";
-import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useCurrentUser } from "@/entities/member/api/use-members";
 import { useActiveRoom } from "@/entities/room/api/use-rooms";
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { createUuid } from "@/shared/lib/uuid";
+import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { Field } from "@/shared/ui/field";
+import { FormMessage } from "@/shared/ui/form-message";
+import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
+import { PrimaryButton } from "@/shared/ui/primary-button";
 
 export function BoardWritePage() {
   const router = useRouter();
@@ -28,8 +28,18 @@ export function BoardWritePage() {
   );
   const submit = async () => {
     const trimmed = body.trim();
-    const normalizedOptions = options.map((option) => option.trim()).filter(Boolean);
-    if (!room || !trimmed || submitting || (isPoll && (normalizedOptions.length < 2 || new Set(normalizedOptions).size !== normalizedOptions.length))) return;
+    const normalizedOptions = options
+      .map((option) => option.trim())
+      .filter(Boolean);
+    if (
+      !room ||
+      !trimmed ||
+      submitting ||
+      (isPoll &&
+        (normalizedOptions.length < 2 ||
+          new Set(normalizedOptions).size !== normalizedOptions.length))
+    )
+      return;
     setSubmitting(true);
     setError(null);
     try {
@@ -43,30 +53,40 @@ export function BoardWritePage() {
       router.back();
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "냥톡을 남기지 못했어요.",
+        reason instanceof Error ? reason.message : "기록을 남기지 못했어요.",
       );
     } finally {
       setSubmitting(false);
     }
   };
   const setOption = (index: number, value: string) => {
-    setOptions((current) => current.map((option, optionIndex) => optionIndex === index ? value : option));
+    setOptions((current) =>
+      current.map((option, optionIndex) =>
+        optionIndex === index ? value : option,
+      ),
+    );
   };
-  const addOption = () => setOptions((current) => current.length < 4 ? [...current, ""] : current);
+  const addOption = () =>
+    setOptions((current) => (current.length < 4 ? [...current, ""] : current));
   const removeOption = (index: number) => {
-    setOptions((current) => current.length > 2 ? current.filter((_, optionIndex) => optionIndex !== index) : current);
+    setOptions((current) =>
+      current.length > 2
+        ? current.filter((_, optionIndex) => optionIndex !== index)
+        : current,
+    );
   };
   const validPoll = options.map((option) => option.trim()).filter(Boolean);
   const canSubmit = Boolean(
-    body.trim()
-    && !submitting
-    && (!isPoll || (validPoll.length >= 2 && new Set(validPoll).size === validPoll.length)),
+    body.trim() &&
+    !submitting &&
+    (!isPoll ||
+      (validPoll.length >= 2 && new Set(validPoll).size === validPoll.length)),
   );
   return (
     <ModalFormScreen
       onBack={() => router.back()}
       testID="new-room-post-screen"
-      title="냥톡 남기기"
+      title="아낌기록 남기기"
     >
       {isOwner ? (
         <Pressable
@@ -98,18 +118,24 @@ export function BoardWritePage() {
           </View>
           <View style={styles.toggleCopy}>
             <Text style={styles.toggleTitle}>투표로 만들기</Text>
-            <Text style={styles.toggleHint}>방 멤버가 하나의 선택지를 고를 수 있어요</Text>
+            <Text style={styles.toggleHint}>
+              방 멤버가 하나의 선택지를 고를 수 있어요
+            </Text>
           </View>
         </Pressable>
       ) : null}
       <Field
-        accessibilityLabel={isPoll ? "투표 제목" : "냥톡 내용"}
+        accessibilityLabel={isPoll ? "투표 제목" : "아낌 내용"}
         autoFocus
         maxLength={500}
         multiline
         onChangeText={setBody}
         placeholder={
-          isNotice ? "공지 내용을 남겨주세요" : isPoll ? "투표 제목을 입력해 주세요" : "냥톡 내용을 남겨주세요"
+          isNotice
+            ? "공지 내용을 남겨주세요"
+            : isPoll
+              ? "투표 제목을 입력해 주세요"
+              : "아낌 내용을 남겨주세요"
         }
         style={styles.field}
         textAlignVertical="top"
@@ -142,7 +168,11 @@ export function BoardWritePage() {
             </View>
           ))}
           {options.length < 4 ? (
-            <Pressable accessibilityRole="button" onPress={addOption} style={styles.addOption}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={addOption}
+              style={styles.addOption}
+            >
               <Text style={styles.addOptionText}>+ 선택지 추가</Text>
             </Pressable>
           ) : null}
@@ -152,7 +182,13 @@ export function BoardWritePage() {
       <PrimaryButton
         disabled={!canSubmit}
         label={
-          submitting ? "남기는 중…" : isNotice ? "공지 올리기" : isPoll ? "투표 올리기" : "냥톡 남기기"
+          submitting
+            ? "남기는 중…"
+            : isNotice
+              ? "공지 올리기"
+              : isPoll
+                ? "투표 올리기"
+                : "아낌 기록 남기기"
         }
         onPress={() => void submit()}
         style={styles.submit}
@@ -192,7 +228,10 @@ const styles = StyleSheet.create({
     backgroundColor: palette.paper,
   },
   boxSelected: { borderColor: palette.green, backgroundColor: palette.green },
-  pollBoxSelected: { borderColor: palette.coral, backgroundColor: palette.coral },
+  pollBoxSelected: {
+    borderColor: palette.coral,
+    backgroundColor: palette.coral,
+  },
   check: {
     color: palette.cream,
     fontFamily: fonts.handBold,
@@ -213,13 +252,41 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   optionsSection: { marginTop: spacing.lg, gap: spacing.sm },
-  optionsTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
+  optionsTitle: {
+    color: palette.ink,
+    fontFamily: fonts.handBold,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   optionRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   optionField: { flex: 1 },
-  removeOption: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: palette.line, borderRadius: radii.sm, backgroundColor: palette.paper },
-  removeOptionText: { color: palette.muted, fontFamily: fonts.handBold, fontSize: 21, lineHeight: 22 },
-  addOption: { alignSelf: "flex-start", paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
-  addOptionText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "700" },
+  removeOption: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.line,
+    borderRadius: radii.sm,
+    backgroundColor: palette.paper,
+  },
+  removeOptionText: {
+    color: palette.muted,
+    fontFamily: fonts.handBold,
+    fontSize: 21,
+    lineHeight: 22,
+  },
+  addOption: {
+    alignSelf: "flex-start",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  addOptionText: {
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   field: { minHeight: 180, paddingTop: spacing.md },
   count: {
     alignSelf: "flex-end",

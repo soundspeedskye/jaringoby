@@ -51,7 +51,7 @@ export const RoomBoardPreview = memo(function RoomBoardPreview({
       accessibilityLabel={
         shownPosts.length
           ? `${BOARD_NAME}, 최신 이야기 보기`
-          : `${BOARD_NAME}, 첫 냥톡 남기기`
+          : `${BOARD_NAME}, 첫 아낌 기록 남기기`
       }
       accessibilityRole="button"
       onPress={openBoard}
@@ -126,7 +126,9 @@ export const RoomBoardPreview = memo(function RoomBoardPreview({
         </View>
       ) : (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>우리 방의 첫 냥톡을 남겨주세요</Text>
+          <Text style={styles.emptyTitle}>
+            우리 방의 첫 아낌 기록을 남겨주세요
+          </Text>
           <Text style={styles.emptyBody}>
             가볍게 오늘의 절약 이야기를 나눠봐요.
           </Text>

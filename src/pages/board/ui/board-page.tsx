@@ -123,7 +123,7 @@ export function BoardPage() {
           right={
             canWrite ? (
               <Pressable
-                accessibilityLabel="냥톡 쓰기"
+                accessibilityLabel="아낌 기록 남기기"
                 accessibilityRole="button"
                 onPress={() => router.push("/room/board/new")}
                 style={styles.writeButton}
@@ -148,9 +148,9 @@ export function BoardPage() {
         ListEmptyComponent={
           latestNotice ? null : (
             <EmptyState
-              description="우리 방의 첫 냥톡을 남겨주세요"
+              description="우리 방의 첫 아낌 기록을 남겨주세요"
               icon="chat-outline"
-              title="아직 냥톡이 없어요."
+              title="아직 아낌 기록이 없어요."
             />
           )
         }

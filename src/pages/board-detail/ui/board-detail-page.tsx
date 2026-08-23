@@ -136,7 +136,7 @@ export function BoardDetailPage() {
               />
             }
             icon="chat-remove-outline"
-            title="삭제되었거나 없는 냥톡이에요."
+            title="삭제되었거나 없는 아낌 기록이에요."
           />
         </View>
       </ScreenFrame>
