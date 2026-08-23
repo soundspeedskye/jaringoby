@@ -168,7 +168,7 @@ export function HistoryDetailPage() {
           style: "destructive",
           onPress: () => {
             void deleteArchivedPeriod(period.id)
-              .then(() => router.replace("/history"))
+              .then(() => router.dismissTo("/history"))
               .catch(() => undefined);
           },
         },
@@ -207,7 +207,7 @@ export function HistoryDetailPage() {
           action={
             <PrimaryButton
               label="목록으로 돌아가기"
-              onPress={() => router.replace("/history")}
+              onPress={() => router.dismissTo("/history")}
               variant="secondary"
             />
           }

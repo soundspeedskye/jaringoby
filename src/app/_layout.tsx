@@ -84,7 +84,7 @@ function AuthenticatedApp() {
             <Stack.Screen name="room/edit" options={{ presentation: 'modal' }} />
             <Stack.Screen name="room/join" options={{ presentation: 'modal' }} />
             <Stack.Screen name="room/leave" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="room/board/index" options={{ gestureEnabled: false }} />
+            <Stack.Screen name="room/board/index" />
             <Stack.Screen name="room/board/[id]" />
             <Stack.Screen name="room/board/new" options={{ presentation: 'modal' }} />
             <Stack.Screen name="profile/edit" options={{ presentation: 'modal' }} />

@@ -61,7 +61,7 @@ export function RoomJoinPage() {
   // screen was removed. The room home is the stable return destination in both
   // cases, including when the user already belongs to a room.
   const returnToRoomHome = useCallback(() => {
-    router.replace("/");
+    router.dismissTo("/");
   }, [router]);
 
   useEffect(() => {
@@ -125,7 +125,7 @@ export function RoomJoinPage() {
     setJoining(true);
     try {
       await joinRoom(preview.code);
-      router.replace("/");
+      router.dismissTo("/");
     } catch (reason) {
       setMessage(
         reason instanceof Error ? reason.message : "방에 참여하지 못했어요.",

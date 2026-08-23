@@ -86,7 +86,7 @@ export function RoomCreatePage() {
         capacity,
         clientRequestId,
       });
-      router.replace("/");
+      router.dismissTo("/");
     } catch (reason) {
       setFormError(
         reason instanceof Error ? reason.message : "방을 만들지 못했어요.",

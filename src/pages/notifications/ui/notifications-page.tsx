@@ -35,7 +35,7 @@ export function NotificationsPage() {
       if (!notification.readAt) await markNotificationsRead([notification.id]);
       if (notification.expenseId) router.push(`/expense/${notification.expenseId}`);
       else if (notification.kind === "room_notice") router.push("/room/board");
-      else router.replace("/");
+      else router.dismissTo("/");
     })();
   };
 

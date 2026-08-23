@@ -101,7 +101,7 @@ export function ExpenseCreatePage() {
           action={
             <PrimaryButton
               label="홈으로 돌아가기"
-              onPress={() => router.replace("/")}
+              onPress={() => router.dismissTo("/")}
               variant="secondary"
             />
           }

@@ -33,7 +33,7 @@ export function RoomEditPage() {
 
   if (!activeRoom || !currentUser) {
     return (
-      <ModalFormScreen onBack={() => router.replace("/")} title="방 설정">
+      <ModalFormScreen onBack={() => router.dismissTo("/")} title="방 설정">
         <EmptyState
           description="현재 참여 중인 방을 먼저 선택해 주세요."
           icon="cog-outline"

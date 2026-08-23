@@ -41,7 +41,7 @@ export function RoomLeavePage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const goHome = useCallback(() => router.replace("/"), [router]);
+  const goHome = useCallback(() => router.dismissTo("/"), [router]);
 
   const isOwner = Boolean(
     activeRoom && currentUser && activeRoom.ownerId === currentUser.id,

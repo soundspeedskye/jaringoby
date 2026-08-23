@@ -116,11 +116,16 @@ export function ExpenseDetailPage() {
   const canMutateComments = phase ? isCommentMutationPhase(phase) : false;
   const [editingExpense, setEditingExpense] = useState(false);
   const [expenseError, setExpenseError] = useState<string | null>(null);
-  // 새 지출은 작성 폼 라우트를 이 상세로 replace하므로 되돌아갈 네이티브
-  // 히스토리가 없을 수 있다. 지출은 자기 주차에 속하니 조회·삭제·취소 후에는
-  // 그 지출의 주차 화면으로 되돌린다: 진행 중이면 홈, 아니면 그 지난 주차 화면.
-  const returnToPeriodContext = useCallback(() => {
-    router.replace(
+  // 헤더·안드로이드 뒤로가기를 스와이프 뒤로가기와 같은 의미로 맞춘다: 온 곳으로
+  // 돌아간다. 새 지출은 작성 폼 라우트를 이 상세로 replace하고 알림 콜드스타트는
+  // 이 상세를 첫 화면으로 띄우므로 돌아갈 히스토리가 없을 수 있다. 그때만 지출이
+  // 속한 주차 화면으로 보낸다: 진행 중이면 홈, 아니면 그 지난 주차 화면.
+  const returnFromExpense = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.dismissTo(
       period && period.id !== currentPeriod?.id ? `/history/${period.id}` : "/",
     );
   }, [currentPeriod?.id, period, router]);
@@ -129,22 +134,22 @@ export function ExpenseDetailPage() {
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        returnToPeriodContext();
+        returnFromExpense();
         return true;
       },
     );
     return () => subscription.remove();
-  }, [returnToPeriodContext]);
+  }, [returnFromExpense]);
 
   if (!expense || !expenseId) {
     return (
       <Screen testID="expense-detail-screen">
-        <PageHeader onBack={returnToPeriodContext} title="지출 상세" />
+        <PageHeader onBack={returnFromExpense} title="지출 상세" />
         <EmptyState
           action={
             <PrimaryButton
               label="뒤로 가기"
-              onPress={returnToPeriodContext}
+              onPress={returnFromExpense}
               variant="secondary"
             />
           }
@@ -168,7 +173,7 @@ export function ExpenseDetailPage() {
             void (async () => {
               try {
                 await deleteExpense(expense.id);
-                returnToPeriodContext();
+                returnFromExpense();
               } catch (reason) {
                 setExpenseError(
                   reason instanceof Error
@@ -184,7 +189,7 @@ export function ExpenseDetailPage() {
 
   return (
     <ScreenFrame
-      fixedHeader={<PageHeader onBack={returnToPeriodContext} title="지출 상세" />}
+      fixedHeader={<PageHeader onBack={returnFromExpense} title="지출 상세" />}
       testID="expense-detail-screen">
       <CommentThread
         actions={{
