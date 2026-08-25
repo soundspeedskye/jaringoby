@@ -198,10 +198,13 @@ export const CommentItem = memo(function CommentItem({
         >
           {features.replies && comment.replyToId ? (
             <View style={styles.quotedMessage}>
-              <Text style={styles.quoteAuthor}>
+              <Text style={[styles.quoteAuthor, mine && styles.quoteAuthorMine]}>
                 {repliedProfile?.nickname ?? "삭제된 메시지"}
               </Text>
-              <Text numberOfLines={2} style={styles.quoteBody}>
+              <Text
+                numberOfLines={2}
+                style={[styles.quoteBody, mine && styles.quoteBodyMine]}
+              >
                 {replied?.deletedAt || !replied
                   ? "삭제된 메시지에 대한 답글"
                   : replied.body}
@@ -362,18 +365,20 @@ const styles = StyleSheet.create({
     borderLeftColor: palette.coral,
   },
   quoteAuthor: {
-    color: "#FFF7E3",
+    color: palette.green,
     fontFamily: fonts.handBold,
     fontSize: 9,
     fontWeight: "700",
   },
+  quoteAuthorMine: { color: palette.cream },
   quoteBody: {
-    color: "#FFF7E3",
+    color: palette.ink,
     fontFamily: fonts.hand,
     fontSize: 10,
     lineHeight: 14,
     marginTop: 2,
   },
+  quoteBodyMine: { color: palette.cream },
   messageBody: {
     color: palette.ink,
     fontFamily: fonts.hand,
