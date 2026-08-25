@@ -860,6 +860,7 @@ function snapshotFixture(userId: string, period: Period): AppSnapshot {
     memberStats: [],
     expenses: [],
   comments: [],
+    commentMentions: [],
     commentReactions: [],
     roomPosts: [],
     roomPostComments: [],

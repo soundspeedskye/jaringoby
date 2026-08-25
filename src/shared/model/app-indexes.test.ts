@@ -91,6 +91,7 @@ function snapshotWith(input: {
     memberStats: [],
     expenses: [expense()],
   comments: [],
+  commentMentions: [],
   commentReactions: [],
   roomPosts: [],
   roomPostComments: [],

@@ -1,4 +1,4 @@
-import type { CommentReaction, SyncStatus } from "@/shared/api/types";
+import type { CommentMentionInput, CommentReaction, SyncStatus } from "@/shared/api/types";
 
 /** API 댓글 타입과 분리된, 대화 UI가 렌더링하는 최소 모델이다. */
 export type ThreadMessage = {
@@ -12,6 +12,14 @@ export type ThreadMessage = {
   replyToId?: string;
 };
 
+export type MentionCandidate = {
+  userId: string;
+  nickname: string;
+  avatar: string;
+  avatarUri?: string;
+  isCurrentUser: boolean;
+};
+
 export type ThreadFeatures = {
   replies: boolean;
   reactions: boolean;
@@ -23,6 +31,7 @@ export type CreateThreadMessageInput = {
   body: string;
   clientRequestId: string;
   replyToId?: string;
+  mentions?: readonly CommentMentionInput[];
 };
 
 export type ThreadActions = {

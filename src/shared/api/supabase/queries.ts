@@ -4,6 +4,7 @@ import { translateError } from "./errors";
 import { rows } from "./results";
 import type {
   CommentReactionRow,
+  CommentMentionRow,
   CommentRow,
   ExpenseExceptionResponseRow,
   ExpenseExceptionRow,
@@ -65,6 +66,23 @@ export async function fetchCommentReactionRows(
     throw translateError(result.error, "댓글 반응을 갱신하지 못했어요.");
   }
   return rows<CommentReactionRow>(result.data);
+}
+
+export async function fetchCommentMentionRows(
+  client: SupabaseClient,
+  commentIds?: readonly string[],
+): Promise<CommentMentionRow[]> {
+  let query = client
+    .from("comment_mentions")
+    .select("comment_id,mentioned_user_id,start_offset,end_offset,display_name")
+    .order("comment_id", { ascending: true })
+    .order("start_offset", { ascending: true });
+  if (commentIds?.length) query = query.in("comment_id", commentIds);
+  const result = await query;
+  if (result.error) {
+    throw translateError(result.error, "댓글 멘션을 갱신하지 못했어요.");
+  }
+  return rows<CommentMentionRow>(result.data);
 }
 
 export async function fetchRoomPostRows(

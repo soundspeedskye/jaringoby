@@ -91,6 +91,11 @@ function shareAppSnapshot(previous: AppSnapshot | null, incoming: AppSnapshot): 
     ),
     expenses: shareRecords(previous.expenses, incoming.expenses, (value) => value.id),
     comments: shareRecords(previous.comments, incoming.comments, (value) => value.id),
+    commentMentions: shareRecords(
+      previous.commentMentions,
+      incoming.commentMentions,
+      (value) => `${value.commentId}\u0000${value.start}`,
+    ),
     commentReactions: shareRecords(
       previous.commentReactions,
       incoming.commentReactions,

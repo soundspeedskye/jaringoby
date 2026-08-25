@@ -20,6 +20,7 @@ const INDEX_DEPENDENCIES = {
   expensesByPeriodAndUserId: ['expenses'],
   commentsByExpenseId: ['comments'],
   commentCountByExpenseId: ['comments'],
+  mentionsByCommentId: ['commentMentions'],
   reactionsByCommentId: ['commentReactions'],
   postById: ['roomPosts'],
   postsByRoomId: ['roomPosts'],
@@ -60,6 +61,7 @@ const SLICES = [
   'memberStats',
   'expenses',
   'comments',
+  'commentMentions',
   'commentReactions',
   'roomPosts',
   'roomPostComments',
@@ -236,6 +238,7 @@ function createDenseSnapshot(): AppSnapshot {
     comments: [
       { id: 'comment-1', clientRequestId: 'req-c1', expenseId: 'expense-live', userId: 'user-b', body: '맛있겠다', createdAt: '2026-08-05T05:00:00.000Z', updatedAt: '2026-08-05T05:00:00.000Z', syncStatus: 'SYNCED' },
     ],
+    commentMentions: [],
     commentReactions: [
       { commentId: 'comment-1', userId: 'user-a', emoji: '❤️', createdAt: '2026-08-05T06:00:00.000Z' },
     ],

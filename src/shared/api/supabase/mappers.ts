@@ -1,6 +1,7 @@
 import type {
   AppNotification,
   Comment,
+  CommentMention,
   CommentReaction,
   Expense,
   ExpenseException,
@@ -306,6 +307,18 @@ export function mapCommentReaction(row: CommentReactionRow): CommentReaction {
     userId: row.user_id,
     emoji: row.emoji,
     createdAt: row.created_at,
+  };
+}
+
+export function mapCommentMention(
+  row: import("./rows").CommentMentionRow,
+): CommentMention {
+  return {
+    commentId: row.comment_id,
+    userId: row.mentioned_user_id,
+    start: row.start_offset,
+    end: row.end_offset,
+    displayName: row.display_name,
   };
 }
 

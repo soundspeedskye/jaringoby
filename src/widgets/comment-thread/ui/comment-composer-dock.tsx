@@ -1,12 +1,19 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import type { ThreadActions, ThreadFeatures } from "../model/types";
+import type { MentionCandidate, ThreadActions, ThreadFeatures } from "../model/types";
 import { CommentComposer } from "./comment-composer";
 import type { ReplyDraft } from "@/shared/lib/domain/replies";
-import { createCommentCommand } from "@/shared/lib/domain/replies";
+import { createCommentCommand, normalizeCommentBody } from "@/shared/lib/domain/replies";
+import {
+  codePointLength,
+  findActiveMention,
+  remapMentions,
+  replaceActiveMention,
+} from "@/shared/lib/domain/comment-mentions";
+import type { CommentMentionInput } from "@/shared/api/types";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { createUuid } from "@/shared/lib/uuid";
 import type { PeriodPhase } from "@/shared/model/types";
@@ -18,6 +25,7 @@ export function CommentComposerDock({
   error,
   feedback,
   inputRef,
+  mentionMembers,
   onError,
   onFeedback,
   onFocus,
@@ -32,6 +40,7 @@ export function CommentComposerDock({
   feedback: string | null;
   features: ThreadFeatures;
   inputRef: React.RefObject<TextInput | null>;
+  mentionMembers: readonly MentionCandidate[];
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
   onFocus: () => void;
@@ -40,6 +49,8 @@ export function CommentComposerDock({
   replyDraft: ReplyDraft | null;
 }) {
   const [body, setBody] = useState("");
+  const [mentions, setMentions] = useState<CommentMentionInput[]>([]);
+  const [cursor, setCursor] = useState(0);
   const [sending, setSending] = useState(false);
   const [clientRequestId, setClientRequestId] = useState(createUuid);
   const sendComment = useCallback(async () => {
@@ -50,13 +61,24 @@ export function CommentComposerDock({
         features.replies ? replyDraft : null,
         features.maxLength,
       );
+      const normalizedBody = normalizeCommentBody(command.body);
+      const leadingSpaces = codePointLength(command.body) - codePointLength(
+        command.body.replace(/^ +/u, ""),
+      );
       setSending(true);
       await actions.create({
-        body: command.body,
+        body: normalizedBody,
+        mentions: mentions.map((mention) => ({
+          ...mention,
+          start: mention.start - leadingSpaces,
+          end: mention.end - leadingSpaces,
+        })),
         replyToId: command.replyToMessageId ?? undefined,
         clientRequestId,
       });
       setBody("");
+      setMentions([]);
+      setCursor(0);
       onReplyChange(null);
       onFeedback(null);
       setClientRequestId(createUuid());
@@ -79,7 +101,36 @@ export function CommentComposerDock({
     onFeedback,
     onReplyChange,
     replyDraft,
+    mentions,
   ]);
+  const activeMention = useMemo(
+    () => findActiveMention(body, cursor),
+    [body, cursor],
+  );
+  const mentionCandidates = useMemo(() => {
+    if (!activeMention) return [];
+    const query = activeMention.query.toLocaleLowerCase();
+    return mentionMembers
+      .filter((member) => !member.isCurrentUser)
+      .filter((member) => member.nickname.toLocaleLowerCase().includes(query))
+      .sort((left, right) => {
+        const leftPrefix = left.nickname.toLocaleLowerCase().startsWith(query);
+        const rightPrefix = right.nickname.toLocaleLowerCase().startsWith(query);
+        return Number(rightPrefix) - Number(leftPrefix) || left.nickname.localeCompare(right.nickname);
+      })
+      .slice(0, 5);
+  }, [activeMention, mentionMembers]);
+  const changeBody = useCallback((nextBody: string) => {
+    setMentions((current) => remapMentions(body, nextBody, current));
+    setBody(nextBody);
+  }, [body]);
+  const selectMention = useCallback((member: MentionCandidate) => {
+    if (!activeMention) return;
+    const next = replaceActiveMention(body, activeMention, member, mentions);
+    setBody(next.body);
+    setMentions(next.mentions);
+    setCursor(next.cursor);
+  }, [activeMention, body, mentions]);
 
   return (
     <SafeAreaView edges={["bottom"]} style={styles.composerSafeArea}>
@@ -96,12 +147,16 @@ export function CommentComposerDock({
             body={body}
             inputRef={inputRef}
             maxLength={features.maxLength}
-            onBodyChange={setBody}
+            mentionCandidates={mentionCandidates}
+            onBodyChange={changeBody}
             onFocus={onFocus}
+            onMentionSelect={selectMention}
             onReplyChange={onReplyChange}
+            onSelectionChange={setCursor}
             onSend={sendComment}
             placeholder={features.placeholder}
             replyDraft={replyDraft}
+            selection={cursor}
             sending={sending}
           />
         ) : (

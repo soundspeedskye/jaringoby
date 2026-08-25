@@ -150,6 +150,14 @@ export type CommentReactionRow = {
   created_at: string;
 };
 
+export type CommentMentionRow = {
+  comment_id: string;
+  mentioned_user_id: string;
+  start_offset: number;
+  end_offset: number;
+  display_name: string;
+};
+
 export type NotificationRow = {
   id: string;
   user_id: string;

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Comment, CommentReaction, Expense } from '@/shared/api/types';
+import type { Comment, CommentMention, CommentReaction, Expense } from '@/shared/api/types';
 import type { AppStoreState } from '@/shared/model/app-store';
 import {
   shallowMapEqual,
@@ -14,6 +14,7 @@ import {
 const EMPTY_COMMENTS: Comment[] = [];
 
 const EMPTY_REACTIONS_BY_COMMENT: ReadonlyMap<string, CommentReaction[]> = new Map();
+const EMPTY_MENTIONS_BY_COMMENT: ReadonlyMap<string, CommentMention[]> = new Map();
 
 export function useExpenseComments(expenseId: string | undefined): Comment[] {
   return useIndexedArray(
@@ -56,6 +57,23 @@ export function useReactionsByCommentId(
       if (reactions) grouped.set(commentId, reactions);
     });
     return grouped.size ? grouped : EMPTY_REACTIONS_BY_COMMENT;
+  }, [normalizedIds]);
+  return useAppStoreSelector(selector, shallowArrayMapEqual);
+}
+
+/** 현재 상세 화면 댓글의 멘션을 comment별로 묶어 노출한다. */
+export function useMentionsByCommentId(
+  commentIds: readonly string[],
+): ReadonlyMap<string, CommentMention[]> {
+  const normalizedIds = useStableIds(commentIds);
+  const selector = useCallback((state: AppStoreState) => {
+    if (normalizedIds.length === 0) return EMPTY_MENTIONS_BY_COMMENT;
+    const grouped = new Map<string, CommentMention[]>();
+    normalizedIds.forEach((commentId) => {
+      const mentions = state.indexes.mentionsByCommentId.get(commentId);
+      if (mentions) grouped.set(commentId, mentions);
+    });
+    return grouped.size ? grouped : EMPTY_MENTIONS_BY_COMMENT;
   }, [normalizedIds]);
   return useAppStoreSelector(selector, shallowArrayMapEqual);
 }

@@ -1180,6 +1180,12 @@ export class OfflineQueueRepository implements AppRepository {
           updatedAt: operation.updatedAt,
           syncStatus,
         });
+        snapshot.commentMentions.push(
+          ...(operation.input.mentions ?? []).map((mention) => ({
+            ...mention,
+            commentId: operation.optimisticId,
+          })),
+        );
       } else if (operation.kind === 'UPDATE_COMMENT') {
         upsertComment(snapshot.comments, {
           ...operation.baseEntity,
@@ -1189,6 +1195,9 @@ export class OfflineQueueRepository implements AppRepository {
           updatedAt: operation.updatedAt,
           syncStatus,
         });
+        snapshot.commentMentions = snapshot.commentMentions.filter(
+          (mention) => mention.commentId !== operation.targetId,
+        );
       } else {
         const current = snapshot.comments.find((comment) => comment.id === operation.targetId) ?? operation.baseEntity;
         upsertComment(snapshot.comments, {
@@ -1198,6 +1207,9 @@ export class OfflineQueueRepository implements AppRepository {
           updatedAt: operation.updatedAt,
           syncStatus,
         });
+        snapshot.commentMentions = snapshot.commentMentions.filter(
+          (mention) => mention.commentId !== operation.targetId,
+        );
       }
     }
     snapshot.expenses = dedupeVersioned(snapshot.expenses);

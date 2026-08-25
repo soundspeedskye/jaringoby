@@ -48,6 +48,7 @@ import {
   expenseThumbnailPath,
   hash32,
   mapComment,
+  mapCommentMention,
   mapCommentReaction,
   mapExpense,
   mapExpenseException,
@@ -71,6 +72,7 @@ import {
 import { readPhoto, safeObjectStem } from "./supabase/photos";
 import {
   fetchCommentReactionRows,
+  fetchCommentMentionRows,
   fetchCommentRows,
   fetchExceptionResponseRows,
   fetchExceptionRows,
@@ -119,6 +121,7 @@ const REALTIME_TABLES = [
   "period_results",
   "expenses",
   "comments",
+  "comment_mentions",
   "comment_reactions",
   "room_posts",
   "room_post_comments",
@@ -141,20 +144,30 @@ type ReloadJob = {
   needsFullReload: boolean;
   promise: Promise<AppSnapshot>;
   tables: Set<RealtimeTable>;
+  /** null이면 전체 멘션 재조회, 값이 있으면 해당 댓글만 재조회한다. */
+  commentMentionIds: Set<string> | null;
 };
 
 function mergeReloadRequest(
   job: ReloadJob,
   tables: ReadonlySet<RealtimeTable> | undefined,
+  commentMentionIds?: ReadonlySet<string>,
 ): void {
   if (tables === undefined) {
     if (job.needsFullReload || job.isFullReloadInFlight) return;
     job.needsFullReload = true;
     job.tables.clear();
+    job.commentMentionIds = null;
     return;
   }
   if (job.needsFullReload) return;
   tables.forEach((table) => job.tables.add(table));
+  if (tables.has("comment_mentions")) {
+    if (!commentMentionIds) job.commentMentionIds = null;
+    else if (job.commentMentionIds) {
+      commentMentionIds.forEach((commentId) => job.commentMentionIds?.add(commentId));
+    }
+  }
 }
 
 export class SupabaseRepository implements AppRepository {
@@ -165,6 +178,7 @@ export class SupabaseRepository implements AppRepository {
   private realtimeUserId: string | null = null;
   private realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly realtimeDirtyTables = new Set<RealtimeTable>();
+  private readonly realtimeDirtyMentionCommentIds = new Set<string>();
   private realtimeNeedsFullReload = false;
   private signedUrlRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private reloadJob: ReloadJob | null = null;
@@ -606,17 +620,24 @@ export class SupabaseRepository implements AppRepository {
   async addComment(input: AddCommentInput): Promise<Comment> {
     await this.requireUserId();
     const requestId = toRequestUuid(input.clientRequestId);
-    const { data, error } = await this.client.rpc("add_comment", {
+    const { data, error } = await this.client.rpc("add_comment_with_mentions", {
       p_expense_id: input.expenseId,
       p_body: input.body,
       p_reply_to_comment_id: input.replyToId ?? null,
       p_client_request_id: requestId,
+      p_mentions: (input.mentions ?? []).map((mention) => ({
+        user_id: mention.userId,
+        start_offset: mention.start,
+        end_offset: mention.end,
+        display_name: mention.displayName,
+      })),
     });
     if (error) throw translateError(error, "댓글을 보내지 못했어요.");
 
     const id = requiredString(firstObject(data)?.id, "생성된 댓글 ID");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(["comments"]),
+      new Set<RealtimeTable>(["comments", "comment_mentions"]),
+      new Set([id]),
     );
     return clone(requireComment(snapshot, id));
   }
@@ -631,7 +652,8 @@ export class SupabaseRepository implements AppRepository {
     });
     if (error) throw translateError(error, "댓글을 수정하지 못했어요.");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(["comments"]),
+      new Set<RealtimeTable>(["comments", "comment_mentions"]),
+      new Set([commentId]),
     );
     return clone(requireComment(snapshot, commentId));
   }
@@ -645,7 +667,8 @@ export class SupabaseRepository implements AppRepository {
     });
     if (error) throw translateError(error, "댓글을 삭제하지 못했어요.");
     await this.reloadRealtimeTablesAndNotify(
-      new Set<RealtimeTable>(["comments"]),
+      new Set<RealtimeTable>(["comments", "comment_mentions"]),
+      new Set([commentId]),
     );
   }
 
@@ -851,6 +874,7 @@ export class SupabaseRepository implements AppRepository {
       invitesResult,
       expenseRows,
       commentRows,
+      commentMentionRows,
       commentReactionRows,
       roomPostRows,
       roomPostCommentRows,
@@ -904,6 +928,7 @@ export class SupabaseRepository implements AppRepository {
         .eq("is_active", true),
       fetchExpenseRows(this.client),
       fetchCommentRows(this.client),
+      fetchCommentMentionRows(this.client),
       fetchCommentReactionRows(this.client),
       fetchRoomPostRows(this.client),
       fetchRoomPostCommentRows(this.client),
@@ -1030,6 +1055,9 @@ export class SupabaseRepository implements AppRepository {
         mapExpense(row, expenseSignedUrls, expenseThumbnailSignedUrls),
       ),
       comments: visibleCommentRows.map(mapComment),
+      commentMentions: commentMentionRows
+        .filter((row) => visibleCommentIds.has(row.comment_id))
+        .map(mapCommentMention),
       commentReactions: commentReactionRows
         .filter((row) => visibleCommentIds.has(row.comment_id))
         .map(mapCommentReaction),
@@ -1078,7 +1106,16 @@ export class SupabaseRepository implements AppRepository {
       channel = channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
-        () => this.scheduleRealtimeReload(table),
+        (payload) => {
+          const record = asObject(payload.new) ?? asObject(payload.old);
+          const mentionCommentId = table === "comment_mentions" && record
+            ? record.comment_id
+            : undefined;
+          this.scheduleRealtimeReload(
+            table,
+            typeof mentionCommentId === "string" ? mentionCommentId : undefined,
+          );
+        },
       );
     }
     this.realtimeChannel = channel;
@@ -1095,6 +1132,7 @@ export class SupabaseRepository implements AppRepository {
     if (this.signedUrlRefreshTimer) clearTimeout(this.signedUrlRefreshTimer);
     this.realtimeReloadTimer = null;
     this.realtimeDirtyTables.clear();
+    this.realtimeDirtyMentionCommentIds.clear();
     this.realtimeNeedsFullReload = false;
     this.signedUrlRefreshTimer = null;
     const channel = this.realtimeChannel;
@@ -1109,19 +1147,28 @@ export class SupabaseRepository implements AppRepository {
     }
   }
 
-  private scheduleRealtimeReload(table?: RealtimeTable): void {
+  private scheduleRealtimeReload(
+    table?: RealtimeTable,
+    mentionCommentId?: string,
+  ): void {
     if (table) this.realtimeDirtyTables.add(table);
+    if (mentionCommentId) this.realtimeDirtyMentionCommentIds.add(mentionCommentId);
     else this.realtimeNeedsFullReload = true;
     if (this.realtimeReloadTimer) clearTimeout(this.realtimeReloadTimer);
     this.realtimeReloadTimer = setTimeout(() => {
       this.realtimeReloadTimer = null;
       const needsFullReload = this.realtimeNeedsFullReload;
       const dirtyTables = new Set(this.realtimeDirtyTables);
+      const dirtyMentionCommentIds = new Set(this.realtimeDirtyMentionCommentIds);
       this.realtimeNeedsFullReload = false;
       this.realtimeDirtyTables.clear();
+      this.realtimeDirtyMentionCommentIds.clear();
       const reload = needsFullReload
         ? this.reloadAndNotify()
-        : this.reloadRealtimeTablesAndNotify(dirtyTables);
+        : this.reloadRealtimeTablesAndNotify(
+          dirtyTables,
+          dirtyMentionCommentIds.size ? dirtyMentionCommentIds : undefined,
+        );
       void reload.catch((error: unknown) => {
         console.warn("Supabase realtime 데이터 갱신 오류", error);
       });
@@ -1147,16 +1194,18 @@ export class SupabaseRepository implements AppRepository {
 
   private async reloadRealtimeTablesAndNotify(
     tables: ReadonlySet<RealtimeTable>,
+    commentMentionIds?: ReadonlySet<string>,
   ): Promise<AppSnapshot> {
-    return this.requestReload(tables);
+    return this.requestReload(tables, commentMentionIds);
   }
 
   private async requestReload(
     tables?: ReadonlySet<RealtimeTable>,
+    commentMentionIds?: ReadonlySet<string>,
   ): Promise<AppSnapshot> {
     const activeJob = this.reloadJob;
     if (activeJob) {
-      mergeReloadRequest(activeJob, tables);
+      mergeReloadRequest(activeJob, tables, commentMentionIds);
       return clone(await activeJob.promise);
     }
 
@@ -1167,6 +1216,10 @@ export class SupabaseRepository implements AppRepository {
       needsFullReload: tables === undefined,
       promise,
       tables: new Set(tables),
+      commentMentionIds:
+        tables?.has("comment_mentions")
+          ? commentMentionIds ? new Set(commentMentionIds) : null
+          : new Set(),
     };
     this.reloadJob = job;
     void promise.then(
@@ -1186,8 +1239,12 @@ export class SupabaseRepository implements AppRepository {
     while (job.needsFullReload || job.tables.size > 0) {
       const needsFullReload = job.needsFullReload;
       const tables = new Set(job.tables);
+      const commentMentionIds = job.commentMentionIds === null
+        ? undefined
+        : new Set(job.commentMentionIds);
       job.needsFullReload = false;
       job.tables.clear();
+      job.commentMentionIds = new Set();
       // A mutation can race an older in-flight load. Let that load settle, then
       // fetch once more so the emitted state always includes the committed row.
       if (this.loading) await this.loading.catch(() => undefined);
@@ -1197,7 +1254,11 @@ export class SupabaseRepository implements AppRepository {
       try {
         snapshot = needsFullReload
           ? await this.fetchSnapshot()
-          : await this.fetchRealtimeSnapshot(tables, workingSnapshot);
+          : await this.fetchRealtimeSnapshot(
+            tables,
+            workingSnapshot,
+            commentMentionIds,
+          );
       } finally {
         job.isFullReloadInFlight = false;
       }
@@ -1230,11 +1291,13 @@ export class SupabaseRepository implements AppRepository {
   private async fetchRealtimeSnapshot(
     tables: ReadonlySet<RealtimeTable>,
     baseSnapshot: AppSnapshot | null = this.lastSnapshot,
+    commentMentionIds?: ReadonlySet<string>,
   ): Promise<AppSnapshot> {
     const canPatchSnapshot = [...tables].every(
       (table) =>
         table === "expenses" ||
         table === "comments" ||
+        table === "comment_mentions" ||
         table === "comment_reactions" ||
         table === "expense_exceptions" ||
         table === "expense_exception_approvals",
@@ -1247,12 +1310,15 @@ export class SupabaseRepository implements AppRepository {
     const userId = await this.requireUserId();
     const shouldFetchExpenses = tables.has("expenses");
     const shouldFetchComments = tables.has("comments");
+    const shouldFetchCommentMentions = tables.has("comment_mentions");
+    const hasScopedMentionIds = Boolean(commentMentionIds?.size);
     const shouldFetchCommentReactions = tables.has("comment_reactions");
     const shouldFetchExceptions = tables.has("expense_exceptions");
     const shouldFetchResponses = tables.has("expense_exception_approvals");
     const [
       expenseRows,
       commentRows,
+      commentMentionRows,
       commentReactionRows,
       exceptionRows,
       responseRows,
@@ -1262,6 +1328,12 @@ export class SupabaseRepository implements AppRepository {
         : Promise.resolve(null),
       shouldFetchComments
         ? fetchCommentRows(this.client)
+        : Promise.resolve(null),
+      shouldFetchCommentMentions
+        ? fetchCommentMentionRows(
+            this.client,
+            hasScopedMentionIds ? [...commentMentionIds!] : undefined,
+          )
         : Promise.resolve(null),
       shouldFetchCommentReactions
         ? fetchCommentReactionRows(this.client)
@@ -1332,6 +1404,25 @@ export class SupabaseRepository implements AppRepository {
           )
         : previous.comments;
     const visibleCommentIds = new Set(comments.map((comment) => comment.id));
+    const commentMentions = commentMentionRows
+      ? hasScopedMentionIds
+        ? [
+            ...previous.commentMentions.filter(
+              (mention) => !commentMentionIds!.has(mention.commentId)
+                && visibleCommentIds.has(mention.commentId),
+            ),
+            ...commentMentionRows
+              .filter((row) => visibleCommentIds.has(row.comment_id))
+              .map(mapCommentMention),
+          ]
+        : commentMentionRows
+            .filter((row) => visibleCommentIds.has(row.comment_id))
+            .map(mapCommentMention)
+      : comments !== previous.comments
+        ? previous.commentMentions.filter((mention) =>
+            visibleCommentIds.has(mention.commentId),
+          )
+        : previous.commentMentions;
     const commentReactions = commentReactionRows
       ? commentReactionRows
           .filter((row) => visibleCommentIds.has(row.comment_id))
@@ -1374,6 +1465,7 @@ export class SupabaseRepository implements AppRepository {
       currentUserId: userId,
       expenses,
       comments,
+      commentMentions,
       commentReactions,
       expenseExceptions,
       expenseExceptionResponses,

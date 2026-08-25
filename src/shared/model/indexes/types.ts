@@ -1,4 +1,4 @@
-import type { Comment, CommentReaction, Expense, ExpenseException, Period, PeriodMember, PeriodResult, Profile, Room, RoomMemberStats, RoomPost, RoomPostComment, RoomPostPollOption, RoomPostPollVote, RoomPostReaction } from '@/shared/api/types';
+import type { Comment, CommentMention, CommentReaction, Expense, ExpenseException, Period, PeriodMember, PeriodResult, Profile, Room, RoomMemberStats, RoomPost, RoomPostComment, RoomPostPollOption, RoomPostPollVote, RoomPostReaction } from '@/shared/api/types';
 
 export type AppIndexes = {
   roomById: Map<string, Room>;
@@ -10,6 +10,7 @@ export type AppIndexes = {
   expensesByPeriodAndUserId: Map<string, Map<string, Expense[]>>;
   commentsByExpenseId: Map<string, Comment[]>;
   commentCountByExpenseId: Map<string, number>;
+  mentionsByCommentId: Map<string, CommentMention[]>;
   reactionsByCommentId: Map<string, CommentReaction[]>;
   postById: Map<string, RoomPost>;
   postsByRoomId: Map<string, RoomPost[]>;

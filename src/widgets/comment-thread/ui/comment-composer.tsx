@@ -1,8 +1,10 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo } from "react";
+import type { NativeSyntheticEvent, TextInputSelectionChangeEventData } from "react-native";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { ReplyDraft } from "@/shared/lib/domain/replies";
+import type { MentionCandidate } from "../model/types";
 import { validateCommentBody } from "@/shared/lib/domain/replies";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
 import { GlassSurface } from "@/shared/ui/glass-surface";
@@ -10,24 +12,32 @@ import { GlassSurface } from "@/shared/ui/glass-surface";
 export const CommentComposer = memo(function CommentComposer({
   body,
   inputRef,
+  mentionCandidates,
   onBodyChange,
   onFocus,
+  onMentionSelect,
   onReplyChange,
+  onSelectionChange,
   onSend,
   maxLength,
   placeholder,
   replyDraft,
+  selection,
   sending,
 }: {
   body: string;
   inputRef: React.RefObject<TextInput | null>;
+  mentionCandidates: readonly MentionCandidate[];
   onBodyChange: (body: string) => void;
   onFocus: () => void;
+  onMentionSelect: (candidate: MentionCandidate) => void;
   onReplyChange: (replyDraft: ReplyDraft | null) => void;
+  onSelectionChange: (cursor: number) => void;
   onSend: () => Promise<void>;
   maxLength: number;
   placeholder: string;
   replyDraft: ReplyDraft | null;
+  selection: number;
   sending: boolean;
 }) {
   const bodyValid = validateCommentBody(body, maxLength).valid;
@@ -61,6 +71,21 @@ export const CommentComposer = memo(function CommentComposer({
           </Pressable>
         </View>
       ) : null}
+      {mentionCandidates.length ? (
+        <View accessibilityLabel="멘션할 멤버" style={styles.mentionPicker}>
+          {mentionCandidates.map((candidate) => (
+            <Pressable
+              accessibilityRole="button"
+              key={candidate.userId}
+              onPress={() => onMentionSelect(candidate)}
+              style={styles.mentionOption}
+            >
+              <Text style={styles.mentionName}>@{candidate.nickname}</Text>
+              <Text style={styles.mentionHint}>이 방의 멤버</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <View style={styles.composerRow}>
         <TextInput
           accessibilityLabel="댓글 입력"
@@ -68,9 +93,13 @@ export const CommentComposer = memo(function CommentComposer({
           multiline
           onChangeText={onBodyChange}
           onFocus={onFocus}
+          onSelectionChange={(
+            event: NativeSyntheticEvent<TextInputSelectionChangeEventData>,
+          ) => onSelectionChange(event.nativeEvent.selection.start)}
           placeholder={placeholder}
           placeholderTextColor={palette.muted}
           ref={inputRef}
+          selection={{ start: selection, end: selection }}
           style={styles.composerInput}
           value={body}
         />
@@ -126,6 +155,25 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: spacing.sm,
   },
+  mentionPicker: {
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: palette.line,
+    borderRadius: radii.sm,
+    overflow: "hidden",
+    backgroundColor: palette.paper,
+  },
+  mentionOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.rule,
+  },
+  mentionName: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12 },
+  mentionHint: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10 },
   composerInput: {
     flex: 1,
     minHeight: 44,

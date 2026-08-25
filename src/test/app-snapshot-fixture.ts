@@ -58,6 +58,7 @@ export function createTestSnapshot(): AppSnapshot {
       version: 1,
     }],
   comments: [],
+  commentMentions: [],
   commentReactions: [],
   roomPosts: [],
   roomPostComments: [],

@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatCommentTime } from "../lib/format-comment-time";
 import type { ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
 import { validateCommentBody } from "@/shared/lib/domain/replies";
+import { isRenderableMention } from "@/shared/lib/domain/comment-mentions";
 import type {
   CommentReaction,
   CommentReactionEmoji,
@@ -38,6 +39,7 @@ export const CommentItem = memo(function CommentItem({
   onReply,
   profile,
   reactions,
+  mentions,
   replied,
   repliedProfile,
   remove: removeComment,
@@ -61,6 +63,7 @@ export const CommentItem = memo(function CommentItem({
   onReply: (comment: ThreadMessage) => void;
   profile?: Profile;
   reactions: CommentReaction[];
+  mentions?: readonly import("@/shared/api/types").CommentMention[];
   replied?: ThreadMessage;
   repliedProfile?: Profile;
 }) {
@@ -222,15 +225,7 @@ export const CommentItem = memo(function CommentItem({
               value={editingBody}
             />
           ) : (
-            <Text
-              style={[
-                styles.messageBody,
-                mine && styles.messageBodyMine,
-                comment.deletedAt && styles.deletedBody,
-              ]}
-            >
-              {comment.body}
-            </Text>
+            <CommentBody comment={comment} mentions={mentions} mine={mine} />
           )}
         </Pressable>
         {features.reactions && !comment.deletedAt ? (
@@ -309,6 +304,48 @@ export const CommentItem = memo(function CommentItem({
   );
 });
 
+function CommentBody({
+  comment,
+  mentions: commentMentions = [],
+  mine,
+}: {
+  comment: ThreadMessage;
+  mentions?: readonly import("@/shared/api/types").CommentMention[];
+  mine: boolean;
+}) {
+  const mentions = commentMentions
+    .filter((mention) => isRenderableMention(comment.body, mention))
+    .sort((left, right) => left.start - right.start);
+  const points = Array.from(comment.body);
+  const renderedMentions = mentions.flatMap((mention, index) => {
+    const previousEnd = mentions[index - 1]?.end ?? 0;
+    const before = points.slice(previousEnd, mention.start).join("");
+    const tagged = points.slice(mention.start, mention.end).join("");
+    return [
+      before,
+      <Text
+        key={`${mention.commentId}:${mention.start}`}
+        style={mine ? styles.mentionMine : styles.mentionOther}
+      >
+        {tagged}
+      </Text>,
+    ];
+  });
+  const finalCursor = mentions.at(-1)?.end ?? 0;
+  return (
+    <Text
+      style={[
+        styles.messageBody,
+        mine && styles.messageBodyMine,
+        comment.deletedAt && styles.deletedBody,
+      ]}
+    >
+      {renderedMentions}
+      {points.slice(finalCursor).join("")}
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
   messageRow: {
     flexDirection: "row",
@@ -386,6 +423,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   messageBodyMine: { color: palette.cream },
+  mentionOther: { color: palette.green, fontFamily: fonts.handBold },
+  mentionMine: { color: palette.yellow, fontFamily: fonts.handBold },
   deletedBody: { fontStyle: "italic" },
   editCommentInput: {
     minWidth: 160,

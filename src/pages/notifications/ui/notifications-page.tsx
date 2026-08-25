@@ -135,6 +135,8 @@ function notificationCopy(notification: AppNotification, actorName?: string) {
       return "내 지출에 새 댓글이 달렸어요.";
     case "comment_reply":
       return "내 댓글에 새 답글이 달렸어요.";
+    case "comment_mention":
+      return `${actor}님이 댓글에서 나를 언급했어요.`;
     case "member_joined":
       return `${actor}님이 방에 참여했어요.`;
     case "room_notice":

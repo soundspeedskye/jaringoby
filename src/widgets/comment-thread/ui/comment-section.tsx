@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
+import type { MentionCandidate, ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -27,6 +27,7 @@ import { InputFocusContext } from "@/shared/lib/input-focus-context";
 import type { ReplyDraft } from "@/shared/lib/domain/replies";
 import { prepareReplyDraft } from "@/shared/lib/domain/replies";
 import type {
+  CommentMention,
   CommentReaction,
   Profile,
 } from "@/shared/api/types";
@@ -46,6 +47,8 @@ export function CommentThread({
   features,
   header,
   highlightCommentId,
+  mentionMembers = [],
+  mentionsByCommentId,
   phase,
   profilesById,
   reactionsByCommentId,
@@ -60,6 +63,8 @@ export function CommentThread({
   header: ReactNode;
   /** 소식함에서 특정 댓글로 들어온 경우 그 댓글로 스크롤하고 잠시 강조한다. */
   highlightCommentId?: string;
+  mentionMembers?: readonly MentionCandidate[];
+  mentionsByCommentId?: ReadonlyMap<string, readonly CommentMention[]>;
   phase?: PeriodPhase | null;
   profilesById: ReadonlyMap<string, Profile>;
   reactionsByCommentId?: ReadonlyMap<string, CommentReaction[]>;
@@ -222,6 +227,7 @@ export function CommentThread({
           onFinishEdit={finishEdit}
           onReply={selectReply}
           profile={profilesById.get(comment.authorId)}
+          mentions={mentionsByCommentId?.get(comment.id)}
           reactions={
             reactionsByCommentId?.get(comment.id) ?? EMPTY_COMMENT_REACTIONS
           }
@@ -250,6 +256,7 @@ export function CommentThread({
       finishEdit,
       focusCommentEditor,
       highlightedCommentId,
+      mentionsByCommentId,
       profilesById,
       reactionsByCommentId,
       selectReply,
@@ -307,6 +314,7 @@ export function CommentThread({
             feedback={feedback}
             features={features}
             inputRef={composerRef}
+            mentionMembers={mentionMembers}
             onError={setError}
             onFeedback={setFeedback}
             onFocus={unfreezeChatScroll}

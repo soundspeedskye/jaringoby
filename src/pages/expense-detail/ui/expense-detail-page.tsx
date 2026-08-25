@@ -16,6 +16,7 @@ import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import {
   useExpenseComments,
+  useMentionsByCommentId,
   useReactionsByCommentId,
 } from "@/entities/expense/api/use-expense-comments";
 import { useExpense } from "@/entities/expense/api/use-expenses";
@@ -23,7 +24,7 @@ import { useProfiles } from "@/entities/member/api/use-members";
 import { usePeriod } from "@/entities/period/api/use-periods";
 import { useRoom } from "@/entities/room/api/use-rooms";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
-import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
+import { useActiveRoomMembers, useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { FormMessage } from "@/shared/ui/form-message";
 import { NoticeBanner } from "@/shared/ui/notice-banner";
@@ -79,24 +80,26 @@ export function ExpenseDetailPage() {
         : [],
     [expense, expenseComments],
   );
-  const threadMessages = useMemo<ThreadMessage[]>(
-    () => comments.map((comment) => ({
-      id: comment.id,
-      authorId: comment.userId,
-      body: comment.body,
-      createdAt: comment.createdAt,
-      updatedAt: comment.updatedAt,
-      deletedAt: comment.deletedAt,
-      syncStatus: comment.syncStatus,
-      replyToId: comment.replyToId,
-    })),
-    [comments],
-  );
   const commentIds = useMemo(
     () => comments.map((comment) => comment.id),
     [comments],
   );
   const reactionsByCommentId = useReactionsByCommentId(commentIds);
+  const mentionsByCommentId = useMentionsByCommentId(commentIds);
+  const mentionMembers = useActiveRoomMembers(room?.id);
+  const threadMessages = useMemo<ThreadMessage[]>(
+    () => comments.map((comment) => ({
+          id: comment.id,
+          authorId: comment.userId,
+          body: comment.body,
+          createdAt: comment.createdAt,
+          updatedAt: comment.updatedAt,
+          deletedAt: comment.deletedAt,
+          syncStatus: comment.syncStatus,
+          replyToId: comment.replyToId,
+        })),
+    [comments],
+  );
   const profileUserIds = useMemo(
     () => [
       ...(expense ? [expense.userId] : []),
@@ -206,6 +209,8 @@ export function ExpenseDetailPage() {
         currentUserId={currentUser?.id}
         highlightCommentId={highlightCommentId}
         features={EXPENSE_COMMENT_FEATURES}
+        mentionMembers={mentionMembers}
+        mentionsByCommentId={mentionsByCommentId}
         reactionsByCommentId={reactionsByCommentId}
         header={
           <>
@@ -279,6 +284,7 @@ export function ExpenseDetailPage() {
     </ScreenFrame>
   );
 }
+
 
 const styles = StyleSheet.create({
   readOnlyBanner: { marginBottom: spacing.md },

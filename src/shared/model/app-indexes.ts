@@ -1,4 +1,4 @@
-import type { AppSnapshot } from '@/shared/api/types';
+import type { AppSnapshot, CommentMention } from '@/shared/api/types';
 
 import { buildCommentIndexes, pickCommentIndexes } from './indexes/comment';
 import { buildCrownIndex, crownInputsAreShared } from './indexes/crown';
@@ -52,6 +52,13 @@ export function buildAppIndexes(
     canReuse && snapshot.commentReactions === previousSnapshot.commentReactions
       ? previousIndexes.reactionsByCommentId
       : groupValues(snapshot.commentReactions, (reaction) => reaction.commentId);
+  const mentionsByCommentId =
+    canReuse && snapshot.commentMentions === previousSnapshot.commentMentions
+      ? previousIndexes.mentionsByCommentId
+      : buildMentionsByCommentId(
+        snapshot.commentMentions,
+        previousIndexes?.mentionsByCommentId,
+      );
   const postIndexes = canReuse && snapshot.roomPosts === previousSnapshot.roomPosts
     ? pickPostIndexes(previousIndexes)
     : buildPostIndexes(snapshot.roomPosts);
@@ -101,6 +108,7 @@ export function buildAppIndexes(
     membersByPeriodId,
     ...expenseIndexes,
     ...commentIndexes,
+    mentionsByCommentId,
     reactionsByCommentId,
     ...postIndexes,
     ...postCommentIndexes,
@@ -124,6 +132,7 @@ function createEmptyIndexes(): AppIndexes {
     expensesByPeriodAndUserId: new Map(),
     commentsByExpenseId: new Map(),
     commentCountByExpenseId: new Map(),
+    mentionsByCommentId: new Map(),
     reactionsByCommentId: new Map(),
     postById: new Map(),
     postsByRoomId: new Map(),
@@ -140,4 +149,22 @@ function createEmptyIndexes(): AppIndexes {
     heldUserIdsByExpenseId: new Map(),
     settlementExcludedExpenseIds: new Set(),
   };
+}
+
+/** 한 댓글의 멘션이 바뀌어도 다른 댓글의 배열 참조는 유지한다. */
+function buildMentionsByCommentId(
+  mentions: readonly CommentMention[],
+  previous?: ReadonlyMap<string, CommentMention[]>,
+): Map<string, CommentMention[]> {
+  const grouped = groupValues([...mentions], (mention) => mention.commentId);
+  if (!previous) return grouped;
+  grouped.forEach((values, commentId) => {
+    const prior = previous.get(commentId);
+    if (
+      prior
+      && prior.length === values.length
+      && prior.every((mention, index) => mention === values[index])
+    ) grouped.set(commentId, prior);
+  });
+  return grouped;
 }

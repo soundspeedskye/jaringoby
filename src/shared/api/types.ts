@@ -147,6 +147,17 @@ export type Comment = {
   version?: number;
 };
 
+/** 댓글 본문 안에서 실제 멤버를 가리키는 @멘션. 위치는 Unicode code point 기준이다. */
+export type CommentMention = {
+  commentId: string;
+  userId: string;
+  start: number;
+  end: number;
+  displayName: string;
+};
+
+export type CommentMentionInput = Omit<CommentMention, "commentId">;
+
 export const COMMENT_REACTION_EMOJIS = ["❤️", "👍", "👏"] as const;
 export type CommentReactionEmoji = (typeof COMMENT_REACTION_EMOJIS)[number];
 
@@ -260,6 +271,7 @@ export type AppSnapshot = {
   memberStats: RoomMemberStats[];
   expenses: Expense[];
   comments: Comment[];
+  commentMentions: CommentMention[];
   commentReactions: CommentReaction[];
   roomPosts: RoomPost[];
   roomPostComments: RoomPostComment[];
@@ -338,6 +350,7 @@ export type AddCommentInput = Pick<
   "expenseId" | "body" | "replyToId"
 > & {
   clientRequestId: string;
+  mentions?: readonly CommentMentionInput[];
 };
 
 export type AddRoomPostInput = {
