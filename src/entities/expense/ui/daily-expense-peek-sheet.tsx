@@ -182,13 +182,13 @@ const styles = StyleSheet.create({
   },
   sheetWrap: { paddingHorizontal: spacing.md },
   glassSheet: {
-    maxHeight: "58%",
+    maxHeight: "70%",
     overflow: "hidden",
     borderRadius: 28,
     padding: spacing.xl,
   },
   paperSheet: {
-    maxHeight: "58%",
+    maxHeight: "70%",
     overflow: "hidden",
     borderRadius: radii.xl,
     borderWidth: 1,
