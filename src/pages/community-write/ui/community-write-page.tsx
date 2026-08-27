@@ -21,19 +21,21 @@ import {
 } from "@/shared/config/design";
 import { formatFullDate, formatKrwInput } from "@/shared/lib/format";
 import { createUuid } from "@/shared/lib/uuid";
-import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/shared/model/types";
+import type { ExpenseCategory } from "@/shared/model/types";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import {
   pickSanitizedExpensePhoto,
   type ExpensePhotoSource,
 } from "@/shared/services/expense-photo-picker";
-import { ChoiceChip } from "@/shared/ui/choice-chip";
 import { Field } from "@/shared/ui/field";
 import { FormMessage } from "@/shared/ui/form-message";
 import { FormSection } from "@/shared/ui/form-section";
 import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
 import { PlatformDateTimePicker } from "@/shared/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/shared/ui/primary-button";
+
+/** 뒷구매 글이 분류를 고르지 않게 된 뒤 쓰는 기본 지출 분류. */
+const SECRET_PURCHASE_EXPENSE_CATEGORY: ExpenseCategory = "사치품";
 
 export function CommunityWritePage() {
   const { id: postId } = useLocalSearchParams<{ id?: string }>();
@@ -79,9 +81,10 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
       ? new Date(post.secretPurchase.occurredAt)
       : new Date(),
   );
-  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>(
-    post?.secretPurchase?.expenseCategory ?? "사치품",
-  );
+  // 뒷구매는 지출 분류를 묻지 않는다. 다만 저장에는 값이 필요해서(뒷구매 글은
+  // 분류가 있어야 한다는 DB 제약) 수정 시에는 기존 값을, 새 글에는 기본값을 쓴다.
+  const expenseCategory: ExpenseCategory =
+    post?.secretPurchase?.expenseCategory ?? SECRET_PURCHASE_EXPENSE_CATEGORY;
   const [photoUri, setPhotoUri] = useState<string | null>(
     post?.photoUri ?? null,
   );
@@ -287,10 +290,8 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
       {isSecretPurchase ? (
         <SecretPurchaseFields
           amountText={amountText}
-          expenseCategory={expenseCategory}
           occurredAt={occurredAt}
           onChangeAmount={(value) => setAmountText(formatKrwInput(value))}
-          onChangeExpenseCategory={setExpenseCategory}
           onChangeOccurredAt={setOccurredAt}
         />
       ) : (
@@ -306,9 +307,7 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
         </>
       )}
 
-      <Text style={styles.fieldLabel}>
-        {isSecretPurchase ? "고해성사" : "내용"}
-      </Text>
+      <Text style={styles.fieldLabel}>내용</Text>
       <Field
         accessibilityLabel={isPoll ? "투표 내용" : "내용"}
         maxLength={500}
@@ -367,16 +366,10 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
           submitting
             ? isEditing
               ? "수정 중…"
-              : "남기는 중…"
+              : "등록 중…"
             : isEditing
               ? "수정 완료"
-              : isNotice
-                ? "공지 올리기"
-                : isPoll
-                  ? "투표 올리기"
-                  : isSecretPurchase
-                    ? "고해성사 남기기"
-                    : "글 올리기"
+              : "등록"
         }
         onPress={() => void submit()}
         style={styles.submit}
@@ -387,17 +380,13 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
 
 function SecretPurchaseFields({
   amountText,
-  expenseCategory,
   occurredAt,
   onChangeAmount,
-  onChangeExpenseCategory,
   onChangeOccurredAt,
 }: {
   amountText: string;
-  expenseCategory: ExpenseCategory;
   occurredAt: Date;
   onChangeAmount: (value: string) => void;
-  onChangeExpenseCategory: (value: ExpenseCategory) => void;
   onChangeOccurredAt: (value: Date) => void;
 }) {
   return (
@@ -425,18 +414,6 @@ function SecretPurchaseFields({
         )}
         value={occurredAt}
       />
-      <FormSection title="지출 분류">
-        <View style={styles.expenseCategories}>
-          {EXPENSE_CATEGORIES.map((item) => (
-            <ChoiceChip
-              key={item}
-              label={item}
-              onPress={() => onChangeExpenseCategory(item)}
-              selected={item === expenseCategory}
-            />
-          ))}
-        </View>
-      </FormSection>
     </>
   );
 }
@@ -720,11 +697,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   timeValue: { color: palette.ink, fontFamily: fonts.hand, fontSize: 15 },
-  expenseCategories: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
   bodyField: { minHeight: 160, paddingTop: spacing.md },
   count: {
     alignSelf: "flex-end",
