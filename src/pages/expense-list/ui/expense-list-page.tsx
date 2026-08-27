@@ -28,12 +28,15 @@ import {
 import {
   EXPENSE_CATEGORIES,
   type ExpenseCategory,
+  type LocalDate,
 } from "@/shared/model/types";
 import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
 import { useUserExpenses } from "@/entities/expense/api/use-expenses";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import type { Expense } from "@/shared/api/types";
-import { formatDateLabel, formatWon } from "@/shared/lib/format";
+import { toSeoulLocalDate } from "@/shared/lib/domain/date-time";
+import { createWeekdayCalendarFromPeriod } from "@/shared/lib/domain/period";
+import { formatDateLabel, formatMonthDay, formatWon } from "@/shared/lib/format";
 
 type Filter = "전체" | ExpenseCategory;
 
@@ -47,22 +50,44 @@ export function ExpenseListPage() {
   const ownExpenses = useUserExpenses(currentUser?.id, currentPeriod?.id);
   const commentCounts = useCommentCounts(ownExpenses);
   const [filter, setFilter] = useState<Filter>("전체");
+  const [selectedDate, setSelectedDate] = useState<LocalDate | null>(null);
+  const periodDays = useMemo(
+    () => (currentPeriod ? createWeekdayCalendarFromPeriod(currentPeriod).days : []),
+    [currentPeriod],
+  );
+  const activeSelectedDate = selectedDate && periodDays.some(
+    (periodDay) => periodDay.date === selectedDate,
+  )
+    ? selectedDate
+    : null;
+
+  const toggleDate = useCallback((date: LocalDate) => {
+    setSelectedDate((current) => current === date ? null : date);
+  }, []);
+
   const visibleExpenses = useMemo(
     () =>
-      filter === "전체"
-        ? ownExpenses
-        : ownExpenses.filter((expense) => expense.category === filter),
-    [filter, ownExpenses],
+      ownExpenses.filter(
+        (expense) =>
+          (activeSelectedDate === null || toSeoulLocalDate(expense.occurredAt) === activeSelectedDate) &&
+          (filter === "전체" || expense.category === filter),
+      ),
+    [activeSelectedDate, filter, ownExpenses],
   );
   const officialTotal = ownExpenses
-    .filter((expense) => filter === "전체" || expenseOfficialCategory(expense) === filter)
+    .filter(
+      (expense) =>
+        (activeSelectedDate === null || toSeoulLocalDate(expense.occurredAt) === activeSelectedDate) &&
+        (filter === "전체" || expenseOfficialCategory(expense) === filter),
+    )
     .reduce((sum, expense) => sum + expenseOfficialAmount(expense), 0);
   const temporaryTotal = visibleExpenses
     .reduce((sum, expense) => sum + expenseOptimisticAmount(expense), 0);
   const pendingDelta = temporaryTotal - officialTotal;
   const hasPending = ownExpenses.some((expense) =>
     hasPendingExpenseProjection(expense) && (
-      filter === "전체" || expense.category === filter || expenseOfficialCategory(expense) === filter
+      (activeSelectedDate === null || toSeoulLocalDate(expense.occurredAt) === activeSelectedDate) &&
+      (filter === "전체" || expense.category === filter || expenseOfficialCategory(expense) === filter)
     ),
   );
   const openExpense = useCallback(
@@ -121,7 +146,7 @@ export function ExpenseListPage() {
         keyExtractor={(expense) => expense.id}
         ListEmptyComponent={
           <EmptyState
-            title="이 카테고리의 지출이 없어요."
+            title={activeSelectedDate ? `${formatMonthDay(activeSelectedDate)}에는 지출이 없어요.` : "이 카테고리의 지출이 없어요."}
             variant="compact"
           />
         }
@@ -136,15 +161,12 @@ export function ExpenseListPage() {
         ListHeaderComponent={
           <>
             <View style={styles.totalCard}>
-              <View style={styles.totalHeader}>
-                <Text style={styles.totalLabel}>
-                  {filter} {hasPending ? "임시 합계" : "지출 합계"}
+              <View style={styles.totalValueRow}>
+                <Text style={styles.totalValue}>
+                  {formatWon(hasPending ? temporaryTotal : officialTotal)}
                 </Text>
                 <Text style={styles.totalMeta}>{visibleExpenses.length}건</Text>
               </View>
-              <Text style={styles.totalValue}>
-                {formatWon(hasPending ? temporaryTotal : officialTotal)}
-              </Text>
               {hasPending ? (
                 <Text style={styles.pendingMeta}>
                   서버 공식 {formatWon(officialTotal)} ·{" "}
@@ -153,6 +175,61 @@ export function ExpenseListPage() {
                     : `대기 반영 ${formatSignedWon(pendingDelta)}`}
                 </Text>
               ) : null}
+
+              <View
+                accessibilityLabel="지출 날짜 필터"
+                accessibilityRole="radiogroup"
+                style={styles.dateFilters}
+              >
+                <Pressable
+                  accessibilityLabel="전체 기간 지출 보기"
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: activeSelectedDate === null }}
+                  onPress={() => setSelectedDate(null)}
+                  style={({ pressed }) => [
+                    styles.allDateButton,
+                    activeSelectedDate === null && styles.allDateButtonSelected,
+                    pressed && styles.dateButtonPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.allDateLabel,
+                      activeSelectedDate === null && styles.allDateLabelSelected,
+                    ]}
+                  >
+                    전체 기간
+                  </Text>
+                </Pressable>
+                <View style={styles.dateChips}>
+                  {periodDays.map((periodDay) => {
+                    const selected = activeSelectedDate === periodDay.date;
+                    return (
+                      <Pressable
+                        accessibilityLabel={`${formatMonthDay(periodDay.date)} 지출 보기${selected ? ", 선택됨" : ""}`}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: selected }}
+                        key={periodDay.date}
+                        onPress={() => toggleDate(periodDay.date)}
+                        style={({ pressed }) => [
+                          styles.dateChip,
+                          selected && styles.dateChipSelected,
+                          pressed && styles.dateButtonPressed,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dateChipLabel,
+                            selected && styles.dateChipLabelSelected,
+                          ]}
+                        >
+                          {periodDay.date.slice(8, 10)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
             </View>
 
             <View
@@ -209,22 +286,52 @@ const styles = StyleSheet.create({
     backgroundColor: palette.green,
     borderRadius: radii.lg,
   },
-  totalHeader: {
+  totalValueRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
     justifyContent: "space-between",
+    gap: spacing.md,
+    marginTop: 5,
   },
-  totalLabel: { color: palette.cream, fontFamily: fonts.hand, fontSize: 13 },
   totalValue: {
     color: palette.cream,
     fontFamily: fonts.number,
     fontSize: 30,
     fontWeight: "700",
-    marginTop: 5,
     ...tabularNums,
   },
-  totalMeta: { color: "rgba(253,246,227,0.76)", fontFamily: fonts.hand, fontSize: 11, ...tabularNums },
+  totalMeta: { color: "rgba(253,246,227,0.76)", fontFamily: fonts.number, fontSize: 14, ...tabularNums },
   pendingMeta: { color: "rgba(253,246,227,0.82)", fontFamily: fonts.hand, fontSize: 11, marginTop: 5, ...tabularNums },
+  dateFilters: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  allDateButton: {
+    minHeight: 32,
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  allDateButtonSelected: { backgroundColor: "rgba(255,255,255,0.22)" },
+  allDateLabel: { color: "rgba(253,246,227,0.78)", fontFamily: fonts.handBold, fontSize: 11, fontWeight: "600" },
+  allDateLabelSelected: { color: palette.cream },
+  dateChips: { flex: 1, flexDirection: "row", justifyContent: "flex-end", gap: 4 },
+  dateChip: {
+    width: 30,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.md,
+    backgroundColor: "rgba(255,255,255,0.13)",
+  },
+  dateChipSelected: { backgroundColor: palette.cream },
+  dateChipLabel: { color: palette.cream, fontFamily: fonts.number, fontSize: 12, ...tabularNums },
+  dateChipLabelSelected: { color: palette.green, fontSize: 14, fontWeight: "700" },
+  dateButtonPressed: { opacity: 0.78, transform: [{ scale: 0.96 }] },
   filters: {
     flexDirection: "row",
     flexWrap: "wrap",
