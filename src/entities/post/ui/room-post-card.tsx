@@ -85,6 +85,14 @@ export function RoomPostCard({
           <View style={styles.detailDivider} />
         </>
       ) : null}
+      {post.photoUri ? (
+        <Image
+          accessibilityLabel="게시글 첨부 사진"
+          contentFit="cover"
+          source={{ uri: post.photoUri }}
+          style={[styles.photo, variant === "detail" && styles.detailPhoto]}
+        />
+      ) : null}
       <Text
         numberOfLines={isPreview ? 2 : variant === "list" ? 3 : undefined}
         style={[
@@ -98,14 +106,6 @@ export function RoomPostCard({
       >
         {post.body}
       </Text>
-      {post.photoUri ? (
-        <Image
-          accessibilityLabel="게시글 첨부 사진"
-          contentFit="cover"
-          source={{ uri: post.photoUri }}
-          style={[styles.photo, variant === "detail" && styles.detailPhoto]}
-        />
-      ) : null}
       {footer}
     </>
   );
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   categoryRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
   categoryLabel: { overflow: "hidden", color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "700", paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radii.pill, backgroundColor: "rgba(47,113,93,0.08)" },
   secretMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
-  photo: { width: "100%", aspectRatio: 16 / 10, borderRadius: radii.lg, backgroundColor: palette.line },
-  detailPhoto: { marginTop: -spacing.md, marginBottom: spacing.xl },
+  photo: { width: "100%", aspectRatio: 16 / 10, borderRadius: radii.lg, backgroundColor: palette.line, marginBottom: spacing.md },
+  detailPhoto: { marginBottom: spacing.sm },
   noticeBody: { fontFamily: fonts.handBold },
 });
