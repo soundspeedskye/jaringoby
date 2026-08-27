@@ -18,6 +18,7 @@ import { useProfiles } from "@/entities/member/api/use-members";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { formatDateLabel, formatMonthDay } from "@/shared/lib/format";
 import type { Expense } from "@/shared/api/types";
+import { expenseDetailHref } from "@/shared/lib/expense-route";
 
 export function MemberFeedPage() {
   const router = useRouter();
@@ -42,7 +43,8 @@ export function MemberFeedPage() {
     return activeRoom ? `${activeRoom.name} · ${weekLabel}` : weekLabel;
   }, [activeRoom, currentPeriod]);
   const openExpense = useCallback(
-    (expenseId: string) => router.push(`/expense/${expenseId}`),
+    (expenseId: string, clientRequestId?: string) =>
+      router.push(expenseDetailHref(expenseId, clientRequestId)),
     [router],
   );
   const renderExpense = useCallback(
@@ -55,6 +57,7 @@ export function MemberFeedPage() {
           category={expense.category}
           commentCount={commentCounts.get(expense.id) ?? 0}
           hideAuthor
+          clientRequestId={expense.clientRequestId}
           id={expense.id}
           memo={expense.memo}
           nickname={displayName}

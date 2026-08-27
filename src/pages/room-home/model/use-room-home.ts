@@ -32,6 +32,7 @@ import { useProfiles } from "@/entities/member/api/use-members";
 import { usePeriodMembers } from "@/entities/period/api/use-periods";
 import { useCrownIds, useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { useAppStatus, useAppStatusActions } from "@/shared/providers/app-status-provider";
+import { expenseDetailHref } from "@/shared/lib/expense-route";
 import type { RoomHomeActions, RoomHomeState } from "@/widgets/room-home";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -144,7 +145,8 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
       createRoom: () => router.push("/room/create"),
       clearError,
       retry: () => void refresh(),
-      onOpenExpense: (expenseId: string) => router.push(`/expense/${expenseId}`),
+      onOpenExpense: (expenseId: string, clientRequestId?: string) =>
+        router.push(expenseDetailHref(expenseId, clientRequestId)),
       onOpenMemberFeed: (userId: string) => router.push(`/room/member/${userId}`),
     }),
     [clearError, refresh, router],

@@ -42,7 +42,7 @@ export type RoomHomeActions = {
   createRoom: () => void;
   clearError: () => void;
   retry: () => void;
-  onOpenExpense: (expenseId: string) => void;
+  onOpenExpense: (expenseId: string, clientRequestId?: string) => void;
   onOpenMemberFeed: (userId: string) => void;
 };
 

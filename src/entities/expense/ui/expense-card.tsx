@@ -8,6 +8,8 @@ import { formatWon } from '@/shared/lib/format';
 
 type ExpenseCardProps = {
   id: string;
+  /** 오프라인 대기 지출도 상세에서 다시 찾을 수 있게 상세로 함께 넘긴다. */
+  clientRequestId?: string;
   nickname: string;
   avatar: string;
   avatarUri?: string;
@@ -22,14 +24,14 @@ type ExpenseCardProps = {
   commentCount: number;
   edited?: boolean;
   hideAuthor?: boolean;
-  onPress?: (id: string) => void;
+  onPress?: (id: string, clientRequestId?: string) => void;
 };
 
 export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => props.onPress?.(props.id)}
+      onPress={() => props.onPress?.(props.id, props.clientRequestId)}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.header}>
         {props.hideAuthor ? (

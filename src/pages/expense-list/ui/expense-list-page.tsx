@@ -37,6 +37,7 @@ import type { Expense } from "@/shared/api/types";
 import { toSeoulLocalDate } from "@/shared/lib/domain/date-time";
 import { createWeekdayCalendarFromPeriod } from "@/shared/lib/domain/period";
 import { formatDateLabel, formatMonthDay, formatWon } from "@/shared/lib/format";
+import { expenseDetailHref } from "@/shared/lib/expense-route";
 
 type Filter = "전체" | ExpenseCategory;
 
@@ -91,7 +92,8 @@ export function ExpenseListPage() {
     ),
   );
   const openExpense = useCallback(
-    (expenseId: string) => router.push(`/expense/${expenseId}`),
+    (expenseId: string, clientRequestId?: string) =>
+      router.push(expenseDetailHref(expenseId, clientRequestId)),
     [router],
   );
   const renderExpense = useCallback(
@@ -103,6 +105,7 @@ export function ExpenseListPage() {
         category={expense.category}
         commentCount={commentCounts.get(expense.id) ?? 0}
         edited={expense.createdAt !== expense.updatedAt}
+        clientRequestId={expense.clientRequestId}
         id={expense.id}
         memo={expense.memo}
         nickname="나"

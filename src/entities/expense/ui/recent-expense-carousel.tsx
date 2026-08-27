@@ -25,7 +25,7 @@ export const RecentExpenseCarousel = memo(function RecentExpenseCarousel({
 }: {
   commentCounts: ReadonlyMap<string, number>;
   expenses: readonly Expense[];
-  onOpenExpense: (expenseId: string) => void;
+  onOpenExpense: (expenseId: string, clientRequestId?: string) => void;
   onOpenMemberFeed: (userId: string) => void;
   profilesById: ReadonlyMap<string, Profile>;
 }) {
@@ -79,11 +79,14 @@ const RecentExpenseCard = memo(function RecentExpenseCard({
 }: {
   commentCount: number;
   expense: Expense;
-  onOpenExpense: (expenseId: string) => void;
+  onOpenExpense: (expenseId: string, clientRequestId?: string) => void;
   onOpenMemberFeed: (userId: string) => void;
   profile?: Profile;
 }) {
-  const openExpense = useCallback(() => onOpenExpense(expense.id), [expense.id, onOpenExpense]);
+  const openExpense = useCallback(
+    () => onOpenExpense(expense.id, expense.clientRequestId),
+    [expense.clientRequestId, expense.id, onOpenExpense],
+  );
   const openMemberFeed = useCallback(() => onOpenMemberFeed(expense.userId), [expense.userId, onOpenMemberFeed]);
   return (
     <Pressable
