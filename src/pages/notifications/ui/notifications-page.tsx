@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
@@ -30,6 +30,17 @@ export function NotificationsPage() {
   const profilesById = useProfiles(actorIds);
   const { markAllNotificationsRead, markNotificationsRead } = useAppActions();
   const hasUnread = notifications.some((notification) => !notification.readAt);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+
+  const markAllAsRead = useCallback(async () => {
+    if (markingAllRead) return;
+    setMarkingAllRead(true);
+    try {
+      await markAllNotificationsRead();
+    } finally {
+      setMarkingAllRead(false);
+    }
+  }, [markAllNotificationsRead, markingAllRead]);
 
   const openNotification = (notification: AppNotification) => {
     void (async () => {
@@ -56,12 +67,15 @@ export function NotificationsPage() {
           right={
             hasUnread ? (
               <Pressable
-                accessibilityLabel="소식 모두 읽음 처리"
+                accessibilityLabel={markingAllRead ? "소식 읽음 처리 중" : "소식 모두 읽음 처리"}
                 accessibilityRole="button"
-                onPress={() => void markAllNotificationsRead()}
-                style={styles.readAllButton}
+                disabled={markingAllRead}
+                onPress={() => void markAllAsRead()}
+                style={[styles.readAllButton, markingAllRead && styles.readAllButtonDisabled]}
               >
-                <Text style={styles.readAllText}>모두 읽음</Text>
+                <Text style={[styles.readAllText, markingAllRead && styles.readAllTextDisabled]}>
+                  {markingAllRead ? "읽음 처리 중…" : "모두 읽음"}
+                </Text>
               </Pressable>
             ) : undefined
           }
@@ -156,7 +170,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.line,
   },
+  readAllButtonDisabled: { opacity: 0.6 },
   readAllText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "700" },
+  readAllTextDisabled: { color: palette.muted },
   row: {
     minHeight: 72,
     flexDirection: "row",
