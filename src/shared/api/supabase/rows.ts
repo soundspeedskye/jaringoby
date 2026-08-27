@@ -179,12 +179,25 @@ export type RoomPostRow = {
   room_id: string;
   period_id: string | null;
   kind: 'notice' | 'post' | 'poll';
+  category: 'frugality' | 'secret_purchase' | 'chat';
   author_id: string;
+  title: string;
   body: string | null;
+  poll_closes_at: string | null;
+  photo_path: string | null;
+  secret_purchase_amount: number | string | null;
+  secret_purchase_occurred_at: string | null;
+  secret_purchase_category: DatabaseExpenseCategory | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
   version: number;
+};
+
+export type RoomPostReadRow = {
+  post_id: string;
+  user_id: string;
+  read_at: string;
 };
 
 export type RoomPostCommentRow = {

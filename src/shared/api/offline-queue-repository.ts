@@ -27,6 +27,7 @@ import type {
   ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
+  UpdateRoomPostInput,
 } from '@/shared/api/types';
 import { createPeriodTimeline } from '@/shared/lib/domain/period';
 
@@ -644,8 +645,8 @@ export class OfflineQueueRepository implements AppRepository {
     return post;
   }
 
-  async updateRoomPost(postId: string, body: string): Promise<RoomPost> {
-    const post = await this.base.updateRoomPost(postId, body);
+  async updateRoomPost(input: UpdateRoomPostInput): Promise<RoomPost> {
+    const post = await this.base.updateRoomPost(input);
     void this.refreshBase().catch(() => undefined);
     return post;
   }
@@ -674,6 +675,11 @@ export class OfflineQueueRepository implements AppRepository {
 
   async toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void> {
     await this.base.toggleRoomPostReaction(postId, emoji);
+    void this.refreshBase().catch(() => undefined);
+  }
+
+  async markRoomPostRead(postId: string): Promise<void> {
+    await this.base.markRoomPostRead(postId);
     void this.refreshBase().catch(() => undefined);
   }
 

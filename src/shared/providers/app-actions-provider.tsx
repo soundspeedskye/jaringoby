@@ -21,6 +21,7 @@ import type {
   ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
+  UpdateRoomPostInput,
 } from '@/shared/api/types';
 import { useAppExecution } from '@/shared/providers/app-status-provider';
 
@@ -48,12 +49,13 @@ export type AppActionsContextValue = {
   deleteComment: (commentId: string) => Promise<void>;
   toggleCommentReaction: (commentId: string, emoji: CommentReactionEmoji) => Promise<void>;
   addRoomPost: (input: AddRoomPostInput) => Promise<RoomPost>;
-  updateRoomPost: (postId: string, body: string) => Promise<RoomPost>;
+  updateRoomPost: (input: UpdateRoomPostInput) => Promise<RoomPost>;
   deleteRoomPost: (postId: string) => Promise<void>;
   addRoomPostComment: (input: AddRoomPostCommentInput) => Promise<RoomPostComment>;
   updateRoomPostComment: (commentId: string, body: string) => Promise<RoomPostComment>;
   deleteRoomPostComment: (commentId: string) => Promise<void>;
   toggleRoomPostReaction: (postId: string, emoji: RoomPostReactionEmoji) => Promise<void>;
+  markRoomPostRead: (postId: string) => Promise<void>;
   voteRoomPostPoll: (postId: string, optionId: string) => Promise<void>;
   markNotificationsRead: (notificationIds: readonly string[]) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
@@ -152,7 +154,7 @@ export function AppActionsProvider({
     [execute, repository],
   );
   const updateRoomPost = useCallback(
-    (postId: string, body: string) => execute(() => repository.updateRoomPost(postId, body)),
+    (input: UpdateRoomPostInput) => execute(() => repository.updateRoomPost(input)),
     [execute, repository],
   );
   const deleteRoomPost = useCallback(
@@ -174,6 +176,10 @@ export function AppActionsProvider({
   const toggleRoomPostReaction = useCallback(
     (postId: string, emoji: RoomPostReactionEmoji) =>
       execute(() => repository.toggleRoomPostReaction(postId, emoji)),
+    [execute, repository],
+  );
+  const markRoomPostRead = useCallback(
+    (postId: string) => execute(() => repository.markRoomPostRead(postId)),
     [execute, repository],
   );
   const voteRoomPostPoll = useCallback(
@@ -217,6 +223,7 @@ export function AppActionsProvider({
     updateRoomPostComment,
     deleteRoomPostComment,
     toggleRoomPostReaction,
+    markRoomPostRead,
     voteRoomPostPoll,
     markNotificationsRead,
     markAllNotificationsRead,
@@ -237,6 +244,7 @@ export function AppActionsProvider({
     updateRoomPostComment,
     deleteRoomPostComment,
     toggleRoomPostReaction,
+    markRoomPostRead,
     voteRoomPostPoll,
     deleteArchivedPeriod,
     deleteExpense,

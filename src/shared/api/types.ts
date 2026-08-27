@@ -158,8 +158,21 @@ export type CommentMention = {
 
 export type CommentMentionInput = Omit<CommentMention, "commentId">;
 
-export const COMMENT_REACTION_EMOJIS = ["❤️", "👍", "👏"] as const;
+export const COMMENT_REACTION_EMOJIS = [
+  "🩷",
+  "👍",
+  "👎",
+  "🤔",
+  "✌️",
+  "👏",
+  "🫠",
+  "🥰",
+  "🥲",
+] as const;
 export type CommentReactionEmoji = (typeof COMMENT_REACTION_EMOJIS)[number];
+
+/** 첫 번째 반응 메뉴에 보여 줄 대표 아이콘. */
+export const QUICK_COMMENT_REACTION_EMOJIS = ["🩷", "👍", "👎", "🤔"] as const satisfies readonly CommentReactionEmoji[];
 
 /** 한 사용자가 댓글에 남긴 이모지 반응. 같은 이모지는 댓글당 한 번만 가능하다. */
 export type CommentReaction = {
@@ -170,6 +183,19 @@ export type CommentReaction = {
 };
 
 export type RoomPostKind = "NOTICE" | "POST" | "POLL";
+export const ROOM_POST_CATEGORIES = [
+  "거지력",
+  "뒷구매",
+  "잡담",
+] as const;
+export type RoomPostCategory = (typeof ROOM_POST_CATEGORIES)[number];
+
+/** 뒷구매는 지출·예산·정산과 분리된 커뮤니티 전용 고해성사 기록이다. */
+export type RoomSecretPurchase = {
+  amount: number;
+  occurredAt: string;
+  expenseCategory: ExpenseCategory;
+};
 
 /** 방의 이야기. 작성 당시 진행 중인 주차는 기록용 도장으로만 남긴다. */
 export type RoomPost = {
@@ -178,12 +204,26 @@ export type RoomPost = {
   roomId: string;
   periodId?: string;
   kind: RoomPostKind;
+  category?: RoomPostCategory;
   authorId: string;
+  title?: string;
   body: string;
+  /** 투표가 닫히는 첫 시각. 투표글이 아니면 없다. */
+  pollClosesAt?: string;
+  photoPath?: string;
+  photoUri?: string;
+  secretPurchase?: RoomSecretPurchase;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
   version?: number;
+};
+
+/** 멤버별 게시글 읽음 상태. 상세를 열 때만 생성한다. */
+export type RoomPostRead = {
+  postId: string;
+  userId: string;
+  readAt: string;
 };
 
 /** 냥냥톡톡 글에 붙는 평면 댓글. 지출 댓글과 달리 답글은 없다. */
@@ -199,8 +239,9 @@ export type RoomPostComment = {
   version?: number;
 };
 
-export const ROOM_POST_REACTION_EMOJIS = ["❤️", "👍", "👏"] as const;
-export type RoomPostReactionEmoji = (typeof ROOM_POST_REACTION_EMOJIS)[number];
+export const ROOM_POST_REACTION_EMOJIS = COMMENT_REACTION_EMOJIS;
+export const QUICK_ROOM_POST_REACTION_EMOJIS = QUICK_COMMENT_REACTION_EMOJIS;
+export type RoomPostReactionEmoji = CommentReactionEmoji;
 
 export type RoomPostReaction = {
   postId: string;
@@ -276,6 +317,7 @@ export type AppSnapshot = {
   roomPosts: RoomPost[];
   roomPostComments: RoomPostComment[];
   roomPostReactions: RoomPostReaction[];
+  roomPostReads?: RoomPostRead[];
   roomPostPollOptions: RoomPostPollOption[];
   roomPostPollVotes: RoomPostPollVote[];
   notifications: AppNotification[];
@@ -356,10 +398,30 @@ export type AddCommentInput = Pick<
 export type AddRoomPostInput = {
   roomId: string;
   kind: RoomPostKind;
+  category: RoomPostCategory;
+  title: string;
   body: string;
+  /** 기기에서 고른 사진 URI. 업로드 뒤 게시글에 연결하며 지출에는 기록하지 않는다. */
+  photoUri?: string;
+  secretPurchase?: RoomSecretPurchase;
   /** 투표글일 때만 2~4개의 선택지를 전달한다. */
   options?: readonly string[];
   clientRequestId: string;
+};
+
+/** 수정 시 기존 사진을 유지할지, 지울지, 새 사진으로 바꿀지 명시한다. */
+export type RoomPostPhotoPatch =
+  | { mode: "keep" }
+  | { mode: "remove" }
+  | { mode: "replace"; uri: string; clientRequestId: string };
+
+export type UpdateRoomPostInput = {
+  postId: string;
+  category: RoomPostCategory;
+  title: string;
+  body: string;
+  photo: RoomPostPhotoPatch;
+  secretPurchase?: RoomSecretPurchase;
 };
 
 export type AddRoomPostCommentInput = {

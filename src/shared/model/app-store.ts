@@ -108,6 +108,13 @@ function shareAppSnapshot(previous: AppSnapshot | null, incoming: AppSnapshot): 
       incoming.roomPostReactions,
       (value) => `${value.postId}\u0000${value.userId}\u0000${value.emoji}`,
     ),
+    roomPostReads: previous.roomPostReads || incoming.roomPostReads
+      ? shareRecords(
+        previous.roomPostReads ?? [],
+        incoming.roomPostReads ?? [],
+        (value) => `${value.postId}\u0000${value.userId}`,
+      )
+      : undefined,
     roomPostPollOptions: shareRecords(
       previous.roomPostPollOptions,
       incoming.roomPostPollOptions,

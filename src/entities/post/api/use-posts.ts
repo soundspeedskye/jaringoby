@@ -62,7 +62,7 @@ export function useLatestRoomNotice(roomId: string | undefined): RoomPost | unde
     useCallback((state: AppStoreState) => (
       roomId
         ? (state.indexes.postsByRoomId.get(roomId) ?? EMPTY_POSTS)
-          .find((post) => post.kind === 'NOTICE')
+          .find((post) => post.kind === 'NOTICE' && !post.deletedAt)
         : undefined
     ), [roomId]),
   );
@@ -94,6 +94,34 @@ export function useRoomPostCommentCounts(posts: readonly RoomPost[]): ReadonlyMa
     return counts;
   }, [posts]);
   return useAppStoreSelector(selector, shallowMapEqual);
+}
+
+/** 현재 멤버가 상세를 열어 읽음 처리하지 않은 글 ID. 본인 글은 새 글로 보이지 않는다. */
+export function useUnreadRoomPostIds(
+  roomId: string | undefined,
+  currentUserId: string | undefined,
+  periodId?: string,
+): ReadonlySet<string> {
+  return useAppStoreSelector(
+    useCallback((state: AppStoreState) => {
+      if (!roomId || !currentUserId) return new Set<string>();
+      const reads = new Set(
+        (state.snapshot?.roomPostReads ?? [])
+          .filter((read) => read.userId === currentUserId)
+          .map((read) => read.postId),
+      );
+      return new Set(
+        (state.indexes.postsByRoomId.get(roomId) ?? EMPTY_POSTS)
+          .filter((post) => (
+            post.authorId !== currentUserId
+            && !post.deletedAt
+            && !reads.has(post.id)
+            && (!periodId || post.periodId === periodId)
+          ))
+          .map((post) => post.id),
+      );
+    }, [currentUserId, periodId, roomId]),
+  );
 }
 
 export function useRoomPostPollOptions(postId: string | undefined): RoomPostPollOption[] {

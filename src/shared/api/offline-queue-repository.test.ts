@@ -33,6 +33,7 @@ import type {
   RoomMember,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
+  UpdateRoomPostInput,
 } from '@/shared/api/types';
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -746,10 +747,19 @@ class FakeRepository implements AppRepository {
     return clone(post);
   }
 
-  async updateRoomPost(postId: string, body: string): Promise<RoomPost> {
-    const post = this.snapshot.roomPosts.find((item) => item.id === postId);
+  async updateRoomPost(input: UpdateRoomPostInput): Promise<RoomPost> {
+    const post = this.snapshot.roomPosts.find((item) => item.id === input.postId);
     if (!post) throw new Error('NOT_FOUND');
-    post.body = body;
+    post.category = input.category;
+    post.title = input.title;
+    post.body = input.body;
+    post.secretPurchase = input.secretPurchase;
+    if (input.photo.mode === 'remove') {
+      post.photoPath = undefined;
+      post.photoUri = undefined;
+    } else if (input.photo.mode === 'replace') {
+      post.photoUri = input.photo.uri;
+    }
     post.version = (post.version ?? 0) + 1;
     return clone(post);
   }
@@ -793,6 +803,18 @@ class FakeRepository implements AppRepository {
     );
     if (index >= 0) this.snapshot.roomPostReactions.splice(index, 1);
     else this.snapshot.roomPostReactions.push({ postId, userId: this.userId, emoji, createdAt: new Date().toISOString() });
+  }
+
+  async markRoomPostRead(postId: string): Promise<void> {
+    const existing = this.snapshot.roomPostReads?.find(
+      (read) => read.postId === postId && read.userId === this.userId,
+    );
+    if (existing) return;
+    (this.snapshot.roomPostReads ??= []).push({
+      postId,
+      userId: this.userId,
+      readAt: new Date().toISOString(),
+    });
   }
 
   async voteRoomPostPoll(postId: string, optionId: string): Promise<void> {

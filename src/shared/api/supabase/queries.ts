@@ -26,7 +26,7 @@ export const COMMENT_COLUMNS =
 export const NOTIFICATION_COLUMNS =
   "id,user_id,kind,actor_id,room_id,period_id,expense_id,comment_id,post_id,route,read_at,created_at";
 export const ROOM_POST_COLUMNS =
-  "id,client_request_id,room_id,period_id,kind,author_id,body,created_at,updated_at,deleted_at,version";
+  "id,client_request_id,room_id,period_id,kind,category,author_id,title,body,poll_closes_at,photo_path,secret_purchase_amount,secret_purchase_occurred_at,secret_purchase_category,created_at,updated_at,deleted_at,version";
 export const ROOM_POST_COMMENT_COLUMNS =
   "id,client_request_id,post_id,author_id,body,created_at,updated_at,deleted_at,version";
 
@@ -119,6 +119,17 @@ export async function fetchRoomPostReactionRows(
   if (result.error)
     throw translateError(result.error, "기록 반응을 갱신하지 못했어요.");
   return rows<RoomPostReactionRow>(result.data);
+}
+
+export async function fetchRoomPostReadRows(
+  client: SupabaseClient,
+): Promise<import("./rows").RoomPostReadRow[]> {
+  const result = await client
+    .from("room_post_reads")
+    .select("post_id,user_id,read_at");
+  if (result.error)
+    throw translateError(result.error, "읽음 상태를 갱신하지 못했어요.");
+  return rows<import("./rows").RoomPostReadRow>(result.data);
 }
 
 export async function fetchRoomPostPollOptionRows(

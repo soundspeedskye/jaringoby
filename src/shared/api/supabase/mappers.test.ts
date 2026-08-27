@@ -554,8 +554,15 @@ describe('mapRoomPost', () => {
     room_id: 'room-1',
     period_id: null,
     kind: 'notice',
+    category: 'chat',
     author_id: 'user-a',
+    title: '공지 제목',
     body: '공지입니다',
+    poll_closes_at: null,
+    photo_path: null,
+    secret_purchase_amount: null,
+    secret_purchase_occurred_at: null,
+    secret_purchase_category: null,
     created_at: '2026-08-04T01:00:00.000Z',
     updated_at: '2026-08-04T01:00:00.000Z',
     deleted_at: null,
@@ -569,7 +576,9 @@ describe('mapRoomPost', () => {
       roomId: 'room-1',
       periodId: undefined,
       kind: 'NOTICE',
+      category: '잡담',
       authorId: 'user-a',
+      title: '공지 제목',
       body: '공지입니다',
       createdAt: '2026-08-04T01:00:00.000Z',
       updatedAt: '2026-08-04T01:00:00.000Z',
@@ -582,13 +591,14 @@ describe('mapRoomPost', () => {
     expect(mapRoomPost({ ...row, kind: 'post' }).kind).toBe('POST');
   });
 
-  it('poll을 POLL로 옮긴다', () => {
-    expect(mapRoomPost({ ...row, kind: 'poll' }).kind).toBe('POLL');
+  it('poll을 POLL과 마감 시각으로 옮긴다', () => {
+    expect(mapRoomPost({ ...row, kind: 'poll', poll_closes_at: '2026-08-06T15:00:00.000Z' }))
+      .toMatchObject({ kind: 'POLL', pollClosesAt: '2026-08-06T15:00:00.000Z' });
   });
 
   it('삭제된 게시글은 원문을 감춘다', () => {
     expect(mapRoomPost({ ...row, deleted_at: '2026-08-05T00:00:00.000Z' }).body)
-      .toBe('삭제된 냥톡입니다.');
+      .toBe('삭제된 기록입니다.');
   });
 });
 
@@ -630,12 +640,12 @@ describe('반응 매퍼', () => {
     expect(mapCommentReaction({
       comment_id: 'comment-1',
       user_id: 'user-a',
-      emoji: '❤️',
+      emoji: '🩷',
       created_at: '2026-08-05T06:00:00.000Z',
     })).toEqual({
       commentId: 'comment-1',
       userId: 'user-a',
-      emoji: '❤️',
+      emoji: '🩷',
       createdAt: '2026-08-05T06:00:00.000Z',
     });
   });

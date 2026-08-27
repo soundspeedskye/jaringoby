@@ -15,10 +15,12 @@ import type {
   RoomMember,
   RoomMemberStats,
   RoomPost,
+  RoomPostCategory,
   RoomPostComment,
   RoomPostPollOption,
   RoomPostPollVote,
   RoomPostReaction,
+  RoomPostRead,
 } from "@/shared/api/types";
 import { ANIMAL_AVATARS } from "@/shared/config/animals";
 import type {
@@ -47,6 +49,7 @@ import type {
   RoomPostPollOptionRow,
   RoomPostPollVoteRow,
   RoomPostReactionRow,
+  RoomPostReadRow,
   RoomPostRow,
   RoomRow,
 } from "./rows";
@@ -322,7 +325,20 @@ export function mapCommentMention(
   };
 }
 
-export function mapRoomPost(row: RoomPostRow): RoomPost {
+export function mapRoomPost(
+  row: RoomPostRow,
+  signedUrls: Map<string, string> = new Map(),
+): RoomPost {
+  const photoPath = row.photo_path ?? undefined;
+  const secretPurchase = row.secret_purchase_amount === null
+    ? undefined
+    : {
+      amount: safeNumber(row.secret_purchase_amount, "뒷구매 금액"),
+      occurredAt: requiredString(row.secret_purchase_occurred_at, "뒷구매 일시"),
+      expenseCategory: CATEGORY_FROM_DATABASE[
+        requiredString(row.secret_purchase_category, "뒷구매 분류") as keyof typeof CATEGORY_FROM_DATABASE
+      ],
+    };
   return {
     id: row.id,
     clientRequestId: row.client_request_id,
@@ -330,13 +346,34 @@ export function mapRoomPost(row: RoomPostRow): RoomPost {
     periodId: row.period_id ?? undefined,
     kind:
       row.kind === "notice" ? "NOTICE" : row.kind === "poll" ? "POLL" : "POST",
+    category: mapRoomPostCategory(row.category),
     authorId: row.author_id,
+    title: row.title,
     body: row.deleted_at ? "삭제된 기록입니다." : (row.body ?? ""),
+    ...(row.poll_closes_at ? { pollClosesAt: row.poll_closes_at } : {}),
+    photoPath,
+    photoUri: photoPath ? signedUrls.get(photoPath) : undefined,
+    secretPurchase,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,
     version: row.version,
   };
+}
+
+export function mapRoomPostRead(row: RoomPostReadRow): RoomPostRead {
+  return { postId: row.post_id, userId: row.user_id, readAt: row.read_at };
+}
+
+function mapRoomPostCategory(
+  category: RoomPostRow["category"],
+): RoomPostCategory {
+  const categories: Record<RoomPostRow["category"], RoomPostCategory> = {
+    frugality: "거지력",
+    secret_purchase: "뒷구매",
+    chat: "잡담",
+  };
+  return categories[category];
 }
 
 export function mapRoomPostComment(row: RoomPostCommentRow): RoomPostComment {

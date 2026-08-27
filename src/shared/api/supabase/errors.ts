@@ -76,6 +76,7 @@ export function policyErrorMessage(message: string): string | null {
   if (message.includes('uploaded photo is required') || message.includes('photo upload')) return '마감 전에 지출 사진 1장 업로드를 완료해 주세요.';
   if (message.includes('room owner must select')) return '방장이 나가려면 다른 참여자에게 방장을 넘겨야 해요.';
   if (message.includes('comment edit window')) return '댓글은 작성 후 5분 안에만 수정할 수 있어요.';
+  if (message.includes('poll has closed')) return '투표가 마감되었어요.';
   if (message.includes('comment is read-only')) return '정산이 끝난 주차의 댓글은 읽기 전용이에요.';
   if (message.includes('comment body')) return '댓글은 앞뒤 공백을 제외하고 1~500자로 입력해 주세요.';
   return null;

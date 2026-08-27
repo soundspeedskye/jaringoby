@@ -240,7 +240,7 @@ function createDenseSnapshot(): AppSnapshot {
     ],
     commentMentions: [],
     commentReactions: [
-      { commentId: 'comment-1', userId: 'user-a', emoji: '❤️', createdAt: '2026-08-05T06:00:00.000Z' },
+      { commentId: 'comment-1', userId: 'user-a', emoji: '🩷', createdAt: '2026-08-05T06:00:00.000Z' },
     ],
     roomPosts: [
       { id: 'post-1', clientRequestId: 'req-p1', roomId: 'room-1', kind: 'NOTICE', authorId: 'user-a', body: '공지', createdAt: '2026-08-04T01:00:00.000Z', updatedAt: '2026-08-04T01:00:00.000Z', version: 1 },

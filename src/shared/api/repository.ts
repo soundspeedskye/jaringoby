@@ -15,6 +15,7 @@ import type {
   RoomPost,
   RoomPostComment,
   RoomPostReactionEmoji,
+  UpdateRoomPostInput,
   ExpenseExceptionResponseDecision,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
@@ -56,12 +57,13 @@ export interface AppRepository {
   deleteComment(commentId: string): Promise<void>;
   toggleCommentReaction(commentId: string, emoji: CommentReactionEmoji): Promise<void>;
   addRoomPost(input: AddRoomPostInput): Promise<RoomPost>;
-  updateRoomPost(postId: string, body: string): Promise<RoomPost>;
+  updateRoomPost(input: UpdateRoomPostInput): Promise<RoomPost>;
   deleteRoomPost(postId: string): Promise<void>;
   addRoomPostComment(input: AddRoomPostCommentInput): Promise<RoomPostComment>;
   updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment>;
   deleteRoomPostComment(commentId: string): Promise<void>;
   toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void>;
+  markRoomPostRead(postId: string): Promise<void>;
   voteRoomPostPoll(postId: string, optionId: string): Promise<void>;
   markNotificationsRead(notificationIds: readonly string[]): Promise<void>;
   markAllNotificationsRead(): Promise<void>;

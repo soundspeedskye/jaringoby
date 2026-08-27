@@ -22,10 +22,12 @@ import type {
   Room,
   RoomMember,
   RoomPost,
+  RoomPostCategory,
   RoomPostComment,
   RoomPostReactionEmoji,
   SwitchRoomInput,
   UpdateRoomSettingsInput,
+  UpdateRoomPostInput,
 } from "@/shared/api/types";
 import {
   RepositoryError,
@@ -66,6 +68,7 @@ import {
   mapRoomPostPollOption,
   mapRoomPostPollVote,
   mapRoomPostReaction,
+  mapRoomPostRead,
   mapStats,
   requiredString,
 } from "./supabase/mappers";
@@ -82,6 +85,7 @@ import {
   fetchRoomPostPollOptionRows,
   fetchRoomPostPollVoteRows,
   fetchRoomPostReactionRows,
+  fetchRoomPostReadRows,
   fetchRoomPostRows,
 } from "./supabase/queries";
 import {
@@ -112,6 +116,15 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const SIGNED_URL_REFRESH_MS = 50 * 60 * 1_000;
 const MAX_EXPENSE_PHOTO_BYTES = 10 * 1024 * 1024;
 const MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024;
+const MAX_ROOM_POST_PHOTO_BYTES = 10 * 1024 * 1024;
+const ROOM_POST_CATEGORY_TO_DATABASE: Record<
+  RoomPostCategory,
+  "frugality" | "secret_purchase" | "chat"
+> = {
+  "거지력": "frugality",
+  "뒷구매": "secret_purchase",
+  "잡담": "chat",
+};
 const REALTIME_TABLES = [
   "profiles",
   "rooms",
@@ -126,6 +139,7 @@ const REALTIME_TABLES = [
   "room_posts",
   "room_post_comments",
   "room_post_reactions",
+  "room_post_reads",
   "room_post_poll_options",
   "room_post_poll_votes",
   "notifications",
@@ -688,7 +702,10 @@ export class SupabaseRepository implements AppRepository {
   }
 
   async addRoomPost(input: AddRoomPostInput): Promise<RoomPost> {
-    await this.requireUserId();
+    const userId = await this.requireUserId();
+    const photoPath = input.photoUri
+      ? await this.uploadRoomPostPhoto(input.photoUri, userId, input.clientRequestId)
+      : null;
     const { data, error } = await this.client.rpc("add_room_post", {
       p_room_id: input.roomId,
       p_kind:
@@ -697,14 +714,25 @@ export class SupabaseRepository implements AppRepository {
           : input.kind === "POLL"
             ? "poll"
             : "post",
+      p_category: ROOM_POST_CATEGORY_TO_DATABASE[input.category],
+      p_title: input.title.trim(),
       p_body: input.body,
       p_options:
         input.kind === "POLL"
           ? (input.options?.map((option) => option.trim()) ?? [])
           : null,
+      p_photo_path: photoPath,
+      p_secret_purchase_amount: input.secretPurchase?.amount ?? null,
+      p_secret_purchase_occurred_at: input.secretPurchase?.occurredAt ?? null,
+      p_secret_purchase_category: input.secretPurchase
+        ? CATEGORY_TO_DATABASE[input.secretPurchase.expenseCategory]
+        : null,
       p_client_request_id: toRequestUuid(input.clientRequestId),
     });
-    if (error) throw translateError(error, "기록을 남기지 못했어요.");
+    if (error) {
+      if (photoPath) await this.removeOrphanRoomPostPhoto(photoPath);
+      throw translateError(error, "기록을 남기지 못했어요.");
+    }
     const id = requiredString(firstObject(data)?.id, "생성된 기록 ID");
     const snapshot = await this.reloadRealtimeTablesAndNotify(
       new Set<RealtimeTable>(["room_posts"]),
@@ -712,19 +740,45 @@ export class SupabaseRepository implements AppRepository {
     return clone(requireRoomPost(snapshot, id));
   }
 
-  async updateRoomPost(postId: string, body: string): Promise<RoomPost> {
-    await this.requireUserId();
-    const current = await this.findCurrentRoomPost(postId);
+  async updateRoomPost(input: UpdateRoomPostInput): Promise<RoomPost> {
+    const userId = await this.requireUserId();
+    const current = await this.findCurrentRoomPost(input.postId);
+    const replacementPath = input.photo.mode === "replace"
+      ? await this.uploadRoomPostPhoto(
+        input.photo.uri,
+        userId,
+        input.photo.clientRequestId,
+      )
+      : null;
+    const photoPath = input.photo.mode === "keep"
+      ? current.photoPath ?? null
+      : input.photo.mode === "remove"
+        ? null
+        : replacementPath;
     const { error } = await this.client.rpc("update_room_post", {
-      p_post_id: postId,
-      p_body: body,
+      p_post_id: input.postId,
+      p_category: ROOM_POST_CATEGORY_TO_DATABASE[input.category],
+      p_title: input.title.trim(),
+      p_body: input.body.trim(),
+      p_photo_path: photoPath,
+      p_secret_purchase_amount: input.secretPurchase?.amount ?? null,
+      p_secret_purchase_occurred_at: input.secretPurchase?.occurredAt ?? null,
+      p_secret_purchase_category: input.secretPurchase
+        ? CATEGORY_TO_DATABASE[input.secretPurchase.expenseCategory]
+        : null,
       p_expected_version: requireVersion(current.version, "기록"),
     });
-    if (error) throw translateError(error, "기록을 수정하지 못했어요.");
+    if (error) {
+      if (replacementPath) await this.removeOrphanRoomPostPhoto(replacementPath);
+      throw translateError(error, "기록을 수정하지 못했어요.");
+    }
+    if (current.photoPath && current.photoPath !== photoPath) {
+      await this.removeOrphanRoomPostPhoto(current.photoPath);
+    }
     const snapshot = await this.reloadRealtimeTablesAndNotify(
       new Set<RealtimeTable>(["room_posts"]),
     );
-    return clone(requireRoomPost(snapshot, postId));
+    return clone(requireRoomPost(snapshot, input.postId));
   }
 
   async deleteRoomPost(postId: string): Promise<void> {
@@ -800,6 +854,17 @@ export class SupabaseRepository implements AppRepository {
     if (error) throw translateError(error, "반응을 변경하지 못했어요.");
     await this.reloadRealtimeTablesAndNotify(
       new Set<RealtimeTable>(["room_post_reactions"]),
+    );
+  }
+
+  async markRoomPostRead(postId: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc("mark_room_post_read", {
+      p_post_id: postId,
+    });
+    if (error) throw translateError(error, "글을 읽음 처리하지 못했어요.");
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["room_post_reads"]),
     );
   }
 
@@ -879,6 +944,7 @@ export class SupabaseRepository implements AppRepository {
       roomPostRows,
       roomPostCommentRows,
       roomPostReactionRows,
+      roomPostReadRows,
       roomPostPollOptionRows,
       roomPostPollVoteRows,
       notificationRows,
@@ -933,6 +999,7 @@ export class SupabaseRepository implements AppRepository {
       fetchRoomPostRows(this.client),
       fetchRoomPostCommentRows(this.client),
       fetchRoomPostReactionRows(this.client),
+      fetchRoomPostReadRows(this.client),
       fetchRoomPostPollOptionRows(this.client),
       fetchRoomPostPollVoteRows(this.client),
       fetchNotificationRows(this.client),
@@ -972,7 +1039,11 @@ export class SupabaseRepository implements AppRepository {
       .filter((row) => row.deleted_at === null)
       .map((row) => row.photo_path)
       .filter(isString);
-    const [expenseSignedUrls, expenseThumbnailSignedUrls, avatarSignedUrls] =
+    const roomPostPhotoPaths = roomPostRows
+      .filter((row) => row.deleted_at === null)
+      .map((row) => row.photo_path)
+      .filter(isString);
+    const [expenseSignedUrls, expenseThumbnailSignedUrls, avatarSignedUrls, roomPostSignedUrls] =
       await Promise.all([
         this.createSignedUrlMap("expense-photos", expensePhotoPaths),
         this.createSignedUrlMap(
@@ -983,11 +1054,13 @@ export class SupabaseRepository implements AppRepository {
           "profile-images",
           profileRows.map((row) => row.avatar_path).filter(isString),
         ),
+        this.createSignedUrlMap("room-post-images", roomPostPhotoPaths),
       ]);
     this.scheduleSignedUrlRefresh(
       expenseSignedUrls.size +
         expenseThumbnailSignedUrls.size +
-        avatarSignedUrls.size >
+        avatarSignedUrls.size +
+        roomPostSignedUrls.size >
         0,
     );
 
@@ -1061,11 +1134,14 @@ export class SupabaseRepository implements AppRepository {
       commentReactions: commentReactionRows
         .filter((row) => visibleCommentIds.has(row.comment_id))
         .map(mapCommentReaction),
-      roomPosts: visibleRoomPostRows.map(mapRoomPost),
+      roomPosts: visibleRoomPostRows.map((row) => mapRoomPost(row, roomPostSignedUrls)),
       roomPostComments: visibleRoomPostCommentRows.map(mapRoomPostComment),
       roomPostReactions: roomPostReactionRows
         .filter((row) => visibleRoomPostIds.has(row.post_id))
         .map(mapRoomPostReaction),
+      roomPostReads: roomPostReadRows
+        .filter((row) => visibleRoomPostIds.has(row.post_id))
+        .map(mapRoomPostRead),
       roomPostPollOptions: roomPostPollOptionRows
         .filter((row) => visibleRoomPostIds.has(row.post_id))
         .map(mapRoomPostPollOption),
@@ -1565,6 +1641,29 @@ export class SupabaseRepository implements AppRepository {
     return path;
   }
 
+  private async uploadRoomPostPhoto(
+    uri: string,
+    userId: string,
+    clientRequestId: string,
+  ): Promise<string> {
+    const file = await readPhoto(uri);
+    if (file.buffer.byteLength > MAX_ROOM_POST_PHOTO_BYTES) {
+      throw new RepositoryError("PHOTO_TOO_LARGE", "게시글 사진은 10MB 이하여야 해요.");
+    }
+    const path = `${userId}/${safeObjectStem(clientRequestId)}.${file.extension}`;
+    const { error } = await this.client.storage
+      .from("room-post-images")
+      .upload(path, file.buffer, {
+        cacheControl: "3600",
+        contentType: file.contentType,
+        upsert: false,
+      });
+    if (error && !isAlreadyExistsError(error)) {
+      throw translateError(error, "게시글 사진을 업로드하지 못했어요.");
+    }
+    return path;
+  }
+
   private async uploadProfilePhoto(
     uri: string,
     userId: string,
@@ -1605,6 +1704,17 @@ export class SupabaseRepository implements AppRepository {
       if (error) throw error;
     } catch (error) {
       console.warn("교체 또는 삭제된 프로필 사진 정리 오류", error);
+    }
+  }
+
+  private async removeOrphanRoomPostPhoto(path: string): Promise<void> {
+    try {
+      const { error } = await this.client.storage
+        .from("room-post-images")
+        .remove([path]);
+      if (error) throw error;
+    } catch (error) {
+      console.warn("생성되지 않은 게시글 사진 정리 오류", error);
     }
   }
 
