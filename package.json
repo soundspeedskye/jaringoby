@@ -47,7 +47,7 @@
     "vitest": "4.1.10"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --localhost --scheme jaringoby",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
