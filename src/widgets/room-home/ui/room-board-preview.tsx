@@ -43,7 +43,7 @@ export const RoomBoardPreview = memo(function RoomBoardPreview({
     [shownPosts],
   );
   const profiles = useProfiles(shownPostAuthorIds);
-  const openBoard = useCallback(() => router.push("/room/board"), [router]);
+  const openBoard = useCallback(() => router.push("/community"), [router]);
 
   return (
     <Pressable

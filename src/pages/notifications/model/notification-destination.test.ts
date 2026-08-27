@@ -56,13 +56,13 @@ describe("notificationDestination", () => {
       notification({ kind: "room_notice", postId: "p1" }),
     );
 
-    expect(destination).toEqual({ type: "push", pathname: "/room/board/p1" });
+    expect(destination).toEqual({ type: "push", pathname: "/community/p1" });
   });
 
   it("post_id가 없던 시절의 공지 소식은 목록으로 보낸다", () => {
     const destination = notificationDestination(notification({ kind: "room_notice" }));
 
-    expect(destination).toEqual({ type: "push", pathname: "/room/board" });
+    expect(destination).toEqual({ type: "push", pathname: "/community" });
   });
 
   it("갈 화면이 없는 소식은 홈으로 보낸다", () => {

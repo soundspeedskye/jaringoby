@@ -1,8 +1,8 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Image } from "expo-image";
-import { useFocusEffect, useRouter, useSegments } from "expo-router";
+import { useRouter } from "expo-router";
 import { memo, useCallback, useMemo } from "react";
-import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
 import {
@@ -24,10 +24,8 @@ import { ScreenFrame } from "@/shared/ui/screen";
 
 const EMPTY_REACTIONS: RoomPostReaction[] = [];
 
-export function BoardPage() {
+export function CommunityPage() {
   const router = useRouter();
-  const segments = useSegments();
-  const tab = segments[0] === "(tabs)" && segments[1] === "community";
   const refreshControl = usePullToRefreshControl();
   const room = useActiveRoom();
   const { currentPeriod } = useCurrentRoom();
@@ -53,11 +51,7 @@ export function BoardPage() {
   const unreadPostIds = useUnreadRoomPostIds(room?.id, currentUser?.id, currentPeriod?.id);
   const canWrite = Boolean(room && currentUser && room.status === "OPEN" && currentPeriod);
 
-  const returnFromBoard = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace("/");
-  }, [router]);
-  const openPost = useCallback((postId: string) => router.push(`/room/board/${postId}`), [router]);
+  const openPost = useCallback((postId: string) => router.push(`/community/${postId}`), [router]);
   const renderPost = useCallback(({ item }: { item: RoomPost }) => (
     <BoardPostRow
       author={profiles.get(item.authorId)}
@@ -69,19 +63,10 @@ export function BoardPage() {
     />
   ), [commentCounts, openPost, profiles, reactionsByPostId, unreadPostIds]);
 
-  useFocusEffect(useCallback(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (tab) return false;
-      returnFromBoard();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [returnFromBoard, tab]));
-
   return (
     <ScreenFrame
       fixedHeaderDivider
-      fixedHeader={<PageHeader bottomSpacing="md" onBack={tab ? undefined : returnFromBoard} right={canWrite ? <Pressable accessibilityLabel="글 남기기" accessibilityRole="button" onPress={() => router.push("/room/board/new")} style={styles.writeButton}><MaterialCommunityIcons color={palette.green} name="pencil-outline" size={21} style={styles.writeIcon} /></Pressable> : undefined} title="아껴씀 청년방" />}
+      fixedHeader={<PageHeader bottomSpacing="md" right={canWrite ? <Pressable accessibilityLabel="글 남기기" accessibilityRole="button" onPress={() => router.push("/community/new")} style={styles.writeButton}><MaterialCommunityIcons color={palette.green} name="pencil-outline" size={21} style={styles.writeIcon} /></Pressable> : undefined} title="아껴씀 청년방" />}
       testID="room-board-screen"
     >
       <FlatList
@@ -144,7 +129,7 @@ const styles = StyleSheet.create({
   writeIcon: { transform: [{ translateX: 8 }] },
   noticeList: { marginBottom: spacing.lg },
   notice: { alignItems: "center", flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: palette.rule },
-  noticeBody: { flex: 1, color: palette.ink, fontFamily: fonts.hand, fontSize: 12 },
+  noticeBody: { flex: 1, color: palette.ink, fontFamily: fonts.hand, fontSize: 13 },
   postRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 88, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: palette.rule },
   pressed: { opacity: 0.72 },
   thumbnail: { width: 72, height: 72, borderRadius: radii.md, backgroundColor: palette.rule },

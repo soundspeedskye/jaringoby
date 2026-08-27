@@ -35,7 +35,7 @@ import { ModalFormScreen } from "@/shared/ui/modal-form-screen";
 import { PlatformDateTimePicker } from "@/shared/ui/platform-date-time-picker";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 
-export function BoardWritePage() {
+export function CommunityWritePage() {
   const { id: postId } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const post = useRoomPost(postId);
@@ -180,7 +180,7 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
                   },
           secretPurchase,
         });
-        router.replace(`/room/board/${post.id}`);
+        router.replace(`/community/${post.id}`);
       } else {
         await addRoomPost({
           roomId: room.id,

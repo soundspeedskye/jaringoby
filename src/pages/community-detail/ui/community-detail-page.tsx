@@ -43,10 +43,10 @@ const ROOM_POST_COMMENT_FEATURES: ThreadFeatures = {
 
 const EMPTY_REACTIONS: RoomPostReaction[] = [];
 
-export function BoardDetailPage() {
+export function CommunityDetailPage() {
   const router = useRouter();
   const refreshControl = usePullToRefreshControl();
-  const { id: postId } = useLocalSearchParams<"/room/board/[id]">();
+  const { id: postId } = useLocalSearchParams<"/community/[id]">();
   const post = useRoomPost(postId);
   const currentUser = useCurrentUser();
   const room = useRoom(post?.roomId);
@@ -101,7 +101,7 @@ export function BoardDetailPage() {
       router.back();
       return;
     }
-    router.replace("/room/board");
+    router.replace("/community");
   }, [router]);
   const createComment = useCallback(
     (input: { body: string; clientRequestId: string; replyToId?: string }) => {
@@ -141,7 +141,7 @@ export function BoardDetailPage() {
         style: "destructive",
         onPress: () => {
           void deleteRoomPost(post.id)
-            .then(() => router.replace("/room/board"))
+            .then(() => router.replace("/community"))
             .catch((reason) =>
               showDialog(
                 "게시글을 삭제하지 못했어요.",
@@ -161,7 +161,7 @@ export function BoardDetailPage() {
         ? [
             {
               text: "수정",
-              onPress: () => router.push(`/room/board/${post.id}/edit`),
+              onPress: () => router.push(`/community/${post.id}/edit`),
             },
           ]
         : []),

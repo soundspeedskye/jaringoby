@@ -29,11 +29,11 @@ export function notificationDestination(
   }
   // 공지는 목록이 아니라 그 글로 바로 보낸다.
   if (notification.postId) {
-    return { type: "push", pathname: `/room/board/${notification.postId}` };
+    return { type: "push", pathname: `/community/${notification.postId}` };
   }
   // post_id를 채우기 전에 쌓인 오래된 공지 소식은 글을 특정할 수 없어 목록으로 보낸다.
   if (notification.kind === "room_notice") {
-    return { type: "push", pathname: "/room/board" };
+    return { type: "push", pathname: "/community" };
   }
   return { type: "dismissTo", pathname: "/" };
 }
