@@ -23,6 +23,7 @@ import type {
   UpdateRoomSettingsInput,
   UpdateRoomPostInput,
 } from '@/shared/api/types';
+import { useAppStore } from '@/shared/providers/app-store-provider';
 import { useAppExecution } from '@/shared/providers/app-status-provider';
 
 export type AppActionsContextValue = {
@@ -55,7 +56,8 @@ export type AppActionsContextValue = {
   updateRoomPostComment: (commentId: string, body: string) => Promise<RoomPostComment>;
   deleteRoomPostComment: (commentId: string) => Promise<void>;
   toggleRoomPostReaction: (postId: string, emoji: RoomPostReactionEmoji) => Promise<void>;
-  markRoomPostRead: (postId: string) => Promise<void>;
+  markExpenseRead: (expenseId: string) => void;
+  markRoomPostRead: (postId: string) => void;
   voteRoomPostPoll: (postId: string, optionId: string) => Promise<void>;
   markNotificationsRead: (notificationIds: readonly string[]) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
@@ -68,6 +70,7 @@ export function AppActionsProvider({
   repository,
 }: PropsWithChildren<{ repository: AppRepository }>) {
   const { execute } = useAppExecution();
+  const store = useAppStore();
   const updateNickname = useCallback(
     (nickname: string) => execute(() => repository.updateNickname(nickname)),
     [execute, repository],
@@ -178,10 +181,17 @@ export function AppActionsProvider({
       execute(() => repository.toggleRoomPostReaction(postId, emoji)),
     [execute, repository],
   );
-  const markRoomPostRead = useCallback(
-    (postId: string) => execute(() => repository.markRoomPostRead(postId)),
-    [execute, repository],
-  );
+  // 읽음 처리는 사용자가 요청한 동작이 아니라 열람의 부수 효과다. 화면은 로컬
+  // 표시를 즉시 반영하고, 서버 반영이 실패해도(오프라인 등) 에러 배너를 띄우지
+  // 않는다. 다음 동기화에서 받은 스냅샷이 최종 상태다.
+  const markExpenseRead = useCallback((expenseId: string) => {
+    store.markReadLocally('expense', expenseId);
+    void repository.markExpenseRead(expenseId).catch(() => undefined);
+  }, [repository, store]);
+  const markRoomPostRead = useCallback((postId: string) => {
+    store.markReadLocally('post', postId);
+    void repository.markRoomPostRead(postId).catch(() => undefined);
+  }, [repository, store]);
   const voteRoomPostPoll = useCallback(
     (postId: string, optionId: string) => execute(() => repository.voteRoomPostPoll(postId, optionId)),
     [execute, repository],
@@ -223,6 +233,7 @@ export function AppActionsProvider({
     updateRoomPostComment,
     deleteRoomPostComment,
     toggleRoomPostReaction,
+    markExpenseRead,
     markRoomPostRead,
     voteRoomPostPoll,
     markNotificationsRead,
@@ -244,6 +255,7 @@ export function AppActionsProvider({
     updateRoomPostComment,
     deleteRoomPostComment,
     toggleRoomPostReaction,
+    markExpenseRead,
     markRoomPostRead,
     voteRoomPostPoll,
     deleteArchivedPeriod,

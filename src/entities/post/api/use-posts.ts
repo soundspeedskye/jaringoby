@@ -9,6 +9,7 @@ import type {
 import type { AppStoreState } from '@/shared/model/app-store';
 import {
   shallowMapEqual,
+  shallowSetEqual,
   useAppStoreSelector,
 } from '@/shared/providers/app-store-provider';
 import {
@@ -18,6 +19,8 @@ import {
 } from '@/shared/providers/store-hooks';
 
 const EMPTY_POSTS: RoomPost[] = [];
+
+const EMPTY_UNREAD_IDS: ReadonlySet<string> = new Set<string>();
 
 const EMPTY_POST_COMMENTS: RoomPostComment[] = [];
 
@@ -101,26 +104,23 @@ export function useUnreadRoomPostIds(
   roomId: string | undefined,
   currentUserId: string | undefined,
   periodId?: string,
+  joinedAt?: string,
 ): ReadonlySet<string> {
   return useAppStoreSelector(
     useCallback((state: AppStoreState) => {
-      if (!roomId || !currentUserId) return new Set<string>();
-      const reads = new Set(
-        (state.snapshot?.roomPostReads ?? [])
-          .filter((read) => read.userId === currentUserId)
-          .map((read) => read.postId),
-      );
-      return new Set(
-        (state.indexes.postsByRoomId.get(roomId) ?? EMPTY_POSTS)
-          .filter((post) => (
-            post.authorId !== currentUserId
-            && !post.deletedAt
-            && !reads.has(post.id)
-            && (!periodId || post.periodId === periodId)
-          ))
-          .map((post) => post.id),
-      );
-    }, [currentUserId, periodId, roomId]),
+      if (!roomId || !currentUserId) return EMPTY_UNREAD_IDS;
+      const unread = new Set<string>();
+      (state.indexes.postsByRoomId.get(roomId) ?? EMPTY_POSTS).forEach((post) => {
+        if (post.authorId === currentUserId || post.deletedAt) return;
+        if (periodId && post.periodId !== periodId) return;
+        if (joinedAt && post.createdAt < joinedAt) return;
+        if (state.indexes.readPostIds.has(post.id)) return;
+        if (state.localReads.postIds.has(post.id)) return;
+        unread.add(post.id);
+      });
+      return unread.size ? unread : EMPTY_UNREAD_IDS;
+    }, [currentUserId, joinedAt, periodId, roomId]),
+    shallowSetEqual,
   );
 }
 

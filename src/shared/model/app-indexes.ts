@@ -16,6 +16,7 @@ import {
   pickPostIndexes,
   pickPostPollIndexes,
 } from './indexes/post';
+import { buildReadIndexes, pickReadIndexes, readInputsAreShared } from './indexes/read';
 import type { AppIndexes } from './indexes/types';
 import { groupValues, indexById } from './indexes/util';
 
@@ -74,6 +75,9 @@ export function buildAppIndexes(
     && snapshot.roomPostPollVotes === previousSnapshot.roomPostPollVotes
     ? pickPostPollIndexes(previousIndexes)
     : buildPostPollIndexes(snapshot.roomPostPollOptions, snapshot.roomPostPollVotes);
+  const readIndexes = canReuse && readInputsAreShared(snapshot, previousSnapshot)
+    ? pickReadIndexes(previousIndexes)
+    : buildReadIndexes(snapshot);
   const exceptionIndexes = canReuse && exceptionInputsAreShared(snapshot, previousSnapshot)
     ? pickExceptionIndexes(previousIndexes)
     : buildExceptionIndexes(snapshot, membersByPeriodId, expenseIndexes.expenseById);
@@ -114,6 +118,7 @@ export function buildAppIndexes(
     ...postCommentIndexes,
     reactionsByPostId,
     ...pollIndexes,
+    ...readIndexes,
     ...exceptionIndexes,
     resultsByPeriodId,
     statsByRoomId,
@@ -144,6 +149,8 @@ function createEmptyIndexes(): AppIndexes {
     resultsByPeriodId: new Map(),
     statsByRoomId: new Map(),
     crownIdsByPeriodId: new Map(),
+    readExpenseIds: new Set(),
+    readPostIds: new Set(),
     exceptionByExpenseId: new Map(),
     approvedUserIdsByExpenseId: new Map(),
     heldUserIdsByExpenseId: new Map(),

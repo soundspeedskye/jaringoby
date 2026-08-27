@@ -805,6 +805,18 @@ class FakeRepository implements AppRepository {
     else this.snapshot.roomPostReactions.push({ postId, userId: this.userId, emoji, createdAt: new Date().toISOString() });
   }
 
+  async markExpenseRead(expenseId: string): Promise<void> {
+    const existing = this.snapshot.expenseReads?.find(
+      (read) => read.expenseId === expenseId && read.userId === this.userId,
+    );
+    if (existing) return;
+    (this.snapshot.expenseReads ??= []).push({
+      expenseId,
+      userId: this.userId,
+      readAt: new Date().toISOString(),
+    });
+  }
+
   async markRoomPostRead(postId: string): Promise<void> {
     const existing = this.snapshot.roomPostReads?.find(
       (read) => read.postId === postId && read.userId === this.userId,

@@ -194,6 +194,12 @@ export type RoomPostRow = {
   version: number;
 };
 
+export type ExpenseReadRow = {
+  expense_id: string;
+  user_id: string;
+  read_at: string;
+};
+
 export type RoomPostReadRow = {
   post_id: string;
   user_id: string;

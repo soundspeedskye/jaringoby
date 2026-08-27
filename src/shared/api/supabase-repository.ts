@@ -60,6 +60,7 @@ import {
   mapPeriod,
   mapPeriodMember,
   mapPeriodResult,
+  mapExpenseRead,
   mapProfile,
   mapRoom,
   mapRoomMember,
@@ -79,6 +80,7 @@ import {
   fetchCommentRows,
   fetchExceptionResponseRows,
   fetchExceptionRows,
+  fetchExpenseReadRows,
   fetchExpenseRows,
   fetchNotificationRows,
   fetchRoomPostCommentRows,
@@ -133,6 +135,7 @@ const REALTIME_TABLES = [
   "period_members",
   "period_results",
   "expenses",
+  "expense_reads",
   "comments",
   "comment_mentions",
   "comment_reactions",
@@ -861,6 +864,17 @@ export class SupabaseRepository implements AppRepository {
     );
   }
 
+  async markExpenseRead(expenseId: string): Promise<void> {
+    await this.requireUserId();
+    const { error } = await this.client.rpc("mark_expense_read", {
+      p_expense_id: expenseId,
+    });
+    if (error) throw translateError(error, "지출을 읽음 처리하지 못했어요.");
+    await this.reloadRealtimeTablesAndNotify(
+      new Set<RealtimeTable>(["expense_reads"]),
+    );
+  }
+
   async markRoomPostRead(postId: string): Promise<void> {
     await this.requireUserId();
     const { error } = await this.client.rpc("mark_room_post_read", {
@@ -942,6 +956,7 @@ export class SupabaseRepository implements AppRepository {
       statsResult,
       invitesResult,
       expenseRows,
+      expenseReadRows,
       commentRows,
       commentMentionRows,
       commentReactionRows,
@@ -997,6 +1012,7 @@ export class SupabaseRepository implements AppRepository {
         .select("room_id,code,is_active")
         .eq("is_active", true),
       fetchExpenseRows(this.client),
+      fetchExpenseReadRows(this.client),
       fetchCommentRows(this.client),
       fetchCommentMentionRows(this.client),
       fetchCommentReactionRows(this.client),
@@ -1131,6 +1147,9 @@ export class SupabaseRepository implements AppRepository {
       expenses: visibleExpenseRows.map((row) =>
         mapExpense(row, expenseSignedUrls, expenseThumbnailSignedUrls),
       ),
+      expenseReads: expenseReadRows
+        .filter((row) => visibleExpenseIds.has(row.expense_id))
+        .map(mapExpenseRead),
       comments: visibleCommentRows.map(mapComment),
       commentMentions: commentMentionRows
         .filter((row) => visibleCommentIds.has(row.comment_id))

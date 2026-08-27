@@ -678,6 +678,11 @@ export class OfflineQueueRepository implements AppRepository {
     void this.refreshBase().catch(() => undefined);
   }
 
+  async markExpenseRead(expenseId: string): Promise<void> {
+    await this.base.markExpenseRead(expenseId);
+    void this.refreshBase().catch(() => undefined);
+  }
+
   async markRoomPostRead(postId: string): Promise<void> {
     await this.base.markRoomPostRead(postId);
     void this.refreshBase().catch(() => undefined);

@@ -56,6 +56,7 @@ export interface AppRepository {
   updateComment(commentId: string, body: string): Promise<Comment>;
   deleteComment(commentId: string): Promise<void>;
   toggleCommentReaction(commentId: string, emoji: CommentReactionEmoji): Promise<void>;
+  markExpenseRead(expenseId: string): Promise<void>;
   addRoomPost(input: AddRoomPostInput): Promise<RoomPost>;
   updateRoomPost(input: UpdateRoomPostInput): Promise<RoomPost>;
   deleteRoomPost(postId: string): Promise<void>;

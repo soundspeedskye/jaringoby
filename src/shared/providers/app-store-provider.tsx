@@ -88,3 +88,12 @@ export function shallowMapEqual<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMa
   }
   return true;
 }
+
+export function shallowSetEqual<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {
+  if (left === right) return true;
+  if (left.size !== right.size) return false;
+  for (const value of left) {
+    if (!right.has(value)) return false;
+  }
+  return true;
+}

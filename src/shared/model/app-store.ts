@@ -2,14 +2,32 @@ import type { AppSnapshot } from '@/shared/api/types';
 import { buildAppIndexes, type AppIndexes } from '@/shared/model/app-indexes';
 import { deriveAppState, type AppDerivedState } from '@/shared/model/app-selectors';
 
+/**
+ * 이 세션에서 방금 상세를 열어 읽은 항목. 서버 읽음 행이 스냅샷에 실려 올 때까지
+ * NEW가 남아 깜빡이는 것을 막는다. 로그인 사용자가 바뀌면 비운다.
+ */
+export type LocalReads = {
+  expenseIds: ReadonlySet<string>;
+  postIds: ReadonlySet<string>;
+};
+
+export type LocalReadKind = 'expense' | 'post';
+
+const EMPTY_LOCAL_READS: LocalReads = {
+  expenseIds: new Set<string>(),
+  postIds: new Set<string>(),
+};
+
 export type AppStoreState = AppDerivedState & {
   snapshot: AppSnapshot | null;
   indexes: AppIndexes;
+  localReads: LocalReads;
 };
 
 export type AppStore = {
   getState: () => AppStoreState;
   setSnapshot: (snapshot: AppSnapshot) => void;
+  markReadLocally: (kind: LocalReadKind, id: string) => void;
   subscribe: (listener: () => void) => () => void;
 };
 
@@ -18,6 +36,7 @@ export function createAppStore(): AppStore {
   let state: AppStoreState = {
     snapshot: null,
     indexes: emptyIndexes,
+    localReads: EMPTY_LOCAL_READS,
     ...deriveAppState(null, emptyIndexes),
   };
   const listeners = new Set<() => void>();
@@ -33,8 +52,19 @@ export function createAppStore(): AppStore {
       state = {
         snapshot,
         indexes,
+        localReads: previousSnapshot && previousSnapshot.currentUserId !== snapshot.currentUserId
+          ? EMPTY_LOCAL_READS
+          : state.localReads,
         ...derivedState,
       };
+      listeners.forEach((listener) => listener());
+    },
+    markReadLocally: (kind, id) => {
+      const key = kind === 'expense' ? 'expenseIds' : 'postIds';
+      if (state.localReads[key].has(id)) return;
+      const next = new Set(state.localReads[key]);
+      next.add(id);
+      state = { ...state, localReads: { ...state.localReads, [key]: next } };
       listeners.forEach((listener) => listener());
     },
     subscribe: (listener) => {
@@ -90,6 +120,13 @@ function shareAppSnapshot(previous: AppSnapshot | null, incoming: AppSnapshot): 
       (value) => `${value.roomId}\u0000${value.userId}`,
     ),
     expenses: shareRecords(previous.expenses, incoming.expenses, (value) => value.id),
+    expenseReads: previous.expenseReads || incoming.expenseReads
+      ? shareRecords(
+        previous.expenseReads ?? [],
+        incoming.expenseReads ?? [],
+        (value) => `${value.expenseId}\u0000${value.userId}`,
+      )
+      : undefined,
     comments: shareRecords(previous.comments, incoming.comments, (value) => value.id),
     commentMentions: shareRecords(
       previous.commentMentions,

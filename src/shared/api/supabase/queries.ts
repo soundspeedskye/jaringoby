@@ -121,6 +121,17 @@ export async function fetchRoomPostReactionRows(
   return rows<RoomPostReactionRow>(result.data);
 }
 
+export async function fetchExpenseReadRows(
+  client: SupabaseClient,
+): Promise<import("./rows").ExpenseReadRow[]> {
+  const result = await client
+    .from("expense_reads")
+    .select("expense_id,user_id,read_at");
+  if (result.error)
+    throw translateError(result.error, "읽음 상태를 갱신하지 못했어요.");
+  return rows<import("./rows").ExpenseReadRow>(result.data);
+}
+
 export async function fetchRoomPostReadRows(
   client: SupabaseClient,
 ): Promise<import("./rows").RoomPostReadRow[]> {

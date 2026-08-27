@@ -25,6 +25,10 @@ export type AppIndexes = {
   exceptionByExpenseId: Map<string, ExpenseException>;
   approvedUserIdsByExpenseId: Map<string, Set<string>>;
   heldUserIdsByExpenseId: Map<string, Set<string>>;
+  /** 현재 사용자가 상세를 열어 읽은 지출 ID. */
+  readExpenseIds: Set<string>;
+  /** 현재 사용자가 상세를 열어 읽은 게시글 ID. */
+  readPostIds: Set<string>;
   /** 예외가 만장일치로 승인돼 정산에서 빠지는 지출 ID(전 주차 통합). */
   settlementExcludedExpenseIds: Set<string>;
 };

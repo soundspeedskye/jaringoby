@@ -219,6 +219,13 @@ export type RoomPost = {
   version?: number;
 };
 
+/** 멤버별 지출 읽음 상태. 상세를 열 때만 생성한다. */
+export type ExpenseRead = {
+  expenseId: string;
+  userId: string;
+  readAt: string;
+};
+
 /** 멤버별 게시글 읽음 상태. 상세를 열 때만 생성한다. */
 export type RoomPostRead = {
   postId: string;
@@ -311,6 +318,7 @@ export type AppSnapshot = {
   periodResults: PeriodResult[];
   memberStats: RoomMemberStats[];
   expenses: Expense[];
+  expenseReads?: ExpenseRead[];
   comments: Comment[];
   commentMentions: CommentMention[];
   commentReactions: CommentReaction[];

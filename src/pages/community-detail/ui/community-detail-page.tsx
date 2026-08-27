@@ -93,7 +93,7 @@ export function CommunityDetailPage() {
   } = useAppActions();
 
   useEffect(() => {
-    if (post?.id) void markRoomPostRead(post.id);
+    if (post?.id) markRoomPostRead(post.id);
   }, [markRoomPostRead, post?.id]);
 
   const returnFromPost = useCallback(() => {

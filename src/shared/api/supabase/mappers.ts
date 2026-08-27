@@ -6,6 +6,7 @@ import type {
   Expense,
   ExpenseException,
   ExpenseExceptionResponse,
+  ExpenseRead,
   InvitePreview,
   Period,
   PeriodMember,
@@ -35,6 +36,7 @@ import type {
   CommentRow,
   ExpenseExceptionResponseRow,
   ExpenseExceptionRow,
+  ExpenseReadRow,
   ExpenseRow,
   JsonObject,
   NotificationRow,
@@ -359,6 +361,10 @@ export function mapRoomPost(
     deletedAt: row.deleted_at ?? undefined,
     version: row.version,
   };
+}
+
+export function mapExpenseRead(row: ExpenseReadRow): ExpenseRead {
+  return { expenseId: row.expense_id, userId: row.user_id, readAt: row.read_at };
 }
 
 export function mapRoomPostRead(row: RoomPostReadRow): RoomPostRead {

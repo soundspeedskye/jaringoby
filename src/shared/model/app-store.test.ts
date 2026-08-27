@@ -159,6 +159,48 @@ function newComment(expenseId: string): Comment {
   };
 }
 
+describe('읽음 표시', () => {
+  it('내 읽음 행만 읽은 지출·게시글 인덱스에 담는다', () => {
+    const store = createStore();
+    const snapshot = createTestSnapshot();
+    snapshot.expenseReads = [
+      { expenseId: 'expense-mine', userId: 'user-me', readAt: '2026-08-12T00:00:00.000Z' },
+      { expenseId: 'expense-theirs', userId: 'user-other', readAt: '2026-08-12T00:00:00.000Z' },
+    ];
+    store.setSnapshot(snapshot);
+
+    expect([...store.getState().indexes.readExpenseIds]).toEqual(['expense-mine']);
+  });
+
+  it('로컬 읽음은 즉시 반영되고 같은 항목을 다시 표시해도 상태를 바꾸지 않는다', () => {
+    const store = createStore();
+    store.setSnapshot(createTestSnapshot());
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    store.markReadLocally('expense', 'expense-test');
+    expect(store.getState().localReads.expenseIds.has('expense-test')).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    const stateAfterFirst = store.getState();
+    store.markReadLocally('expense', 'expense-test');
+    expect(store.getState()).toBe(stateAfterFirst);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('로그인 사용자가 바뀌면 로컬 읽음을 비운다', () => {
+    const store = createStore();
+    store.setSnapshot(createTestSnapshot());
+    store.markReadLocally('post', 'post-test');
+
+    const other = clone(createTestSnapshot());
+    other.currentUserId = 'user-other';
+    store.setSnapshot(other);
+
+    expect(store.getState().localReads.postIds.size).toBe(0);
+  });
+});
+
 function newExpense(base: Expense): Expense {
   return {
     ...base,

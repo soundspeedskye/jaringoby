@@ -29,6 +29,8 @@ const INDEX_DEPENDENCIES = {
   reactionsByPostId: ['roomPostReactions'],
   pollOptionsByPostId: ['roomPostPollOptions', 'roomPostPollVotes'],
   pollVotesByPostId: ['roomPostPollOptions', 'roomPostPollVotes'],
+  readExpenseIds: ['expenseReads', 'roomPostReads'],
+  readPostIds: ['expenseReads', 'roomPostReads'],
   resultsByPeriodId: ['periodResults'],
   statsByRoomId: ['memberStats'],
   exceptionByExpenseId: EXCEPTION_INPUTS(),
@@ -68,6 +70,8 @@ const SLICES = [
   'roomPostReactions',
   'roomPostPollOptions',
   'roomPostPollVotes',
+  'roomPostReads',
+  'expenseReads',
   'notifications',
   'expenseExceptions',
   'expenseExceptionResponses',
@@ -78,7 +82,7 @@ type Slice = (typeof SLICES)[number];
 
 /** 내용은 그대로 두고 배열 참조만 교체한다. */
 function touch(snapshot: AppSnapshot, slice: Slice): AppSnapshot {
-  return { ...snapshot, [slice]: [...snapshot[slice]] };
+  return { ...snapshot, [slice]: [...(snapshot[slice] ?? [])] };
 }
 
 /** 어떤 슬라이스를 건드렸을 때 해당 인덱스가 참조 재사용되는지. */
@@ -250,6 +254,12 @@ function createDenseSnapshot(): AppSnapshot {
     ],
     roomPostReactions: [
       { postId: 'post-1', userId: 'user-b', emoji: '👍', createdAt: '2026-08-04T03:00:00.000Z' },
+    ],
+    roomPostReads: [
+      { postId: 'post-1', userId: 'user-a', readAt: '2026-08-04T04:00:00.000Z' },
+    ],
+    expenseReads: [
+      { expenseId: 'expense-b', userId: 'user-a', readAt: '2026-08-05T05:00:00.000Z' },
     ],
     roomPostPollOptions: [],
     roomPostPollVotes: [],
