@@ -714,7 +714,9 @@ export class SupabaseRepository implements AppRepository {
           : input.kind === "POLL"
             ? "poll"
             : "post",
-      p_category: ROOM_POST_CATEGORY_TO_DATABASE[input.category],
+      p_category: input.category
+        ? ROOM_POST_CATEGORY_TO_DATABASE[input.category]
+        : null,
       p_title: input.title.trim(),
       p_body: input.body,
       p_options:
@@ -757,7 +759,9 @@ export class SupabaseRepository implements AppRepository {
         : replacementPath;
     const { error } = await this.client.rpc("update_room_post", {
       p_post_id: input.postId,
-      p_category: ROOM_POST_CATEGORY_TO_DATABASE[input.category],
+      p_category: input.category
+        ? ROOM_POST_CATEGORY_TO_DATABASE[input.category]
+        : null,
       p_title: input.title.trim(),
       p_body: input.body.trim(),
       p_photo_path: photoPath,

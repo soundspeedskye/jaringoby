@@ -591,9 +591,9 @@ describe('mapRoomPost', () => {
     expect(mapRoomPost({ ...row, kind: 'post' }).kind).toBe('POST');
   });
 
-  it('poll을 POLL과 마감 시각으로 옮긴다', () => {
-    expect(mapRoomPost({ ...row, kind: 'poll', poll_closes_at: '2026-08-06T15:00:00.000Z' }))
-      .toMatchObject({ kind: 'POLL', pollClosesAt: '2026-08-06T15:00:00.000Z' });
+  it('카테고리 없는 poll을 POLL과 마감 시각으로 옮긴다', () => {
+    expect(mapRoomPost({ ...row, kind: 'poll', category: null, poll_closes_at: '2026-08-06T15:00:00.000Z' }))
+      .toMatchObject({ kind: 'POLL', category: undefined, pollClosesAt: '2026-08-06T15:00:00.000Z' });
   });
 
   it('삭제된 게시글은 원문을 감춘다', () => {

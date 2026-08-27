@@ -398,7 +398,8 @@ export type AddCommentInput = Pick<
 export type AddRoomPostInput = {
   roomId: string;
   kind: RoomPostKind;
-  category: RoomPostCategory;
+  /** 투표는 카테고리 없이 작성한다. */
+  category?: RoomPostCategory;
   title: string;
   body: string;
   /** 기기에서 고른 사진 URI. 업로드 뒤 게시글에 연결하며 지출에는 기록하지 않는다. */
@@ -417,7 +418,8 @@ export type RoomPostPhotoPatch =
 
 export type UpdateRoomPostInput = {
   postId: string;
-  category: RoomPostCategory;
+  /** 투표는 카테고리 없이 유지한다. */
+  category?: RoomPostCategory;
   title: string;
   body: string;
   photo: RoomPostPhotoPatch;

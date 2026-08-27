@@ -367,8 +367,9 @@ export function mapRoomPostRead(row: RoomPostReadRow): RoomPostRead {
 
 function mapRoomPostCategory(
   category: RoomPostRow["category"],
-): RoomPostCategory {
-  const categories: Record<RoomPostRow["category"], RoomPostCategory> = {
+): RoomPostCategory | undefined {
+  if (category === null) return undefined;
+  const categories: Record<Exclude<RoomPostRow["category"], null>, RoomPostCategory> = {
     frugality: "거지력",
     secret_purchase: "뒷구매",
     chat: "잡담",

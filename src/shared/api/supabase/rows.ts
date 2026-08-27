@@ -179,7 +179,7 @@ export type RoomPostRow = {
   room_id: string;
   period_id: string | null;
   kind: 'notice' | 'post' | 'poll';
-  category: 'frugality' | 'secret_purchase' | 'chat';
+  category: 'frugality' | 'secret_purchase' | 'chat' | null;
   author_id: string;
   title: string;
   body: string | null;

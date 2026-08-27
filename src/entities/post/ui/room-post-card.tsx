@@ -31,14 +31,15 @@ export function RoomPostCard({
   const isPoll = post.kind === "POLL";
   const isPreview = variant === "preview";
   const showCategoryAtTop = variant === "detail" && !isNotice;
+  const postLabel = isPoll ? "투표" : post.category;
   const content = (
     <>
       {/* 공지는 "고정된 중요 글"이라 눈에 띄는 알약으로 카드 맨 위에 세운다. */}
       {isNotice ? <NoticeBadge compact={variant !== "detail"} /> : null}
-      {/* 일반 글은 어떤 종류의 이야기인지 먼저 알 수 있도록 카테고리를 맨 위에 둔다. */}
-      {showCategoryAtTop ? (
+      {/* 투표는 카테고리를 갖지 않고, 글 종류만 뱃지로 보여 준다. */}
+      {showCategoryAtTop && postLabel ? (
         <View style={styles.categoryRow}>
-          <Text style={styles.categoryLabel}>{post.category ?? "잡담"}</Text>
+          <Text style={styles.categoryLabel}>{postLabel}</Text>
           {post.secretPurchase ? (
             <Text style={styles.secretMeta}>{`${post.secretPurchase.expenseCategory} · ${formatDateLabel(post.secretPurchase.occurredAt)}`}</Text>
           ) : null}
@@ -55,16 +56,6 @@ export function RoomPostCard({
             value={author?.avatar}
           />
           <Text style={styles.author}>{author?.nickname ?? "알 수 없음"}</Text>
-          {/* 투표글은 종류 표시일 뿐이라 라벨 대신 조용한 아이콘 하나로 둔다.
-              순수 체크(check-circle)는 이 앱에서 "달성"이라 겹치지 않는 글리프를 쓴다. */}
-          {isPoll ? (
-            <MaterialCommunityIcons
-              accessibilityLabel="투표글"
-              color={palette.coralText}
-              name="format-list-checks"
-              size={20}
-            />
-          ) : null}
           {variant === "list" && dateLabel ? (
             <Text style={styles.listDate}>{dateLabel}</Text>
           ) : null}

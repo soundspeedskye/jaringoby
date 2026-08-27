@@ -99,7 +99,7 @@ const BoardPostRow = memo(function BoardPostRow({ author, commentCount, onOpen, 
     <Pressable accessibilityLabel={`${author?.nickname ?? "알 수 없음"}님의 글: ${title}`} accessibilityRole="button" onPress={() => onOpen(post.id)} style={({ pressed }) => [styles.postRow, pressed && styles.pressed]}>
       <PostThumbnail post={post} />
       <View style={styles.postCopy}>
-        <Text style={styles.postMeta}><Text style={styles.category}>{post.category ?? "잡담"}</Text>{` · ${formatDay(post.createdAt)}`}</Text>
+        <Text style={styles.postMeta}><Text style={styles.category}>{post.kind === "POLL" ? "투표" : post.category ?? "잡담"}</Text>{` · ${formatDay(post.createdAt)}`}</Text>
         <View style={styles.postTitleRow}><Text numberOfLines={1} style={styles.postTitle}>{title}</Text>{unread ? <Text style={styles.new}>NEW</Text> : null}</View>
         <Text style={styles.postFooter}>{`반응 ${reactions.length} · 댓글 ${commentCount}`}</Text>
       </View>
@@ -115,7 +115,7 @@ const BoardPostRow = memo(function BoardPostRow({ author, commentCount, onOpen, 
 
 function PostThumbnail({ post }: { post: RoomPost }) {
   if (post.photoUri) return <Image accessibilityLabel="게시글 사진" contentFit="cover" source={{ uri: post.photoUri }} style={styles.thumbnail} />;
-  const icon = post.category === "뒷구매" ? "shopping-outline" : post.category === "거지력" ? "piggy-bank-outline" : "chat-outline";
+  const icon = post.kind === "POLL" ? "format-list-checks" : post.category === "뒷구매" ? "shopping-outline" : post.category === "거지력" ? "piggy-bank-outline" : "chat-outline";
   return <View style={[styles.thumbnail, styles.thumbnailFallback]}><MaterialCommunityIcons color={palette.green} name={icon} size={24} /></View>;
 }
 

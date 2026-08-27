@@ -60,8 +60,8 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
   const currentUser = useCurrentUser();
   const { addRoomPost, updateRoomPost } = useAppActions();
   const isEditing = Boolean(post);
-  const [category, setCategory] = useState<RoomPostCategory>(
-    post?.category ?? "거지력",
+  const [category, setCategory] = useState<RoomPostCategory | undefined>(
+    post?.category ?? (post?.kind === "POLL" ? undefined : "거지력"),
   );
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [title, setTitle] = useState(post?.title ?? "");
@@ -165,7 +165,7 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
         if (!post) throw new Error("게시글을 찾을 수 없어요.");
         await updateRoomPost({
           postId: post.id,
-          category,
+          category: post.kind === "POLL" ? undefined : category,
           title: submittedTitle,
           body: trimmedBody,
           photo:
@@ -185,7 +185,7 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
         await addRoomPost({
           roomId: room.id,
           kind: isNotice ? "NOTICE" : isPoll ? "POLL" : "POST",
-          category,
+          category: isPoll ? undefined : category,
           title: submittedTitle,
           body: trimmedBody,
           options: isPoll ? normalizedOptions : undefined,
