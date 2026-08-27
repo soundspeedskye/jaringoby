@@ -1,0 +1,10 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="녹는 중">
+  <path d="M47 8c20.5 0 37 15 37 33.5 0 8-3 13-3 18.5 0 6.6 10 8 10 15 0 6.4-9 10-22 10.4-9.6.3-15-1.7-23.5-1.7-9.5 0-15.8 2-25.4 1C14.5 84.4 8.5 80.6 8.5 74.6c0-6 6-7.6 6-13.6C14.5 55.6 10 51 10 42.5 10 24 26.5 8 47 8Z" fill="#F5CE3F"/>
+  <path d="M70 87c2.7 4.2 4.8 6.4 4.8 8.9a4.8 4.8 0 0 1-9.6 0c0-2.5 2.1-4.7 4.8-8.9Z" fill="#F5CE3F"/>
+  <path d="M28 86c2.1 3.4 3.7 5.1 3.7 7a3.7 3.7 0 0 1-7.4 0c0-1.9 1.6-3.6 3.7-7Z" fill="#F5CE3F"/>
+  <ellipse cx="23" cy="57" rx="7" ry="4.4" fill="#EE7B62" opacity=".5"/>
+  <ellipse cx="68" cy="54" rx="7" ry="4.4" fill="#EE7B62" opacity=".5"/>
+  <ellipse cx="34" cy="45" rx="4.4" ry="6.4" fill="#3B2E23"/>
+  <ellipse cx="60" cy="40" rx="4.2" ry="5.2" fill="#3B2E23"/>
+  <path d="M32 68c4.5-5.5 8.5 4 13.5-1.5s8.5 4 13-1.5" stroke="#3B2E23" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

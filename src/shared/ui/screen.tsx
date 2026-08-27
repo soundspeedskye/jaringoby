@@ -24,6 +24,8 @@ type ScreenProps = PropsWithChildren<{
    * 모달 폼의 제목과 닫기 버튼처럼 스크롤되면 안 되는 요소에 사용한다.
    */
   fixedHeader?: ReactNode;
+  /** 고정 헤더와 스크롤 콘텐츠의 경계를 종이 괘선으로 구분한다. */
+  fixedHeaderDivider?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   testID?: string;
 }>;
@@ -35,15 +37,32 @@ type ScreenFrameProps = PropsWithChildren<{
    * 목록의 contentContainerStyle과 좌우 여백을 맞춰 두 영역이 같은 세로선에 선다.
    */
   fixedHeader?: ReactNode;
+  /** 고정 헤더와 스크롤 콘텐츠의 경계를 종이 괘선으로 구분한다. */
+  fixedHeaderDivider?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }>;
 
-export function ScreenFrame({ children, fixedHeader, style, testID }: ScreenFrameProps) {
+export function ScreenFrame({
+  children,
+  fixedHeader,
+  fixedHeaderDivider = false,
+  style,
+  testID,
+}: ScreenFrameProps) {
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} testID={testID}>
       <View style={[styles.frame, style]}>
-        {fixedHeader ? <View style={styles.frameFixedHeader}>{fixedHeader}</View> : null}
+        {fixedHeader ? (
+          <View
+            style={[
+              styles.frameFixedHeader,
+              fixedHeaderDivider && styles.fixedHeaderDivider,
+            ]}
+          >
+            {fixedHeader}
+          </View>
+        ) : null}
         {children}
       </View>
     </SafeAreaView>
@@ -55,6 +74,7 @@ export function Screen({
   scroll = true,
   keyboardAvoiding = false,
   fixedHeader,
+  fixedHeaderDivider = false,
   contentStyle,
   testID,
 }: ScreenProps) {
@@ -74,7 +94,14 @@ export function Screen({
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} testID={testID}>
       {fixedHeader ? (
-        <View style={styles.fixedHeader}>{fixedHeader}</View>
+        <View
+          style={[
+            styles.fixedHeader,
+            fixedHeaderDivider && styles.fixedHeaderDivider,
+          ]}
+        >
+          {fixedHeader}
+        </View>
       ) : null}
       {scroll ? (
         shouldAvoidKeyboard ? (
@@ -104,6 +131,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     backgroundColor: palette.cream,
     zIndex: 1,
+  },
+  fixedHeaderDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: palette.line,
   },
   scrollContent: {
     flexGrow: 1,

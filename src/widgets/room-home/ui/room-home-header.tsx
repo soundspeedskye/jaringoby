@@ -6,7 +6,6 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ExceptionApprovalInbox } from "@/features/exception-approval";
 import { RecentExpenseCarousel } from "@/entities/expense/ui/recent-expense-carousel";
 import { DailyExpensePeekSheet } from "@/entities/expense/ui/daily-expense-peek-sheet";
-import { RoomBoardPreview } from "./room-board-preview";
 import { RoomHero } from "@/entities/room/ui/room-hero";
 import { NoticeBanner } from "@/shared/ui/notice-banner";
 import {
@@ -161,8 +160,6 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         onClose={closeDailyExpensePeek}
         profilesById={profilesById}
       />
-
-      <RoomBoardPreview roomId={activeRoom.id} />
 
       <RecentExpenseCarousel
         commentCounts={commentCounts}

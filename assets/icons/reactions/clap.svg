@@ -1,0 +1,18 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="박수">
+  <g transform="rotate(-17 34 62)">
+    <rect x="16" y="30" width="36" height="62" rx="16" fill="#DBA22B"/>
+    <rect x="7" y="56" width="15" height="22" rx="7.5" fill="#DBA22B" transform="rotate(-22 14.5 67)"/>
+    <path d="M27 44h14" stroke="#B98219" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+  </g>
+  <g transform="rotate(16 66 60)">
+    <rect x="48" y="28" width="37" height="63" rx="16" fill="#F4C64A"/>
+    <rect x="79" y="54" width="15" height="22" rx="7.5" fill="#F4C64A" transform="rotate(22 86.5 65)"/>
+    <path d="M60 42h14" stroke="#DFAA36" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+    <ellipse cx="57" cy="74" rx="6.2" ry="4" fill="#EE7B62" opacity=".5"/>
+    <ellipse cx="77" cy="74" rx="6.2" ry="4" fill="#EE7B62" opacity=".5"/>
+    <ellipse cx="60.5" cy="66" rx="3.9" ry="4.6" fill="#3B2E23"/>
+    <ellipse cx="73.5" cy="66" rx="3.9" ry="4.6" fill="#3B2E23"/>
+    <path d="M63.5 75c2.6 3.5 7.8 3.5 10.4 0" stroke="#3B2E23" stroke-width="4.1" stroke-linecap="round" fill="none"/>
+  </g>
+  <path d="M50 13V4M26 18l-5-7M74 18l5-7M10 38l-8-3M90 38l8-3" stroke="#EA6A4E" stroke-width="5" stroke-linecap="round"/>
+</svg>

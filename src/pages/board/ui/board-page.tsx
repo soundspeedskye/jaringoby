@@ -1,328 +1,157 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { Image } from "expo-image";
+import { useFocusEffect, useRouter, useSegments } from "expo-router";
 import { memo, useCallback, useMemo } from "react";
-import {
-  BackHandler,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useCurrentUser, useProfiles } from "@/entities/member/api/use-members";
 import {
-  useLatestRoomNotice,
   useReactionsByPostId,
   useRoomPostCommentCounts,
   useRoomPosts,
+  useUnreadRoomPostIds,
 } from "@/entities/post/api/use-posts";
-import { RoomPostReactionPills } from "@/entities/post/ui/post-reaction-pills";
-import { RoomPostCard } from "@/entities/post/ui/room-post-card";
 import { useActiveRoom } from "@/entities/room/api/use-rooms";
 import type { Profile, RoomPost, RoomPostReaction } from "@/shared/api/types";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
-import { useAppActions } from "@/shared/providers/app-actions-provider";
+import { formatWon } from "@/shared/lib/format";
+import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
+import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { PageHeader } from "@/shared/ui/page-header";
 import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { ScreenFrame } from "@/shared/ui/screen";
 
-type BoardRow =
-  | { type: "week"; label: string; id: string }
-  | { type: "post"; post: RoomPost };
-
 const EMPTY_REACTIONS: RoomPostReaction[] = [];
 
 export function BoardPage() {
   const router = useRouter();
+  const segments = useSegments();
+  const tab = segments[0] === "(tabs)" && segments[1] === "community";
   const refreshControl = usePullToRefreshControl();
   const room = useActiveRoom();
+  const { currentPeriod } = useCurrentRoom();
   const currentUser = useCurrentUser();
-  const posts = useRoomPosts(room?.id);
-  const latestNotice = useLatestRoomNotice(room?.id);
-  const listPosts = useMemo(
-    () => posts.filter((post) => post.id !== latestNotice?.id),
-    [latestNotice?.id, posts],
+  const allPosts = useRoomPosts(room?.id);
+  const posts = useMemo(
+    () => allPosts.filter((post) => !post.deletedAt && post.periodId === currentPeriod?.id),
+    [allPosts, currentPeriod?.id],
   );
-  const rows = useMemo(() => buildRows(listPosts), [listPosts]);
-  const postAuthorIds = useMemo(
-    () => posts.map((post) => post.authorId),
+  // 공지는 작성된 주차와 관계없이, 삭제될 때까지 게시판 맨 위에 고정한다.
+  // 여러 공지가 있으면 최신순으로 모두 보여 준다.
+  const notices = useMemo(
+    () => allPosts.filter((post) => !post.deletedAt && post.kind === "NOTICE"),
+    [allPosts],
+  );
+  const listPosts = useMemo(
+    () => posts.filter((post) => post.kind !== "NOTICE"),
     [posts],
   );
-  const postIds = useMemo(() => posts.map((post) => post.id), [posts]);
-  const profiles = useProfiles(postAuthorIds);
-  const reactionsByPostId = useReactionsByPostId(postIds);
+  const profiles = useProfiles(posts.map((post) => post.authorId));
+  const reactionsByPostId = useReactionsByPostId(posts.map((post) => post.id));
   const commentCounts = useRoomPostCommentCounts(posts);
-  const { toggleRoomPostReaction } = useAppActions();
-  const canWrite = Boolean(room && currentUser && room.status === "OPEN");
-  const returnFromBoard = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace("/");
-  }, [router]);
-  const openPost = useCallback(
-    (postId: string) => router.push(`/room/board/${postId}`),
-    [router],
-  );
-  const togglePostReaction = useCallback(
-    (postId: string, emoji: RoomPostReaction["emoji"]) =>
-      void toggleRoomPostReaction(postId, emoji),
-    [toggleRoomPostReaction],
-  );
-  const renderRow = useCallback(
-    ({ item }: { item: BoardRow }) => {
-      if (item.type === "week")
-        return <Text style={styles.week}>{item.label}</Text>;
-      const post = item.post;
-      return (
-        <BoardPostRow
-          author={profiles.get(post.authorId)}
-          commentCount={commentCounts.get(post.id) ?? 0}
-          currentUserId={currentUser?.id}
-          onOpen={openPost}
-          onToggleReaction={togglePostReaction}
-          post={post}
-          reactions={reactionsByPostId.get(post.id) ?? EMPTY_REACTIONS}
-        />
-      );
-    },
-    [
-      commentCounts,
-      currentUser?.id,
-      openPost,
-      profiles,
-      reactionsByPostId,
-      togglePostReaction,
-    ],
-  );
+  const unreadPostIds = useUnreadRoomPostIds(room?.id, currentUser?.id, currentPeriod?.id);
+  const canWrite = Boolean(room && currentUser && room.status === "OPEN" && currentPeriod);
 
-  // 냥냥톡톡은 홈의 맥락 콘텐츠다. 목록에서 나갈 때 이전 스택이 아니라
-  // Android 시스템 뒤로가기도 헤더와 같은 스택 우선 규칙을 쓴다.
-  useFocusEffect(
-    useCallback(() => {
-      const subscription = BackHandler.addEventListener(
-        "hardwareBackPress",
-        () => {
-          returnFromBoard();
-          return true;
-        },
-      );
-      return () => subscription.remove();
-    }, [returnFromBoard]),
-  );
+  const returnFromBoard = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
+  }, [router]);
+  const openPost = useCallback((postId: string) => router.push(`/room/board/${postId}`), [router]);
+  const renderPost = useCallback(({ item }: { item: RoomPost }) => (
+    <BoardPostRow
+      author={profiles.get(item.authorId)}
+      commentCount={commentCounts.get(item.id) ?? 0}
+      onOpen={openPost}
+      post={item}
+      reactions={reactionsByPostId.get(item.id) ?? EMPTY_REACTIONS}
+      unread={unreadPostIds.has(item.id)}
+    />
+  ), [commentCounts, openPost, profiles, reactionsByPostId, unreadPostIds]);
+
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (tab) return false;
+      returnFromBoard();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [returnFromBoard, tab]));
 
   return (
     <ScreenFrame
-      fixedHeader={
-        <PageHeader
-          bottomSpacing="md"
-          onBack={returnFromBoard}
-          right={
-            canWrite ? (
-              <Pressable
-                accessibilityLabel="아낌 기록 남기기"
-                accessibilityRole="button"
-                onPress={() => router.push("/room/board/new")}
-                style={styles.writeButton}
-              >
-                <MaterialCommunityIcons
-                  color={palette.green}
-                  name="pencil-outline"
-                  size={21}
-                />
-              </Pressable>
-            ) : undefined
-          }
-          title="아껴씀 청년방"
-        />
-      }
+      fixedHeaderDivider
+      fixedHeader={<PageHeader bottomSpacing="md" onBack={tab ? undefined : returnFromBoard} right={canWrite ? <Pressable accessibilityLabel="글 남기기" accessibilityRole="button" onPress={() => router.push("/room/board/new")} style={styles.writeButton}><MaterialCommunityIcons color={palette.green} name="pencil-outline" size={21} style={styles.writeIcon} /></Pressable> : undefined} title="아껴씀 청년방" />}
       testID="room-board-screen"
     >
       <FlatList
         contentContainerStyle={styles.content}
-        data={rows}
-        keyExtractor={(item) => (item.type === "week" ? item.id : item.post.id)}
-        ListEmptyComponent={
-          latestNotice ? null : (
-            <EmptyState
-              description="우리 방의 첫 아낌 기록을 남겨주세요"
-              icon="chat-outline"
-              title="아직 아낌 기록이 없어요."
-            />
-          )
-        }
-        ListHeaderComponent={
-          <>
-            {latestNotice ? (
-              <Pressable
-                accessibilityLabel={`공지: ${latestNotice.body}`}
-                accessibilityRole="button"
-                onPress={() => router.push(`/room/board/${latestNotice.id}`)}
-                style={styles.notice}
-              >
-                <View style={styles.noticeBadge}>
-                  <MaterialCommunityIcons
-                    color={palette.cream}
-                    name="pin"
-                    size={14}
-                  />
-                  <Text style={styles.noticeBadgeText}>공지</Text>
-                </View>
-                <Text numberOfLines={2} style={styles.noticeBody}>
-                  {latestNotice.body}
-                </Text>
+        data={listPosts}
+        keyExtractor={(post) => post.id}
+        ListEmptyComponent={notices.length ? null : <EmptyState description="이번 주 첫 글을 남겨주세요" icon="chat-outline" title="아직 게시글이 없어요." />}
+        ListHeaderComponent={notices.length ? (
+          <View style={styles.noticeList}>
+            {notices.map((notice) => (
+              <Pressable accessibilityLabel={`공지: ${notice.title ?? notice.body}`} accessibilityRole="button" key={notice.id} onPress={() => openPost(notice.id)} style={styles.notice}>
+                <MaterialCommunityIcons color={palette.green} name="pin" size={16} />
+                <Text numberOfLines={1} style={styles.noticeBody}>{notice.title ?? notice.body}</Text>
+                <MaterialCommunityIcons color={palette.muted} name="chevron-right" size={18} />
               </Pressable>
-            ) : null}
-          </>
-        }
+            ))}
+          </View>
+        ) : null}
         refreshControl={refreshControl}
-        renderItem={renderRow}
+        renderItem={renderPost}
         showsVerticalScrollIndicator={false}
       />
     </ScreenFrame>
   );
 }
 
-const BoardPostRow = memo(function BoardPostRow({
-  author,
-  commentCount,
-  currentUserId,
-  onOpen,
-  onToggleReaction,
-  post,
-  reactions,
-}: {
-  author?: Profile;
-  commentCount: number;
-  currentUserId?: string;
-  onOpen: (postId: string) => void;
-  onToggleReaction: (postId: string, emoji: RoomPostReaction["emoji"]) => void;
-  post: RoomPost;
-  reactions: readonly RoomPostReaction[];
-}) {
-  const toggleReaction = useCallback(
-    (emoji: RoomPostReaction["emoji"]) => onToggleReaction(post.id, emoji),
-    [onToggleReaction, post.id],
-  );
-  const footer = (
-    <View style={styles.postFooter}>
-      <RoomPostReactionPills
-        currentUserId={currentUserId}
-        onToggle={toggleReaction}
-        reactions={reactions}
-      />
-      <View style={styles.comments}>
-        <MaterialCommunityIcons
-          color={palette.muted}
-          name="comment-outline"
-          size={16}
-        />
-        <Text style={styles.commentsText}>댓글 {commentCount}</Text>
-      </View>
-    </View>
-  );
+const BoardPostRow = memo(function BoardPostRow({ author, commentCount, onOpen, post, reactions, unread }: { author?: Profile; commentCount: number; onOpen: (postId: string) => void; post: RoomPost; reactions: readonly RoomPostReaction[]; unread: boolean }) {
+  const title = post.secretPurchase ? `${formatWon(post.secretPurchase.amount)} 뒷구매` : post.title ?? post.body;
   return (
-    <RoomPostCard
-      author={author}
-      dateLabel={formatDay(post.createdAt)}
-      footer={footer}
-      onPress={() => onOpen(post.id)}
-      post={post}
-      variant="list"
-    />
+    <Pressable accessibilityLabel={`${author?.nickname ?? "알 수 없음"}님의 글: ${title}`} accessibilityRole="button" onPress={() => onOpen(post.id)} style={({ pressed }) => [styles.postRow, pressed && styles.pressed]}>
+      <PostThumbnail post={post} />
+      <View style={styles.postCopy}>
+        <Text style={styles.postMeta}><Text style={styles.category}>{post.category ?? "잡담"}</Text>{` · ${formatDay(post.createdAt)}`}</Text>
+        <View style={styles.postTitleRow}><Text numberOfLines={1} style={styles.postTitle}>{title}</Text>{unread ? <Text style={styles.new}>NEW</Text> : null}</View>
+        <Text style={styles.postFooter}>{`반응 ${reactions.length} · 댓글 ${commentCount}`}</Text>
+      </View>
+      <View style={styles.authorProfile}>
+        <AnimalAvatar photoUri={author?.avatarUri} size={32} value={author?.avatar} />
+        <Text numberOfLines={1} style={styles.authorNickname}>
+          {author?.nickname ?? "알 수 없음"}
+        </Text>
+      </View>
+    </Pressable>
   );
 });
 
-function buildRows(posts: readonly RoomPost[]): BoardRow[] {
-  const rows: BoardRow[] = [];
-  let previousLabel = "";
-  posts.forEach((post) => {
-    const label = formatWeek(post.createdAt);
-    if (label !== previousLabel) {
-      rows.push({ type: "week", label, id: `week-${label}` });
-      previousLabel = label;
-    }
-    rows.push({ type: "post", post });
-  });
-  return rows;
-}
-
-function formatWeek(value: string): string {
-  const date = new Date(value);
-  const month = new Intl.DateTimeFormat("ko-KR", {
-    month: "numeric",
-    timeZone: "Asia/Seoul",
-  }).format(date);
-  const first = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  const day = date.getDate();
-  return `${month} ${Math.ceil((day + first) / 7)}주차`;
+function PostThumbnail({ post }: { post: RoomPost }) {
+  if (post.photoUri) return <Image accessibilityLabel="게시글 사진" contentFit="cover" source={{ uri: post.photoUri }} style={styles.thumbnail} />;
+  const icon = post.category === "뒷구매" ? "shopping-outline" : post.category === "거지력" ? "piggy-bank-outline" : "chat-outline";
+  return <View style={[styles.thumbnail, styles.thumbnailFallback]}><MaterialCommunityIcons color={palette.green} name={icon} size={24} /></View>;
 }
 
 function formatDay(value: string): string {
-  return `${new Intl.DateTimeFormat("ko-KR", { day: "numeric", timeZone: "Asia/Seoul" }).format(new Date(value))}`;
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
 const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingHorizontal: spacing.xl, paddingBottom: 120 },
-  writeButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: palette.line,
-    borderRadius: 21,
-    backgroundColor: palette.paper,
-  },
-  // 공지는 일반 글과 같은 종이를 쓰고 라벨·테두리 진하기로만 구분한다.
-  notice: {
-    marginBottom: spacing.xl,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: palette.lineStrong,
-    borderRadius: radii.xl,
-    backgroundColor: palette.paper,
-  },
-  noticeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 4,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-    backgroundColor: palette.green,
-  },
-  noticeBadgeText: {
-    color: palette.cream,
-    fontFamily: fonts.handBold,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  noticeBody: {
-    color: palette.ink,
-    fontFamily: fonts.handBold,
-    fontSize: 19,
-    lineHeight: 27,
-  },
-  week: {
-    color: palette.muted,
-    fontFamily: fonts.handBold,
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: spacing.md,
-  },
-  postFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  comments: { flexDirection: "row", alignItems: "center", gap: 4 },
-  commentsText: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
+  writeButton: { width: 42, height: 42, alignItems: "flex-start", justifyContent: "center", borderWidth: 1, borderColor: palette.line, borderRadius: 21, backgroundColor: palette.paper },
+  writeIcon: { transform: [{ translateX: 8 }] },
+  noticeList: { marginBottom: spacing.lg },
+  notice: { alignItems: "center", flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: palette.rule },
+  noticeBody: { flex: 1, color: palette.ink, fontFamily: fonts.hand, fontSize: 12 },
+  postRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 88, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: palette.rule },
+  pressed: { opacity: 0.72 },
+  thumbnail: { width: 72, height: 72, borderRadius: radii.md, backgroundColor: palette.rule },
+  thumbnailFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(47,113,93,0.08)" },
+  postCopy: { flex: 1, minWidth: 0, alignSelf: "stretch", justifyContent: "center" },
+  postMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10 }, category: { color: palette.green, fontFamily: fonts.handBold, fontWeight: "700" },
+  postTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 4 }, postTitle: { flex: 1, color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" }, new: { color: palette.stamp, fontFamily: fonts.handBold, fontSize: 9, fontWeight: "700", letterSpacing: 0.5 }, postFooter: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 6 },
+  authorProfile: { alignItems: "center", gap: 3, width: 46 },
+  authorNickname: { alignSelf: "stretch", color: palette.muted, fontFamily: fonts.hand, fontSize: 9, textAlign: "center" },
 });

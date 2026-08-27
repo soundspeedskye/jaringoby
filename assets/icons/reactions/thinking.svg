@@ -1,0 +1,15 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="고민 중">
+  <path d="M45 5c20.5-.5 36.5 15 36 34.5S65 74 45 74 9 59 9 39.5 24.5 5.5 45 5Z" fill="#F5CE3F"/>
+  <path d="M22 30c4.2-4.8 11-5.2 15.6-1.4" stroke="#3B2E23" stroke-width="4.4" stroke-linecap="round" fill="none"/>
+  <path d="M50 24c4.6-5.4 11.4-5.8 16-1.8" stroke="#3B2E23" stroke-width="4.4" stroke-linecap="round" fill="none"/>
+  <ellipse cx="19" cy="54" rx="7" ry="4.4" fill="#EE7B62" opacity=".5"/>
+  <ellipse cx="30" cy="42" rx="4.2" ry="5" fill="#3B2E23"/>
+  <ellipse cx="58" cy="38" rx="4.2" ry="5" fill="#3B2E23"/>
+  <path d="M27 60c6.5 3.4 13.5 2.6 18.5-2.4" stroke="#3B2E23" stroke-width="4.4" stroke-linecap="round" fill="none"/>
+  <g transform="rotate(-14 58 74)">
+    <rect x="34" y="58" width="48" height="30" rx="15" fill="#DFAA36"/>
+    <circle cx="76" cy="66" r="9" fill="#DFAA36"/>
+    <path d="M44 70h22M46 79h20" stroke="#C8912A" stroke-width="3.2" stroke-linecap="round" fill="none" opacity=".7"/>
+  </g>
+  <path d="M85 20l6-4M89 33l7 1" stroke="#EA6A4E" stroke-width="4.4" stroke-linecap="round"/>
+</svg>

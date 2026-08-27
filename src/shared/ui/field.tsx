@@ -1,5 +1,12 @@
 import type { ComponentProps } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 import { fonts, palette, radii, spacing } from '@/shared/config/design';
 
@@ -7,12 +14,20 @@ type FieldProps = ComponentProps<typeof TextInput> & {
   label?: string;
   error?: string;
   hint?: string;
+  containerStyle?: StyleProp<ViewStyle>;
 };
 
-export function Field({ label, error, hint, style, ...props }: FieldProps) {
+export function Field({
+  label,
+  error,
+  hint,
+  style,
+  containerStyle,
+  ...props
+}: FieldProps) {
   const accessibilityHint = error ?? props.accessibilityHint ?? hint;
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, containerStyle]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         accessibilityLabel={label ?? props.accessibilityLabel}

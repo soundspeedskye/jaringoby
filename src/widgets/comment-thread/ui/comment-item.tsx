@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { memo, useCallback, useMemo, useState } from "react";
 import type { FocusEvent } from "react-native";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -12,7 +13,10 @@ import type {
   CommentReactionEmoji,
   Profile,
 } from "@/shared/api/types";
-import { COMMENT_REACTION_EMOJIS } from "@/shared/api/types";
+import {
+  COMMENT_REACTION_EMOJIS,
+  QUICK_COMMENT_REACTION_EMOJIS,
+} from "@/shared/api/types";
 import {
   fonts,
   palette,
@@ -22,6 +26,7 @@ import {
 } from "@/shared/config/design";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { CommentReactionIcon } from "@/shared/ui/comment-reaction-icon";
 
 export const CommentItem = memo(function CommentItem({
   canDelete,
@@ -71,6 +76,9 @@ export const CommentItem = memo(function CommentItem({
   const [editingBody, setEditingBody] = useState(comment.body);
   const [reactingEmoji, setReactingEmoji] =
     useState<CommentReactionEmoji | null>(null);
+  const [reactionPicker, setReactionPicker] = useState<
+    "closed" | "quick" | "all"
+  >("closed");
   const mine = comment.authorId === currentUserId;
   // 반응을 한 번만 훑어 이모지별 개수·내 선택 여부를 집계한다(렌더는 조회만).
   const reactionSummary = useMemo(() => {
@@ -166,6 +174,17 @@ export const CommentItem = memo(function CommentItem({
       setReactingEmoji(null);
     }
   };
+  const toggleReactionPicker = () => {
+    setReactionPicker((current) => {
+      if (current === "closed") return "quick";
+      if (current === "quick") return "all";
+      return "closed";
+    });
+  };
+  const chooseReaction = async (emoji: CommentReactionEmoji) => {
+    await toggleReaction(emoji);
+    setReactionPicker("closed");
+  };
 
   return (
     <View
@@ -230,30 +249,76 @@ export const CommentItem = memo(function CommentItem({
         </Pressable>
         {features.reactions && !comment.deletedAt ? (
           <View style={[styles.reactionRow, mine && styles.reactionRowMine]}>
-            {COMMENT_REACTION_EMOJIS.map((emoji) => {
-              const { count = 0, selected = false } =
-                reactionSummary.get(emoji) ?? {};
-              return (
-                <Pressable
-                  accessibilityLabel={`${emoji} 반응${count ? ` ${count}개` : ""}${selected ? ", 선택됨" : ""}`}
-                  accessibilityRole="button"
-                  disabled={!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)}
-                  key={emoji}
-                  onPress={() => void toggleReaction(emoji)}
-                  style={[
-                    styles.reactionButton,
-                    selected && styles.reactionButtonSelected,
-                    (!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)) &&
-                      styles.reactionButtonDisabled,
-                  ]}
-                >
-                  <Text style={styles.reactionText}>
-                    {emoji}
-                    {count ? ` ${count}` : ""}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            <View style={styles.reactionControls}>
+              {COMMENT_REACTION_EMOJIS.filter(
+                (emoji) => (reactionSummary.get(emoji)?.count ?? 0) > 0,
+              ).map((emoji) => {
+                const { count = 0, selected = false } =
+                  reactionSummary.get(emoji) ?? {};
+                return (
+                  <Pressable
+                    accessibilityLabel={`${emoji} 반응${count ? ` ${count}개` : ""}${selected ? ", 선택됨" : ""}`}
+                    accessibilityRole="button"
+                    disabled={!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)}
+                    key={emoji}
+                    onPress={() => void toggleReaction(emoji)}
+                    style={[
+                      styles.reactionButton,
+                      selected && styles.reactionButtonSelected,
+                      (!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)) &&
+                        styles.reactionButtonDisabled,
+                    ]}
+                  >
+                    <CommentReactionIcon emoji={emoji} size={20} />
+                    <Text style={styles.reactionCount}>{count}</Text>
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                accessibilityLabel={
+                  reactionPicker === "quick"
+                    ? "전체 반응 보기"
+                    : "반응 이모지 추가"
+                }
+                accessibilityRole="button"
+                disabled={!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)}
+                onPress={toggleReactionPicker}
+                style={[
+                  styles.reactionAddButton,
+                  (!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)) &&
+                    styles.reactionButtonDisabled,
+                ]}
+              >
+                <MaterialCommunityIcons color={palette.muted} name="emoticon-plus-outline" size={19} />
+              </Pressable>
+            </View>
+            {reactionPicker !== "closed" ? (
+              <View style={[styles.reactionPicker, mine && styles.reactionPickerMine]}>
+                {(reactionPicker === "quick"
+                  ? QUICK_COMMENT_REACTION_EMOJIS
+                  : COMMENT_REACTION_EMOJIS
+                ).map((emoji) => {
+                  const selected = reactionSummary.get(emoji)?.selected ?? false;
+                  return (
+                    <Pressable
+                      accessibilityLabel={`${emoji} 반응${selected ? ", 선택됨" : ""}`}
+                      accessibilityRole="button"
+                      disabled={!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)}
+                      key={emoji}
+                      onPress={() => void chooseReaction(emoji)}
+                      style={[
+                        styles.reactionPickerButton,
+                        selected && styles.reactionButtonSelected,
+                        (!canMutate || !toggleCommentReaction || Boolean(reactingEmoji)) &&
+                          styles.reactionButtonDisabled,
+                      ]}
+                    >
+                      <CommentReactionIcon emoji={emoji} size={28} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
           </View>
         ) : null}
         <View
@@ -435,22 +500,23 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   reactionRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 5,
+    alignItems: "flex-start",
     marginTop: 6,
     marginLeft: 2,
   },
   reactionRowMine: {
-    justifyContent: "flex-end",
+    alignItems: "flex-end",
     marginLeft: 0,
     marginRight: 2,
   },
+  reactionControls: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
   reactionButton: {
     minHeight: 27,
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "center",
-    paddingHorizontal: 7,
+    gap: 2,
+    paddingHorizontal: 5,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: palette.line,
@@ -461,7 +527,36 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,135,98,0.14)",
   },
   reactionButtonDisabled: { opacity: 0.62 },
-  reactionText: { color: palette.ink, fontFamily: fonts.hand, fontSize: 12 },
+  reactionCount: { color: palette.ink, fontFamily: fonts.hand, fontSize: 12 },
+  reactionAddButton: {
+    alignItems: "center",
+    backgroundColor: palette.paper,
+    borderColor: palette.line,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 27,
+    justifyContent: "center",
+    width: 31,
+  },
+  reactionPicker: {
+    backgroundColor: palette.paper,
+    borderColor: palette.line,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 2,
+    padding: 6,
+  },
+  reactionPickerMine: { alignSelf: "flex-end" },
+  reactionPickerButton: {
+    alignItems: "center",
+    borderRadius: radii.sm,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
+  },
   messageMetaRow: { flexDirection: "row", gap: 5, marginTop: 3, marginLeft: 4 },
   messageMetaRowMine: {
     justifyContent: "flex-end",

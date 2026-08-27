@@ -8,14 +8,16 @@ import { fonts, glass, palette, radii, spacing, tabBar } from '@/shared/config/d
 import { useLiquidGlass } from '@/shared/lib/use-liquid-glass';
 
 const labels: Record<string, string> = {
-  index: '챌린지',
+  index: '홈',
   expenses: '내 지출',
+  community: '커뮤니티',
   profile: '내 정보',
 };
 
 const icons: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
   index: 'home-outline',
   expenses: 'format-list-bulleted',
+  community: 'forum-outline',
   profile: 'account-circle-outline',
 };
 

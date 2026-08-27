@@ -14,6 +14,7 @@ type ModalFormScreenProps = PropsWithChildren<{
   loading?: boolean;
   footer?: ReactNode;
   headerBottomSpacing?: HeaderSpacing;
+  headerDivider?: boolean;
 }>;
 
 export function ModalFormScreen({
@@ -23,6 +24,7 @@ export function ModalFormScreen({
   loading = false,
   footer,
   headerBottomSpacing = "lg",
+  headerDivider = false,
   children,
 }: ModalFormScreenProps) {
   return (
@@ -35,6 +37,7 @@ export function ModalFormScreen({
           title={title}
         />
       }
+      fixedHeaderDivider={headerDivider}
       keyboardAvoiding
       scroll={!loading}
       testID={testID}

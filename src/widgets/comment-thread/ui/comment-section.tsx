@@ -1,11 +1,11 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { MentionCandidate, ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   FocusEvent,
   LayoutChangeEvent,
   ListRenderItemInfo,
+  RefreshControlProps,
   ScrollViewProps,
 } from "react-native";
 import {
@@ -19,21 +19,27 @@ import {
 } from "react-native";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useDerivedValue } from "react-native-reanimated";
+import type {
+  MentionCandidate,
+  ThreadActions,
+  ThreadFeatures,
+  ThreadMessage,
+} from "../model/types";
 
-import { CommentChatScrollView } from "./comment-chat-scroll-view";
-import { CommentComposerDock } from "./comment-composer-dock";
-import { CommentItem } from "./comment-item";
-import { InputFocusContext } from "@/shared/lib/input-focus-context";
-import type { ReplyDraft } from "@/shared/lib/domain/replies";
-import { prepareReplyDraft } from "@/shared/lib/domain/replies";
 import type {
   CommentMention,
   CommentReaction,
   Profile,
 } from "@/shared/api/types";
 import { fonts, palette, spacing } from "@/shared/config/design";
+import type { ReplyDraft } from "@/shared/lib/domain/replies";
+import { prepareReplyDraft } from "@/shared/lib/domain/replies";
+import { InputFocusContext } from "@/shared/lib/input-focus-context";
 import type { PeriodPhase } from "@/shared/model/types";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { CommentChatScrollView } from "./comment-chat-scroll-view";
+import { CommentComposerDock } from "./comment-composer-dock";
+import { CommentItem } from "./comment-item";
 
 const EMPTY_COMMENT_REACTIONS: CommentReaction[] = [];
 
@@ -52,6 +58,7 @@ export function CommentThread({
   phase,
   profilesById,
   reactionsByCommentId,
+  refreshControl,
 }: {
   actions: ThreadActions;
   canMutate: boolean;
@@ -68,6 +75,8 @@ export function CommentThread({
   phase?: PeriodPhase | null;
   profilesById: ReadonlyMap<string, Profile>;
   reactionsByCommentId?: ReadonlyMap<string, CommentReaction[]>;
+  /** 상세 화면이 명시적으로 제공할 때만 당겨서 새로고침을 켠다. */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const listRef = useRef<FlatList<ThreadMessage>>(null);
   const composerRef = useRef<TextInput>(null);
@@ -117,18 +126,24 @@ export function CommentThread({
   );
   // 소식함에서 특정 댓글로 들어오면 그 댓글까지 데려가고 잠시 강조한다.
   // 목록이 한 번 그려진 뒤에야 인덱스를 잡을 수 있어 다음 프레임에 실행한다.
-  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(
-    highlightCommentId ?? null,
-  );
+  const [highlightedCommentId, setHighlightedCommentId] = useState<
+    string | null
+  >(highlightCommentId ?? null);
   const highlightHandled = useRef(false);
   useEffect(() => {
     if (!highlightCommentId || highlightHandled.current) return;
-    const index = comments.findIndex((comment) => comment.id === highlightCommentId);
+    const index = comments.findIndex(
+      (comment) => comment.id === highlightCommentId,
+    );
     // 아직 목록에 없으면(로딩 중) 다음 렌더에서 다시 본다.
     if (index < 0) return;
     highlightHandled.current = true;
     const scrollTimer = setTimeout(() => {
-      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+      listRef.current?.scrollToIndex({
+        animated: true,
+        index,
+        viewPosition: 0.5,
+      });
     }, 250);
     // 강조는 잠깐만 둔다. 계속 켜 두면 읽는 데 방해가 된다.
     const fadeTimer = setTimeout(() => setHighlightedCommentId(null), 2600);
@@ -141,13 +156,23 @@ export function CommentThread({
   // 없으면 조용히 아무 일도 하지 않는다. 대략 위치로 먼저 옮긴 뒤 한 번만
   // 다시 시도한다.
   const scrollToIndexFailed = useCallback(
-    ({ index, averageItemLength }: { index: number; averageItemLength: number }) => {
+    ({
+      index,
+      averageItemLength,
+    }: {
+      index: number;
+      averageItemLength: number;
+    }) => {
       listRef.current?.scrollToOffset({
         animated: true,
         offset: index * averageItemLength,
       });
       setTimeout(() => {
-        listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+        listRef.current?.scrollToIndex({
+          animated: true,
+          index,
+          viewPosition: 0.5,
+        });
       }, 300);
     },
     [],
@@ -270,12 +295,14 @@ export function CommentThread({
           accessibilityLabel="댓글 대화"
           contentContainerStyle={styles.commentListContent}
           data={comments}
-          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardDismissMode={
+            Platform.OS === "ios" ? "interactive" : "on-drag"
+          }
           keyboardShouldPersistTaps="handled"
           keyExtractor={(comment) => comment.id}
           ListEmptyComponent={
             <EmptyState
-              title="아직 댓글이 없어요. 첫 응원을 남겨 보세요."
+              title="아직 댓글이 없어요. 첫 댓글을 남겨 보세요."
               variant="compact"
             />
           }
@@ -298,6 +325,7 @@ export function CommentThread({
           onScrollToIndexFailed={scrollToIndexFailed}
           renderItem={renderComment}
           renderScrollComponent={renderScrollComponent}
+          refreshControl={refreshControl}
           ref={listRef}
           showsVerticalScrollIndicator={false}
           style={styles.commentList}
