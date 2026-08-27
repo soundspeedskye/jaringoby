@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AnimalAvatar } from '@/shared/ui/animal-avatar';
+import { UnreadDot } from '@/shared/ui/unread-dot';
 import { fonts, palette, spacing, tabularNums } from '@/shared/config/design';
 import { formatWon } from '@/shared/lib/format';
 
@@ -14,6 +15,8 @@ export type MemberListItem = {
   isCrowned: boolean;
   isLateJoiner?: boolean;
   isCurrentUser?: boolean;
+  /** 이 멤버가 올린 지출 중 내가 아직 열어 보지 않은 건수. */
+  unreadExpenseCount?: number;
 };
 
 export function MemberList({
@@ -37,7 +40,7 @@ export function MemberList({
         return (
           <View
             accessible
-            accessibilityLabel={`${member.isCrowned ? '현재 1위, ' : ''}${displayName}, ${member.detail}, ${balanceLabel}`}
+            accessibilityLabel={`${member.isCrowned ? '현재 1위, ' : ''}${displayName}, ${member.detail}, ${balanceLabel}${member.unreadExpenseCount ? `, 읽지 않은 지출 ${member.unreadExpenseCount}건` : ''}`}
             key={member.id}
             style={[
               styles.row,
@@ -50,11 +53,16 @@ export function MemberList({
                 accessibilityRole="button"
                 hitSlop={6}
                 onPress={() => onPressAvatar(member.id)}
+                style={styles.avatarSlot}
               >
                 <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={46} style={styles.avatar} />
+                <UnreadDot count={member.unreadExpenseCount ?? 0} />
               </Pressable>
             ) : (
-              <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={46} style={styles.avatar} />
+              <View style={styles.avatarSlot}>
+                <AnimalAvatar photoUri={member.avatarUri} value={member.avatar} size={46} style={styles.avatar} />
+                <UnreadDot count={member.unreadExpenseCount ?? 0} />
+              </View>
             )}
             <View style={styles.copy}>
               <View style={styles.nameRow}>
@@ -111,6 +119,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   lastRow: { borderBottomWidth: 0 },
+  avatarSlot: { position: 'relative' },
   avatar: {
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.88)',

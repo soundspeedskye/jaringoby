@@ -21,6 +21,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { NewBadge } from "@/shared/ui/new-badge";
 import { fonts, glass, palette, radii, spacing, tabularNums } from "@/shared/config/design";
 import { toSeoulLocalDate } from "@/shared/lib/domain/date-time";
 import {
@@ -40,6 +41,8 @@ type DailyExpensePeekSheetProps = {
   onClose: () => void;
   /** 항목을 누르면 시트를 닫은 뒤 호출된다. entities는 라우터를 직접 쓰지 않는다. */
   onSelectExpense?: (expenseId: string, clientRequestId?: string) => void;
+  /** 아직 상세를 열지 않은 남의 지출 ID. */
+  unreadExpenseIds?: ReadonlySet<string>;
 };
 
 const SHEET_MIN_HEIGHT = 360;
@@ -64,6 +67,7 @@ export const DailyExpensePeekSheet = memo(function DailyExpensePeekSheet({
   expenses,
   profilesById,
   topOffset,
+  unreadExpenseIds,
   onClose,
   onSelectExpense,
 }: DailyExpensePeekSheetProps) {
@@ -198,6 +202,7 @@ export const DailyExpensePeekSheet = memo(function DailyExpensePeekSheet({
                     panGesture={panGesture}
                     profilesById={profilesById}
                     total={total}
+                    unreadExpenseIds={unreadExpenseIds}
                   />
                 </GlassView>
               ) : (
@@ -210,6 +215,7 @@ export const DailyExpensePeekSheet = memo(function DailyExpensePeekSheet({
                     panGesture={panGesture}
                     profilesById={profilesById}
                     total={total}
+                    unreadExpenseIds={unreadExpenseIds}
                   />
                 </View>
               )}
@@ -229,6 +235,7 @@ function SheetContents({
   panGesture,
   profilesById,
   total,
+  unreadExpenseIds,
 }: {
   date: string;
   dayExpenses: readonly Expense[];
@@ -237,6 +244,7 @@ function SheetContents({
   panGesture: ReturnType<typeof Gesture.Pan>;
   profilesById: ReadonlyMap<string, Profile>;
   total: number;
+  unreadExpenseIds?: ReadonlySet<string>;
 }) {
   return (
     <View style={styles.sheetContent}>
@@ -275,10 +283,11 @@ function SheetContents({
             const profile = profilesById.get(expense.userId);
             const nickname = profile?.nickname ?? "알 수 없음";
             const title = expense.memo || expense.category;
+            const unread = unreadExpenseIds?.has(expense.id) ?? false;
             return (
               <Pressable
                 accessibilityHint={onSelectExpense ? "지출 상세를 엽니다" : undefined}
-                accessibilityLabel={`${nickname}님의 ${expense.category} ${formatWon(expense.amount)}, ${title}`}
+                accessibilityLabel={`${unread ? "읽지 않음, " : ""}${nickname}님의 ${expense.category} ${formatWon(expense.amount)}, ${title}`}
                 accessibilityRole={onSelectExpense ? "button" : undefined}
                 disabled={!onSelectExpense}
                 key={expense.id}
@@ -294,9 +303,12 @@ function SheetContents({
                   value={profile?.avatar ?? ""}
                 />
                 <View style={styles.recordCopy}>
-                  <Text numberOfLines={1} style={styles.recordTitle}>
-                    {title}
-                  </Text>
+                  <View style={styles.recordTitleRow}>
+                    <Text numberOfLines={1} style={styles.recordTitle}>
+                      {title}
+                    </Text>
+                    {unread ? <NewBadge /> : null}
+                  </View>
                   <Text style={styles.recordMeta}>
                     {nickname} · {expense.category} · {formatTimeLabel(expense.occurredAt)}
                   </Text>
@@ -381,6 +393,7 @@ const styles = StyleSheet.create({
   },
   recordPressed: { opacity: 0.72 },
   recordCopy: { flex: 1, minWidth: 0 },
+  recordTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   recordTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
   recordMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, marginTop: 3 },
   amount: { color: palette.coralText, fontFamily: fonts.number, fontSize: 14, fontWeight: "800", ...tabularNums },

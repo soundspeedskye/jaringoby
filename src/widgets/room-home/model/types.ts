@@ -32,6 +32,8 @@ export type RoomHomeData = {
   feedExpenses: Expense[];
   recentExpenses: Expense[];
   profilesById: ReadonlyMap<string, Profile>;
+  /** 아직 상세를 열지 않은 남의 지출 ID. 최근 피드·일별 시트의 NEW 표시에 쓴다. */
+  unreadExpenseIds: ReadonlySet<string>;
   error: string | null;
 };
 

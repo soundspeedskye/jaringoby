@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AnimalAvatar } from '@/shared/ui/animal-avatar';
+import { NewBadge } from '@/shared/ui/new-badge';
 import { ExpensePhoto } from '@/entities/expense/ui/expense-photo';
 import { fonts, palette, radii, shadow, spacing, tabularNums } from '@/shared/config/design';
 import { formatWon } from '@/shared/lib/format';
@@ -23,6 +24,8 @@ type ExpenseCardProps = {
   occurredAtLabel: string;
   commentCount: number;
   edited?: boolean;
+  /** 아직 상세를 열지 않은 남의 지출이면 NEW 도장을 붙인다. */
+  unread?: boolean;
   hideAuthor?: boolean;
   onPress?: (id: string, clientRequestId?: string) => void;
 };
@@ -36,7 +39,10 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
       <View style={styles.header}>
         {props.hideAuthor ? (
           <View style={styles.expenseDetails}>
-            <Text style={styles.category}>{props.category}</Text>
+            <View style={styles.categoryRow}>
+              <Text style={styles.category}>{props.category}</Text>
+              {props.unread ? <NewBadge /> : null}
+            </View>
             <Text style={styles.meta}>
               {props.occurredAtLabel}{props.edited ? ' · 수정됨' : ''}
             </Text>
@@ -45,7 +51,10 @@ export const ExpenseCard = memo(function ExpenseCard(props: ExpenseCardProps) {
           <View style={styles.author}>
             <AnimalAvatar photoUri={props.avatarUri} value={props.avatar} size={32} />
             <View>
-              <Text style={styles.name}>{props.nickname}</Text>
+              <View style={styles.categoryRow}>
+                <Text style={styles.name}>{props.nickname}</Text>
+                {props.unread ? <NewBadge /> : null}
+              </View>
               <Text style={styles.meta}>{props.category} · {props.occurredAtLabel}{props.edited ? ' · 수정됨' : ''}</Text>
             </View>
           </View>
@@ -80,6 +89,7 @@ const styles = StyleSheet.create({
   author: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   name: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '600' },
   expenseDetails: { flex: 1, minWidth: 0 },
+  categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   category: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: '700' },
   meta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, marginTop: 2 },
   amount: { color: palette.coralText, fontFamily: fonts.number, fontSize: 16, fontWeight: '700', ...tabularNums },

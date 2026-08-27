@@ -11,6 +11,7 @@ import {
   useRoomPosts,
   useUnreadRoomPostIds,
 } from "@/entities/post/api/use-posts";
+import { useMyPeriodJoinedAt } from "@/entities/period/api/use-periods";
 import { useActiveRoom } from "@/entities/room/api/use-rooms";
 import type { Profile, RoomPost, RoomPostReaction } from "@/shared/api/types";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
@@ -18,6 +19,7 @@ import { formatWon } from "@/shared/lib/format";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { NewBadge } from "@/shared/ui/new-badge";
 import { PageHeader } from "@/shared/ui/page-header";
 import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { ScreenFrame } from "@/shared/ui/screen";
@@ -30,6 +32,7 @@ export function CommunityPage() {
   const room = useActiveRoom();
   const { currentPeriod } = useCurrentRoom();
   const currentUser = useCurrentUser();
+  const myPeriodJoinedAt = useMyPeriodJoinedAt(currentPeriod?.id, currentUser?.id);
   const allPosts = useRoomPosts(room?.id);
   const posts = useMemo(
     () => allPosts.filter((post) => !post.deletedAt && post.periodId === currentPeriod?.id),
@@ -48,7 +51,13 @@ export function CommunityPage() {
   const profiles = useProfiles(posts.map((post) => post.authorId));
   const reactionsByPostId = useReactionsByPostId(posts.map((post) => post.id));
   const commentCounts = useRoomPostCommentCounts(posts);
-  const unreadPostIds = useUnreadRoomPostIds(room?.id, currentUser?.id, currentPeriod?.id);
+  // 중도 합류자는 합류 전 글까지 새 글로 보지 않는다.
+  const unreadPostIds = useUnreadRoomPostIds(
+    room?.id,
+    currentUser?.id,
+    currentPeriod?.id,
+    myPeriodJoinedAt,
+  );
   const canWrite = Boolean(room && currentUser && room.status === "OPEN" && currentPeriod);
 
   const openPost = useCallback((postId: string) => router.push(`/community/${postId}`), [router]);
@@ -100,7 +109,7 @@ const BoardPostRow = memo(function BoardPostRow({ author, commentCount, onOpen, 
       <PostThumbnail post={post} />
       <View style={styles.postCopy}>
         <Text style={styles.postMeta}><Text style={styles.category}>{post.kind === "POLL" ? "투표" : post.category ?? "잡담"}</Text>{` · ${formatDay(post.createdAt)}`}</Text>
-        <View style={styles.postTitleRow}><Text numberOfLines={1} style={styles.postTitle}>{title}</Text>{unread ? <Text style={styles.new}>NEW</Text> : null}</View>
+        <View style={styles.postTitleRow}><Text numberOfLines={1} style={styles.postTitle}>{title}</Text>{unread ? <NewBadge /> : null}</View>
         <Text style={styles.postFooter}>{`반응 ${reactions.length} · 댓글 ${commentCount}`}</Text>
       </View>
       <View style={styles.authorProfile}>
@@ -136,7 +145,7 @@ const styles = StyleSheet.create({
   thumbnailFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(47,113,93,0.08)" },
   postCopy: { flex: 1, minWidth: 0, alignSelf: "stretch", justifyContent: "center" },
   postMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10 }, category: { color: palette.green, fontFamily: fonts.handBold, fontWeight: "700" },
-  postTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 4 }, postTitle: { flex: 1, color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" }, new: { color: palette.stamp, fontFamily: fonts.handBold, fontSize: 9, fontWeight: "700", letterSpacing: 0.5 }, postFooter: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 6 },
+  postTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 4 }, postTitle: { flex: 1, color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" }, postFooter: { color: palette.muted, fontFamily: fonts.hand, fontSize: 10, marginTop: 6 },
   authorProfile: { alignItems: "center", gap: 3, width: 46 },
   authorNickname: { alignSelf: "stretch", color: palette.muted, fontFamily: fonts.hand, fontSize: 9, textAlign: "center" },
 });

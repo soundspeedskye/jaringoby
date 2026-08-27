@@ -27,9 +27,14 @@ import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
 import {
   usePeriodExpenses,
   useSettlementExcludedExpenseIds,
+  useUnreadExpenseCountByUserId,
+  useUnreadExpenseIds,
 } from "@/entities/expense/api/use-expenses";
 import { useProfiles } from "@/entities/member/api/use-members";
-import { usePeriodMembers } from "@/entities/period/api/use-periods";
+import {
+  useMyPeriodJoinedAt,
+  usePeriodMembers,
+} from "@/entities/period/api/use-periods";
 import { useCrownIds, useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { useAppStatus, useAppStatusActions } from "@/shared/providers/app-status-provider";
 import { expenseDetailHref } from "@/shared/lib/expense-route";
@@ -64,6 +69,17 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
   const profilesById = useProfiles(memberUserIds);
   const commentCounts = useCommentCounts(currentPeriodFeedExpenses);
   const crownIds = useCrownIds(currentPeriod?.id);
+  // 중도 합류자는 합류 전 지출까지 새 것으로 보지 않는다.
+  const myPeriodJoinedAt = useMyPeriodJoinedAt(currentPeriod?.id, currentUser?.id);
+  const unreadExpenseIds = useUnreadExpenseIds(
+    currentPeriod?.id,
+    currentUser?.id,
+    myPeriodJoinedAt,
+  );
+  const unreadCountByUserId = useUnreadExpenseCountByUserId(
+    currentPeriod?.id,
+    unreadExpenseIds,
+  );
   const excludedExpenseIds = useSettlementExcludedExpenseIds();
   const expensesByUserId = useMemo(() => {
     const grouped = new Map<string, Expense[]>();
@@ -134,9 +150,18 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
           isCrowned: crownIds.includes(member.userId),
           isLateJoiner: member.isLateJoiner,
           isCurrentUser: member.userId === currentUser.id,
+          unreadExpenseCount: unreadCountByUserId.get(member.userId) ?? 0,
         };
       });
-  }, [crownIds, currentUser, excludedExpenseIds, expensesByUserId, members, profilesById]);
+  }, [
+    crownIds,
+    currentUser,
+    excludedExpenseIds,
+    expensesByUserId,
+    members,
+    profilesById,
+    unreadCountByUserId,
+  ]);
 
   const actions = useMemo<RoomHomeActions>(
     () => ({
@@ -234,6 +259,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
         feedExpenses: currentPeriodFeedExpenses,
         recentExpenses: currentPeriodFeedExpenses.slice(0, 10),
         profilesById,
+        unreadExpenseIds,
         error,
       },
     };
@@ -253,6 +279,7 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     sectionExpensesByUserId,
     timeline,
     currentPeriodFeedExpenses,
+    unreadExpenseIds,
   ]);
 
   return { state, actions };

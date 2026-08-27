@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View, type ListRenderItemInfo } 
 
 import { ExpensePhoto } from "@/entities/expense/ui/expense-photo";
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
+import { NewBadge } from "@/shared/ui/new-badge";
 import {
   fonts,
   palette,
@@ -22,12 +23,14 @@ export const RecentExpenseCarousel = memo(function RecentExpenseCarousel({
   onOpenExpense,
   onOpenMemberFeed,
   profilesById,
+  unreadExpenseIds,
 }: {
   commentCounts: ReadonlyMap<string, number>;
   expenses: readonly Expense[];
   onOpenExpense: (expenseId: string, clientRequestId?: string) => void;
   onOpenMemberFeed: (userId: string) => void;
   profilesById: ReadonlyMap<string, Profile>;
+  unreadExpenseIds?: ReadonlySet<string>;
 }) {
   const renderExpense = useCallback(
     ({ item: expense }: ListRenderItemInfo<Expense>) => (
@@ -37,9 +40,10 @@ export const RecentExpenseCarousel = memo(function RecentExpenseCarousel({
         onOpenExpense={onOpenExpense}
         onOpenMemberFeed={onOpenMemberFeed}
         profile={profilesById.get(expense.userId)}
+        unread={unreadExpenseIds?.has(expense.id) ?? false}
       />
     ),
-    [commentCounts, onOpenExpense, onOpenMemberFeed, profilesById],
+    [commentCounts, onOpenExpense, onOpenMemberFeed, profilesById, unreadExpenseIds],
   );
 
   return (
@@ -76,12 +80,14 @@ const RecentExpenseCard = memo(function RecentExpenseCard({
   onOpenExpense,
   onOpenMemberFeed,
   profile,
+  unread,
 }: {
   commentCount: number;
   expense: Expense;
   onOpenExpense: (expenseId: string, clientRequestId?: string) => void;
   onOpenMemberFeed: (userId: string) => void;
   profile?: Profile;
+  unread: boolean;
 }) {
   const openExpense = useCallback(
     () => onOpenExpense(expense.id, expense.clientRequestId),
@@ -90,7 +96,7 @@ const RecentExpenseCard = memo(function RecentExpenseCard({
   const openMemberFeed = useCallback(() => onOpenMemberFeed(expense.userId), [expense.userId, onOpenMemberFeed]);
   return (
     <Pressable
-      accessibilityLabel={`${profile?.nickname ?? "알 수 없음"}님의 ${expense.category} ${formatWon(expense.amount)} 게시글`}
+      accessibilityLabel={`${unread ? "읽지 않음, " : ""}${profile?.nickname ?? "알 수 없음"}님의 ${expense.category} ${formatWon(expense.amount)} 게시글`}
       accessibilityRole="button"
       onPress={openExpense}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
@@ -108,9 +114,12 @@ const RecentExpenseCard = memo(function RecentExpenseCard({
         >
           <AnimalAvatar photoUri={profile?.avatarUri} size={30} value={profile?.avatar ?? ""} />
           <View style={styles.authorCopy}>
-            <Text numberOfLines={1} style={styles.authorName}>
-              {profile?.nickname ?? "알 수 없음"}
-            </Text>
+            <View style={styles.authorNameRow}>
+              <Text numberOfLines={1} style={styles.authorName}>
+                {profile?.nickname ?? "알 수 없음"}
+              </Text>
+              {unread ? <NewBadge /> : null}
+            </View>
             <Text style={styles.when}>{formatDateLabel(expense.createdAt)}</Text>
           </View>
         </Pressable>
@@ -191,6 +200,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   authorCopy: { flex: 1, minWidth: 0 },
+  authorNameRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   authorName: {
     color: palette.ink,
     fontFamily: fonts.handBold,

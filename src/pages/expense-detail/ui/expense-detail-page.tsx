@@ -52,6 +52,7 @@ export function ExpenseDetailPage() {
     addComment,
     deleteComment,
     deleteExpense,
+    markExpenseRead,
     toggleCommentReaction,
     updateComment,
     updateExpense,
@@ -63,6 +64,14 @@ export function ExpenseDetailPage() {
   const period = usePeriod(expense?.periodId);
   const room = useRoom(period?.roomId);
   const expenseComments = useExpenseComments(expense?.id);
+  // 상세를 열면 읽음 처리한다. 본인 지출과 개인 지출은 서버가 걸러 낸다.
+  const readableExpenseId =
+    expense && expense.periodId && expense.userId !== currentUser?.id
+      ? expense.id
+      : undefined;
+  useEffect(() => {
+    if (readableExpenseId) markExpenseRead(readableExpenseId);
+  }, [markExpenseRead, readableExpenseId]);
   const timeline = useMemo(
     () => (period ? createPeriodTimeline(period.weekStart) : null),
     [period],

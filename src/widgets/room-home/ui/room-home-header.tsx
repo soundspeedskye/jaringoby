@@ -52,6 +52,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
     phase,
     profilesById,
     recentExpenses,
+    unreadExpenseIds,
     timeline,
     weekMonthLabel,
     weekDays,
@@ -179,6 +180,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         onSelectExpense={onOpenExpense}
         profilesById={profilesById}
         topOffset={peekTopOffset}
+        unreadExpenseIds={unreadExpenseIds}
       />
 
       <RecentExpenseCarousel
@@ -187,6 +189,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         onOpenExpense={onOpenExpense}
         onOpenMemberFeed={onOpenMemberFeed}
         profilesById={profilesById}
+        unreadExpenseIds={unreadExpenseIds}
       />
 
       <View style={styles.inviteSection}>

@@ -13,8 +13,12 @@ import {
   isFeedVisibleExpense,
 } from "@/shared/api/expense-sync";
 import { useCommentCounts } from "@/entities/expense/api/use-expense-comments";
-import { useUserExpenses } from "@/entities/expense/api/use-expenses";
+import {
+  useUnreadExpenseIds,
+  useUserExpenses,
+} from "@/entities/expense/api/use-expenses";
 import { useProfiles } from "@/entities/member/api/use-members";
+import { useMyPeriodJoinedAt } from "@/entities/period/api/use-periods";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { formatDateLabel, formatMonthDay } from "@/shared/lib/format";
 import type { Expense } from "@/shared/api/types";
@@ -34,6 +38,12 @@ export function MemberFeedPage() {
   );
   const profilesById = useProfiles(userId ? [userId] : []);
   const commentCounts = useCommentCounts(expenses);
+  const myPeriodJoinedAt = useMyPeriodJoinedAt(currentPeriod?.id, currentUser?.id);
+  const unreadExpenseIds = useUnreadExpenseIds(
+    currentPeriod?.id,
+    currentUser?.id,
+    myPeriodJoinedAt,
+  );
   const profile = userId ? profilesById.get(userId) : undefined;
   const displayName =
     userId === currentUser?.id ? "나" : (profile?.nickname ?? "멤버");
@@ -67,10 +77,18 @@ export function MemberFeedPage() {
           photoThumbnailUri={expense.photoThumbnailUri}
           photoUri={expense.photoUri}
           pointAmount={expense.pointAmount}
+          unread={unreadExpenseIds.has(expense.id)}
         />
       </View>
     ),
-    [commentCounts, displayName, openExpense, profile?.avatar, profile?.avatarUri],
+    [
+      commentCounts,
+      displayName,
+      openExpense,
+      profile?.avatar,
+      profile?.avatarUri,
+      unreadExpenseIds,
+    ],
   );
 
   return (
