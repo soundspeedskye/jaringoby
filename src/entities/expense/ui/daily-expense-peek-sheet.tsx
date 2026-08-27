@@ -35,28 +35,37 @@ type DailyExpensePeekSheetProps = {
   date: string | null;
   expenses: readonly Expense[];
   profilesById: ReadonlyMap<string, Profile>;
+  /** 시트 위쪽으로 남겨둘 화면 높이(px). 히어로 카드 아래를 여는 쪽에서 재서 넘긴다. */
+  topOffset: number | null;
   onClose: () => void;
+  /** 항목을 누르면 시트를 닫은 뒤 호출된다. entities는 라우터를 직접 쓰지 않는다. */
+  onSelectExpense?: (expenseId: string, clientRequestId?: string) => void;
 };
 
 const SHEET_MIN_HEIGHT = 360;
-const SHEET_HEIGHT_RATIO = 0.5;
+// 히어로 카드 아래로 둘 숨 쉴 틈.
 const SHEET_TOP_GAP = 12;
+// 히어로 카드 위치를 재지 못했을 때 쓰는 대략치.
+const SHEET_FALLBACK_RATIO = 0.55;
 const DISMISS_DISTANCE = 84;
 const DISMISS_VELOCITY = 900;
 const SHEET_ANIMATION = {
-  duration: 240,
+  duration: 280,
   easing: Easing.out(Easing.cubic),
 };
 
 /**
- * 홈의 날짜칩에서 열리는 읽기 전용 모달 바텀시트다. 탭 바를 포함한 홈 화면을
- * 가리지 않고 위에 겹쳐 보이되, 열린 동안에는 뒤 화면을 조작할 수 없다.
+ * 홈의 날짜칩에서 열리는 읽기 전용 모달 바텀시트다. 날짜칩이 있는 히어로 카드는
+ * 그대로 보이도록 그 아래에 붙어, 화면 아래까지 도킹한다. 열린 동안에는 뒤
+ * 화면을 조작할 수 없다.
  */
 export const DailyExpensePeekSheet = memo(function DailyExpensePeekSheet({
   date,
   expenses,
   profilesById,
+  topOffset,
   onClose,
+  onSelectExpense,
 }: DailyExpensePeekSheetProps) {
   const insets = useSafeAreaInsets();
   const liquidGlass = useLiquidGlass();
@@ -64,19 +73,21 @@ export const DailyExpensePeekSheet = memo(function DailyExpensePeekSheet({
   const sheetOffset = useSharedValue(SHEET_MIN_HEIGHT);
   const panStartOffset = useSharedValue(0);
   const isClosing = useSharedValue(false);
-  const preferredSheetHeight = Math.max(
-    SHEET_MIN_HEIGHT,
-    Math.floor(windowHeight * SHEET_HEIGHT_RATIO),
-  );
+  // 히어로 카드는 그대로 보이고 그 아래만 덮는다. 카드 아래 끝을 열 때 재서
+  // 받으므로, 못 받았을 때만 대략치로 떨어진다.
+  const sheetTop = (topOffset ?? Math.floor(windowHeight * SHEET_FALLBACK_RATIO)) + SHEET_TOP_GAP;
   const sheetHeight = Math.max(
-    0,
+    // 내용이 없는 날의 빈 상태가 찌그러지지 않을 만큼은 지킨다.
+    SHEET_MIN_HEIGHT,
     Math.min(
-      preferredSheetHeight,
-      // 아주 작은 화면에서도 상단 안전 영역을 덮지 않는다.
-      // 50% 높이와 최소 높이는 가능한 한 유지하고, 물리적으로 불가능한 경우에만 줄인다.
-      windowHeight - insets.top - SHEET_TOP_GAP,
+      windowHeight - sheetTop,
+      // 어떤 경우에도 상단 안전 영역까지 올라오지 않는다.
+      windowHeight - insets.top,
     ),
   );
+  // 시트 표면이 화면 맨 아래까지 닿아야 해서 이 여백은 래퍼가 아니라 표면 안쪽에 준다.
+  // 래퍼에 주면 그만큼 배경 없는 띠가 남아 뒤의 홈 화면이 그대로 드러난다.
+  const surfacePaddingBottom = Math.max(insets.bottom, spacing.lg);
   const dayExpenses = useMemo(
     () =>
       date
@@ -88,17 +99,30 @@ export const DailyExpensePeekSheet = memo(function DailyExpensePeekSheet({
   );
   const total = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
-  const dismiss = useCallback(() => {
+  // 모달이 떠 있는 채로 화면을 밀면 iOS에서 새 화면이 모달 아래에 깔린다.
+  // 그래서 항목을 골라도 닫힘 애니메이션이 끝난 뒤에야 이동시킨다.
+  const finishClose = useCallback((expenseId?: string, clientRequestId?: string) => {
+    onClose();
+    if (expenseId) onSelectExpense?.(expenseId, clientRequestId);
+  }, [onClose, onSelectExpense]);
+
+  const dismissWith = useCallback((expenseId?: string, clientRequestId?: string) => {
     if (isClosing.get()) return;
     isClosing.set(true);
     sheetOffset.set(withTiming(
       sheetHeight,
       SHEET_ANIMATION,
       (finished) => {
-        if (finished) runOnJS(onClose)();
+        if (finished) runOnJS(finishClose)(expenseId, clientRequestId);
       },
     ));
-  }, [isClosing, onClose, sheetHeight, sheetOffset]);
+  }, [finishClose, isClosing, sheetHeight, sheetOffset]);
+
+  const dismiss = useCallback(() => dismissWith(), [dismissWith]);
+  const selectExpense = useCallback(
+    (expense: Expense) => dismissWith(expense.id, expense.clientRequestId),
+    [dismissWith],
+  );
 
   useEffect(() => {
     if (!date) return;
@@ -156,34 +180,33 @@ export const DailyExpensePeekSheet = memo(function DailyExpensePeekSheet({
             <Animated.View
               style={[
                 styles.sheetWrap,
-                {
-                  height: sheetHeight,
-                  paddingBottom: Math.max(insets.bottom, spacing.lg),
-                },
+                { height: sheetHeight },
                 sheetAnimatedStyle,
               ]}
             >
               {liquidGlass ? (
                 <GlassView
                   glassEffectStyle="regular"
-                  style={styles.glassSheet}
+                  style={[styles.glassSheet, { paddingBottom: surfacePaddingBottom }]}
                   tintColor={glass.tint}
                 >
                   <SheetContents
                     date={date}
                     dayExpenses={dayExpenses}
                     onClose={dismiss}
+                    onSelectExpense={onSelectExpense ? selectExpense : undefined}
                     panGesture={panGesture}
                     profilesById={profilesById}
                     total={total}
                   />
                 </GlassView>
               ) : (
-                <View style={styles.paperSheet}>
+                <View style={[styles.paperSheet, { paddingBottom: surfacePaddingBottom }]}>
                   <SheetContents
                     date={date}
                     dayExpenses={dayExpenses}
                     onClose={dismiss}
+                    onSelectExpense={onSelectExpense ? selectExpense : undefined}
                     panGesture={panGesture}
                     profilesById={profilesById}
                     total={total}
@@ -202,6 +225,7 @@ function SheetContents({
   date,
   dayExpenses,
   onClose,
+  onSelectExpense,
   panGesture,
   profilesById,
   total,
@@ -209,6 +233,7 @@ function SheetContents({
   date: string;
   dayExpenses: readonly Expense[];
   onClose: () => void;
+  onSelectExpense?: (expense: Expense) => void;
   panGesture: ReturnType<typeof Gesture.Pan>;
   profilesById: ReadonlyMap<string, Profile>;
   total: number;
@@ -248,8 +273,21 @@ function SheetContents({
         >
           {dayExpenses.map((expense) => {
             const profile = profilesById.get(expense.userId);
+            const nickname = profile?.nickname ?? "알 수 없음";
+            const title = expense.memo || expense.category;
             return (
-              <View key={expense.id} style={styles.record}>
+              <Pressable
+                accessibilityHint={onSelectExpense ? "지출 상세를 엽니다" : undefined}
+                accessibilityLabel={`${nickname}님의 ${expense.category} ${formatWon(expense.amount)}, ${title}`}
+                accessibilityRole={onSelectExpense ? "button" : undefined}
+                disabled={!onSelectExpense}
+                key={expense.id}
+                onPress={() => onSelectExpense?.(expense)}
+                style={({ pressed }) => [
+                  styles.record,
+                  pressed && onSelectExpense && styles.recordPressed,
+                ]}
+              >
                 <AnimalAvatar
                   photoUri={profile?.avatarUri}
                   size={34}
@@ -257,14 +295,14 @@ function SheetContents({
                 />
                 <View style={styles.recordCopy}>
                   <Text numberOfLines={1} style={styles.recordTitle}>
-                    {expense.memo || expense.category}
+                    {title}
                   </Text>
                   <Text style={styles.recordMeta}>
-                    {profile?.nickname ?? "알 수 없음"} · {expense.category} · {formatTimeLabel(expense.occurredAt)}
+                    {nickname} · {expense.category} · {formatTimeLabel(expense.occurredAt)}
                   </Text>
                 </View>
                 <Text style={styles.amount}>{formatWon(expense.amount)}</Text>
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -286,14 +324,19 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: "transparent",
   },
-  sheetWrap: { overflow: "hidden", borderRadius: radii.xl },
+  sheetWrap: {
+    overflow: "hidden",
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+  },
   glassSheet: {
     flex: 1,
     padding: spacing.xl,
   },
   paperSheet: {
     flex: 1,
-    borderWidth: 1,
+    // 화면 아래에 도킹된 종이라 위쪽 경계선만 남긴다.
+    borderTopWidth: 1,
     borderColor: palette.line,
     backgroundColor: palette.paper,
     padding: spacing.xl,
@@ -336,6 +379,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(42,38,32,0.15)",
   },
+  recordPressed: { opacity: 0.72 },
   recordCopy: { flex: 1, minWidth: 0 },
   recordTitle: { color: palette.ink, fontFamily: fonts.handBold, fontSize: 14, fontWeight: "700" },
   recordMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11, marginTop: 3 },

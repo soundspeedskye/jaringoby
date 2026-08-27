@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ExceptionApprovalInbox } from "@/features/exception-approval";
@@ -67,7 +67,23 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
   } = actions;
   const isRoomOwner = activeRoom.ownerId === currentUser.id;
   const [peekDate, setPeekDate] = useState<string | null>(null);
-  const openDailyExpensePeek = useCallback((date: string) => setPeekDate(date), []);
+  // 시트가 히어로 카드를 가리지 않도록, 열 때 카드 아래 끝의 화면 좌표를 재서 넘긴다.
+  // 날짜칩이 카드 안에 있으니 이 시점의 카드는 항상 화면에 있다.
+  const [peekTopOffset, setPeekTopOffset] = useState<number | null>(null);
+  const heroRef = useRef<View>(null);
+  const openDailyExpensePeek = useCallback((date: string) => {
+    const hero = heroRef.current;
+    if (!hero) {
+      setPeekTopOffset(null);
+      setPeekDate(date);
+      return;
+    }
+    // 높이가 확정된 뒤에 열어야 열림 애니메이션이 도중에 다시 시작되지 않는다.
+    hero.measureInWindow((_x, y, _width, height) => {
+      setPeekTopOffset(y + height);
+      setPeekDate(date);
+    });
+  }, []);
   const closeDailyExpensePeek = useCallback(() => setPeekDate(null), []);
   // 제목·본문 없이 항목만 보여준다. 다이얼로그가 떴다는 것 자체가 "고르세요"라는 뜻이다.
   const openRoomActions = () => {
@@ -136,29 +152,33 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         </Pressable>
       ) : null}
 
-      <RoomHero
-        appliedLimit={appliedLimit}
-        daysRemaining={daysRemaining}
-        pendingDelta={myPendingDelta}
-        pendingCount={myPendingCount}
-        spent={mySpent}
-        title={activeRoom.name}
-        weekDays={weekDays}
-        weekIndex={currentPeriod.weekIndex}
-        weekMonthLabel={weekMonthLabel}
-        weekRangeLabel={weekRangeLabel}
-        participants={memberRows}
-        onPressWeekDay={openDailyExpensePeek}
-        onPressSettings={
-          isRoomOwner ? () => router.push("/room/edit") : undefined
-        }
-      />
+      <View collapsable={false} ref={heroRef}>
+        <RoomHero
+          appliedLimit={appliedLimit}
+          daysRemaining={daysRemaining}
+          pendingDelta={myPendingDelta}
+          pendingCount={myPendingCount}
+          spent={mySpent}
+          title={activeRoom.name}
+          weekDays={weekDays}
+          weekIndex={currentPeriod.weekIndex}
+          weekMonthLabel={weekMonthLabel}
+          weekRangeLabel={weekRangeLabel}
+          participants={memberRows}
+          onPressWeekDay={openDailyExpensePeek}
+          onPressSettings={
+            isRoomOwner ? () => router.push("/room/edit") : undefined
+          }
+        />
+      </View>
 
       <DailyExpensePeekSheet
         date={peekDate}
         expenses={feedExpenses}
         onClose={closeDailyExpensePeek}
+        onSelectExpense={onOpenExpense}
         profilesById={profilesById}
+        topOffset={peekTopOffset}
       />
 
       <RecentExpenseCarousel
