@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "자린고비",
-    "slug": "jaringoby",
+    "name": "자링고비",
+    "slug": "zaringovy",
     "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "ios": {
       "icon": "./assets/images/icon.png",
-      "bundleIdentifier": "com.jaringoby.app",
+      "bundleIdentifier": "com.zaringovy.app",
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "지출 또는 프로필 사진을 촬영하기 위해 카메라를 사용합니다.",
@@ -18,7 +18,7 @@
       }
     },
     "android": {
-      "package": "com.jaringoby.app",
+      "package": "com.zaringovy.app",
       "versionCode": 5,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
@@ -26,10 +26,7 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "blockedPermissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -41,7 +38,8 @@
         "expo-image-picker",
         {
           "photosPermission": "지출 또는 프로필 사진을 선택하기 위해 사진 보관함을 사용합니다.",
-          "cameraPermission": "지출 또는 프로필 사진을 촬영하기 위해 카메라를 사용합니다."
+          "cameraPermission": "지출 또는 프로필 사진을 촬영하기 위해 카메라를 사용합니다.",
+          "microphonePermission": false
         }
       ],
       [
@@ -69,14 +67,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "524d6217-3e1b-4136-8537-1a9a47b17af3"
+        "projectId": "64b90866-b73b-4734-8026-024f49470e5b"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/524d6217-3e1b-4136-8537-1a9a47b17af3"
-    }
+      "url": "https://u.expo.dev/64b90866-b73b-4734-8026-024f49470e5b"
+    },
+    "owner": "dev.youn.cheon"
   }
 }
