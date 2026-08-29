@@ -31,7 +31,12 @@ import { NoticeBanner } from "@/shared/ui/notice-banner";
 import { PageHeader } from "@/shared/ui/page-header";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { Screen, ScreenFrame } from "@/shared/ui/screen";
-import { CommentThread, type ThreadFeatures, type ThreadMessage } from "@/widgets/comment-thread";
+import {
+  CommentThread,
+  type ThreadActions,
+  type ThreadFeatures,
+  type ThreadMessage,
+} from "@/widgets/comment-thread";
 
 const EXPENSE_COMMENT_FEATURES: ThreadFeatures = {
   replies: true,
@@ -154,6 +159,37 @@ export function ExpenseDetailPage() {
     return () => subscription.remove();
   }, [returnFromExpense]);
 
+  // 아래 셋은 CommentThread의 renderItem이 의존한다. 매 렌더 새로 만들면
+  // 스냅샷이 한 번 바뀔 때마다 댓글 목록의 셀이 전부 다시 만들어진다.
+  // 지출 객체가 아니라 그 id에만 묶어 두어야 갱신마다 흔들리지 않는다.
+  const threadExpenseId = expense?.id;
+  const threadActions = useMemo<ThreadActions>(
+    () => ({
+      create: (input) => {
+        if (!threadExpenseId) throw new Error("지출 기록을 찾을 수 없어요.");
+        return addComment({ ...input, expenseId: threadExpenseId });
+      },
+      update: updateComment,
+      remove: deleteComment,
+      toggleReaction: toggleCommentReaction,
+    }),
+    [
+      addComment,
+      deleteComment,
+      threadExpenseId,
+      toggleCommentReaction,
+      updateComment,
+    ],
+  );
+  const canDeleteComment = useCallback(
+    (comment: ThreadMessage) => comment.authorId === currentUser?.id,
+    [currentUser?.id],
+  );
+  const canEditComment = useCallback(
+    (comment: ThreadMessage) => comment.authorId === currentUser?.id,
+    [currentUser?.id],
+  );
+
   if (!expense || !expenseId) {
     return (
       <Screen testID="expense-detail-screen">
@@ -205,14 +241,9 @@ export function ExpenseDetailPage() {
       fixedHeader={<PageHeader onBack={returnFromExpense} title="지출 상세" />}
       testID="expense-detail-screen">
       <CommentThread
-        actions={{
-          create: (input) => addComment({ ...input, expenseId: expense.id }),
-          update: updateComment,
-          remove: deleteComment,
-          toggleReaction: toggleCommentReaction,
-        }}
-        canDelete={(comment) => comment.authorId === currentUser?.id}
-        canEdit={(comment) => comment.authorId === currentUser?.id}
+        actions={threadActions}
+        canDelete={canDeleteComment}
+        canEdit={canEditComment}
         canMutate={canMutateComments}
         comments={threadMessages}
         currentUserId={currentUser?.id}

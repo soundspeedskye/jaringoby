@@ -20,6 +20,7 @@ import type {
   RoomPostReactionEmoji,
 } from "@/shared/api/types";
 import { palette, spacing } from "@/shared/config/design";
+import { formatPostDateTime } from "@/shared/lib/format";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -256,7 +257,7 @@ export function CommunityDetailPage() {
           <>
             <RoomPostCard
               author={author}
-              dateLabel={formatFullDate(post.createdAt)}
+              dateLabel={formatPostDateTime(post.createdAt)}
               footer={
                 <RoomPostReactionPills
                   canReact={canMutateComments}
@@ -285,24 +286,6 @@ export function CommunityDetailPage() {
       />
     </ScreenFrame>
   );
-}
-
-function formatFullDate(value: string): string {
-  const date = new Date(value);
-  const dateLabel = new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Seoul",
-  }).format(date);
-  const timeLabel = new Intl.DateTimeFormat("ko-KR", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Seoul",
-  }).format(date);
-
-  return `${dateLabel} · ${timeLabel}`;
 }
 
 const styles = StyleSheet.create({

@@ -43,6 +43,7 @@ import {
   pickSanitizedExpensePhoto,
   type ExpensePhotoSource,
 } from "@/shared/services/expense-photo-picker";
+import { formatSeoulDateTime } from "@/shared/lib/format";
 import { createUuid } from "@/shared/lib/uuid";
 
 const CATEGORY_ICONS: Record<
@@ -483,23 +484,6 @@ function chooseInitialOccurrence(
 
 function dateAtSeoulNoon(date: LocalDate): Date {
   return new Date(`${date}T12:00:00+09:00`);
-}
-
-function formatSeoulDateTime(value: Date): string {
-  const date = new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-    timeZone: "Asia/Seoul",
-  }).format(value);
-  const time = new Intl.DateTimeFormat("ko-KR", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Seoul",
-  }).format(value);
-  return `${date} ${time}`;
 }
 
 const styles = StyleSheet.create({

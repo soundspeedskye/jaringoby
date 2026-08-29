@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AnimalAvatar } from '@/shared/ui/animal-avatar';
@@ -19,7 +20,9 @@ export type MemberListItem = {
   unreadExpenseCount?: number;
 };
 
-export function MemberList({
+// 홈은 갱신마다 data 객체를 새로 만들어 내려보낸다. members 배열이 그대로면
+// 멤버 줄을 다시 그리지 않도록 막는다.
+export const MemberList = memo(function MemberList({
   members,
   onPressAvatar,
 }: {
@@ -91,7 +94,7 @@ export function MemberList({
       })}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   header: {

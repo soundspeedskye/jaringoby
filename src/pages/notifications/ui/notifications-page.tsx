@@ -1,7 +1,14 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type ListRenderItemInfo,
+} from "react-native";
 
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -9,7 +16,7 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { ScreenFrame } from "@/shared/ui/screen";
 import { usePullToRefreshControl } from "@/shared/ui/pull-to-refresh";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
-import type { AppNotification } from "@/shared/api/types";
+import type { AppNotification, Profile } from "@/shared/api/types";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useProfiles } from "@/entities/member/api/use-members";
 import { useNotifications } from "@/entities/notification/api/use-notifications";
@@ -42,7 +49,7 @@ export function NotificationsPage() {
     }
   }, [markAllNotificationsRead, markingAllRead]);
 
-  const openNotification = (notification: AppNotification) => {
+  const openNotification = useCallback((notification: AppNotification) => {
     void (async () => {
       if (!notification.readAt) await markNotificationsRead([notification.id]);
       const destination = notificationDestination(notification);
@@ -56,7 +63,22 @@ export function NotificationsPage() {
           : destination.pathname) as never,
       );
     })();
-  };
+  }, [markNotificationsRead, router]);
+
+  const renderNotification = useCallback(
+    ({ item: notification }: ListRenderItemInfo<AppNotification>) => (
+      <NotificationRow
+        actor={
+          notification.actorId
+            ? profilesById.get(notification.actorId)
+            : undefined
+        }
+        notification={notification}
+        onOpen={openNotification}
+      />
+    ),
+    [openNotification, profilesById],
+  );
 
   return (
     <ScreenFrame
@@ -95,50 +117,53 @@ export function NotificationsPage() {
           />
         }
         refreshControl={refreshControl}
-        renderItem={({ item: notification }) => {
-          const actor = notification.actorId
-            ? profilesById.get(notification.actorId)
-            : undefined;
-          const copy = notificationCopy(notification, actor?.nickname);
-          return (
-            <Pressable
-              accessibilityLabel={copy}
-              accessibilityRole="button"
-              onPress={() => openNotification(notification)}
-              style={({ pressed }) => [
-                styles.row,
-                !notification.readAt && styles.unreadRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              {actor ? (
-                <AnimalAvatar
-                  photoUri={actor.avatarUri}
-                  size={42}
-                  value={actor.avatar}
-                />
-              ) : (
-                <View style={styles.iconCircle}>
-                  <MaterialCommunityIcons
-                    color={palette.green}
-                    name="bell-outline"
-                    size={21}
-                  />
-                </View>
-              )}
-              <View style={styles.copy}>
-                <Text style={styles.message}>{copy}</Text>
-                <Text style={styles.date}>{formatDateLabel(notification.createdAt)}</Text>
-              </View>
-              {!notification.readAt ? <View style={styles.unreadDot} /> : null}
-            </Pressable>
-          );
-        }}
+        renderItem={renderNotification}
         showsVerticalScrollIndicator={false}
       />
     </ScreenFrame>
   );
 }
+
+const NotificationRow = memo(function NotificationRow({
+  actor,
+  notification,
+  onOpen,
+}: {
+  actor?: Profile;
+  notification: AppNotification;
+  onOpen: (notification: AppNotification) => void;
+}) {
+  const copy = notificationCopy(notification, actor?.nickname);
+  return (
+    <Pressable
+      accessibilityLabel={copy}
+      accessibilityRole="button"
+      onPress={() => onOpen(notification)}
+      style={({ pressed }) => [
+        styles.row,
+        !notification.readAt && styles.unreadRow,
+        pressed && styles.pressed,
+      ]}
+    >
+      {actor ? (
+        <AnimalAvatar photoUri={actor.avatarUri} size={42} value={actor.avatar} />
+      ) : (
+        <View style={styles.iconCircle}>
+          <MaterialCommunityIcons
+            color={palette.green}
+            name="bell-outline"
+            size={21}
+          />
+        </View>
+      )}
+      <View style={styles.copy}>
+        <Text style={styles.message}>{copy}</Text>
+        <Text style={styles.date}>{formatDateLabel(notification.createdAt)}</Text>
+      </View>
+      {!notification.readAt ? <View style={styles.unreadDot} /> : null}
+    </Pressable>
+  );
+});
 
 function notificationCopy(notification: AppNotification, actorName?: string) {
   const actor = actorName ?? "멤버";

@@ -15,7 +15,7 @@ import { useMyPeriodJoinedAt } from "@/entities/period/api/use-periods";
 import { useActiveRoom } from "@/entities/room/api/use-rooms";
 import type { Profile, RoomPost, RoomPostReaction } from "@/shared/api/types";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
-import { formatWon } from "@/shared/lib/format";
+import { formatBoardDay, formatWon } from "@/shared/lib/format";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
 import { AnimalAvatar } from "@/shared/ui/animal-avatar";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -48,8 +48,10 @@ export function CommunityPage() {
     () => posts.filter((post) => post.kind !== "NOTICE"),
     [posts],
   );
-  const profiles = useProfiles(posts.map((post) => post.authorId));
-  const reactionsByPostId = useReactionsByPostId(posts.map((post) => post.id));
+  const postAuthorIds = useMemo(() => posts.map((post) => post.authorId), [posts]);
+  const postIds = useMemo(() => posts.map((post) => post.id), [posts]);
+  const profiles = useProfiles(postAuthorIds);
+  const reactionsByPostId = useReactionsByPostId(postIds);
   const commentCounts = useRoomPostCommentCounts(posts);
   // 중도 합류자는 합류 전 글까지 새 글로 보지 않는다.
   const unreadPostIds = useUnreadRoomPostIds(
@@ -108,7 +110,7 @@ const BoardPostRow = memo(function BoardPostRow({ author, commentCount, onOpen, 
     <Pressable accessibilityLabel={`${author?.nickname ?? "알 수 없음"}님의 글: ${title}`} accessibilityRole="button" onPress={() => onOpen(post.id)} style={({ pressed }) => [styles.postRow, pressed && styles.pressed]}>
       <PostThumbnail post={post} />
       <View style={styles.postCopy}>
-        <Text style={styles.postMeta}><Text style={styles.category}>{post.kind === "POLL" ? "투표" : post.category ?? "잡담"}</Text>{` · ${formatDay(post.createdAt)}`}</Text>
+        <Text style={styles.postMeta}><Text style={styles.category}>{post.kind === "POLL" ? "투표" : post.category ?? "잡담"}</Text>{` · ${formatBoardDay(post.createdAt)}`}</Text>
         <View style={styles.postTitleRow}><Text numberOfLines={1} style={styles.postTitle}>{title}</Text>{unread ? <NewBadge /> : null}</View>
         <Text style={styles.postFooter}>{`반응 ${reactions.length} · 댓글 ${commentCount}`}</Text>
       </View>
@@ -126,10 +128,6 @@ function PostThumbnail({ post }: { post: RoomPost }) {
   if (post.photoUri) return <Image accessibilityLabel="게시글 사진" contentFit="cover" source={{ uri: post.photoUri }} style={styles.thumbnail} />;
   const icon = post.kind === "POLL" ? "format-list-checks" : post.category === "뒷구매" ? "shopping-outline" : post.category === "거지력" ? "piggy-bank-outline" : "chat-outline";
   return <View style={[styles.thumbnail, styles.thumbnailFallback]}><MaterialCommunityIcons color={palette.green} name={icon} size={24} /></View>;
-}
-
-function formatDay(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
 const styles = StyleSheet.create({
