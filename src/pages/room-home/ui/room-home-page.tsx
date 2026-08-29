@@ -1,16 +1,10 @@
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { MemberExpenseList } from "@/widgets/room-home";
+import { ErrorBanner } from "@/shared/ui/error-banner";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { Screen, ScreenFrame } from "@/shared/ui/screen";
-import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { fonts, palette, spacing } from "@/shared/config/design";
 import { useRoomHome } from "../model/use-room-home";
 import type { RoomHomeActions } from "@/widgets/room-home";
 
@@ -47,20 +41,7 @@ function RoomHomeEmpty({
 }) {
   return (
     <Screen>
-      {error ? (
-        <Pressable
-          accessibilityRole="alert"
-          onPress={actions.clearError}
-          style={styles.errorBanner}
-        >
-          <Text style={styles.errorText}>{error}</Text>
-          <MaterialCommunityIcons
-            color={palette.danger}
-            name="close"
-            size={18}
-          />
-        </Pressable>
-      ) : null}
+      <ErrorBanner error={error} onDismiss={actions.clearError} />
       <View style={styles.emptyHeader}>
         <Text style={styles.kicker}>Jaringoby</Text>
         <Text style={styles.emptyTitle}>
@@ -95,21 +76,6 @@ function RoomHomeEmpty({
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(182,83,72,0.10)",
-  },
-  errorText: {
-    color: palette.danger,
-    flex: 1,
-    fontFamily: fonts.hand,
-    fontSize: 13,
-  },
   kicker: {
     color: palette.green,
     fontFamily: fonts.handBold,

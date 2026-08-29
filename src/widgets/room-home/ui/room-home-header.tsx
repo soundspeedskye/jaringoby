@@ -7,6 +7,7 @@ import { ExceptionApprovalInbox } from "@/features/exception-approval";
 import { RecentExpenseCarousel } from "@/entities/expense/ui/recent-expense-carousel";
 import { DailyExpensePeekSheet } from "@/entities/expense/ui/daily-expense-peek-sheet";
 import { RoomHero } from "@/entities/room/ui/room-hero";
+import { ErrorBanner } from "@/shared/ui/error-banner";
 import { NoticeBanner } from "@/shared/ui/notice-banner";
 import {
   fonts,
@@ -138,20 +139,7 @@ export const RoomHomeHeader = memo(function RoomHomeHeader({
         </View>
       </View>
 
-      {error ? (
-        <Pressable
-          accessibilityRole="alert"
-          onPress={clearError}
-          style={styles.errorBanner}
-        >
-          <Text style={styles.errorText}>{error}</Text>
-          <MaterialCommunityIcons
-            color={palette.danger}
-            name="close"
-            size={18}
-          />
-        </Pressable>
-      ) : null}
+      <ErrorBanner error={error} onDismiss={clearError} />
 
       <View collapsable={false} ref={heroRef}>
         <RoomHero
@@ -308,21 +296,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800",
     ...tabularNums,
-  },
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(182,83,72,0.10)",
-  },
-  errorText: {
-    color: palette.danger,
-    flex: 1,
-    fontFamily: fonts.hand,
-    fontSize: 13,
   },
   inviteSection: {
     minHeight: 58,

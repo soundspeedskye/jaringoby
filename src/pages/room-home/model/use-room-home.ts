@@ -90,17 +90,6 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     });
     return grouped;
   }, [expenses]);
-  const sectionExpensesByUserId = useMemo(() => {
-    const sorted = new Map<string, Expense[]>();
-    expensesByUserId.forEach((memberExpenses, userId) => {
-      sorted.set(userId, [...memberExpenses].sort((a, b) => (
-        // occurredAt·createdAt 모두 ISO라 사전식 비교로 충분하다.
-        b.occurredAt.localeCompare(a.occurredAt) ||
-        b.createdAt.localeCompare(a.createdAt)
-      )));
-    });
-    return sorted;
-  }, [expensesByUserId]);
   const timeline = useMemo(
     () => (currentPeriod ? createPeriodTimeline(currentPeriod.weekStart) : null),
     [currentPeriod],
@@ -254,7 +243,6 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
         weekDays,
         weekRangeLabel,
         memberRows,
-        expensesByUserId: sectionExpensesByUserId,
         commentCounts,
         feedExpenses: currentPeriodFeedExpenses,
         recentExpenses: currentPeriodFeedExpenses.slice(0, 10),
@@ -276,7 +264,6 @@ export function useRoomHome(): { state: RoomHomeState; actions: RoomHomeActions 
     members,
     now,
     profilesById,
-    sectionExpensesByUserId,
     timeline,
     currentPeriodFeedExpenses,
     unreadExpenseIds,
