@@ -20,6 +20,10 @@ type RepositoryHarness = {
   requestReload: (tables?: ReadonlySet<string>) => Promise<AppSnapshot>;
 };
 
+type RealtimeHarness = RepositoryHarness & {
+  scheduleRealtimeReload: (table?: string, mentionCommentId?: string) => void;
+};
+
 describe('SupabaseRepository refresh coordination', () => {
   it('joins load to an active reload instead of starting a competing fetch', async () => {
     const snapshot = createTestSnapshot();
@@ -123,6 +127,100 @@ describe('SupabaseRepository refresh coordination', () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith(final);
     expect(harness.lastSnapshot).toEqual(final);
+  });
+});
+
+describe('SupabaseRepository realtime scheduling', () => {
+  it('patches instead of refetching everything for a single dirty table', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = createTestSnapshot();
+      const repository = createRepository(initial.currentUserId);
+      const harness = repository as unknown as RealtimeHarness;
+      harness.lastSnapshot = initial;
+      const fetchRealtimeSnapshot = vi.fn().mockResolvedValue(initial);
+      const fetchSnapshot = vi.fn().mockResolvedValue(initial);
+      harness.fetchRealtimeSnapshot = fetchRealtimeSnapshot;
+      harness.fetchSnapshot = fetchSnapshot;
+
+      harness.scheduleRealtimeReload('expenses');
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(fetchSnapshot).not.toHaveBeenCalled();
+      expect(fetchRealtimeSnapshot).toHaveBeenCalledTimes(1);
+      expect(fetchRealtimeSnapshot.mock.calls[0]?.[0]).toEqual(new Set(['expenses']));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still refetches everything when asked without a table', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = createTestSnapshot();
+      const repository = createRepository(initial.currentUserId);
+      const harness = repository as unknown as RealtimeHarness;
+      harness.lastSnapshot = initial;
+      const fetchRealtimeSnapshot = vi.fn().mockResolvedValue(initial);
+      const fetchSnapshot = vi.fn().mockResolvedValue(initial);
+      harness.fetchRealtimeSnapshot = fetchRealtimeSnapshot;
+      harness.fetchSnapshot = fetchSnapshot;
+
+      harness.scheduleRealtimeReload();
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(fetchSnapshot).toHaveBeenCalledTimes(1);
+      expect(fetchRealtimeSnapshot).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-reads every mention when a mention event carries no comment id', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = createTestSnapshot();
+      const repository = createRepository(initial.currentUserId);
+      const harness = repository as unknown as RealtimeHarness;
+      harness.lastSnapshot = initial;
+      const fetchRealtimeSnapshot = vi.fn().mockResolvedValue(initial);
+      harness.fetchRealtimeSnapshot = fetchRealtimeSnapshot;
+      harness.fetchSnapshot = vi.fn().mockResolvedValue(initial);
+
+      harness.scheduleRealtimeReload('comment_mentions', 'comment-1');
+      harness.scheduleRealtimeReload('comment_mentions');
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(fetchRealtimeSnapshot).toHaveBeenCalledTimes(1);
+      // 범위를 좁힐 수 없으면 undefined로 넘겨 멘션 전체를 다시 읽는다.
+      expect(fetchRealtimeSnapshot.mock.calls[0]?.[2]).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps read tables on the patch path', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = createTestSnapshot();
+      const repository = createRepository(initial.currentUserId);
+      const harness = repository as unknown as RealtimeHarness;
+      harness.lastSnapshot = initial;
+      const fetchRealtimeSnapshot = vi.fn().mockResolvedValue(initial);
+      const fetchSnapshot = vi.fn().mockResolvedValue(initial);
+      harness.fetchRealtimeSnapshot = fetchRealtimeSnapshot;
+      harness.fetchSnapshot = fetchSnapshot;
+
+      harness.scheduleRealtimeReload('expense_reads');
+      await vi.advanceTimersByTimeAsync(200);
+      harness.scheduleRealtimeReload('room_post_reads');
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(fetchSnapshot).not.toHaveBeenCalled();
+      expect(fetchRealtimeSnapshot).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

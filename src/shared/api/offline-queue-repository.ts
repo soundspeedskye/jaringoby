@@ -279,22 +279,22 @@ export class OfflineQueueRepository implements AppRepository {
   }
 
   // 프로필은 사진 업로드와 서버 시각 기반 쿨다운을 함께 다루므로 오프라인
-  // 재생 대상이 아니다. 성공 뒤에는 기본 스냅샷을 즉시 다시 읽는다.
+  // 재생 대상이 아니다. 성공 뒤에는 읽기 모델을 base와 맞춘다.
   async updateNickname(nickname: string): Promise<Profile> {
     const result = await this.base.updateNickname(nickname);
-    await this.refreshBase();
+    await this.syncBaseAfterMutation();
     return result;
   }
 
   async updateAvatar(input: { avatarKey?: string; photoUri?: string | null }): Promise<Profile> {
     const result = await this.base.updateAvatar(input);
-    await this.refreshBase();
+    await this.syncBaseAfterMutation();
     return result;
   }
 
   async createRoom(input: CreateRoomInput): Promise<Room> {
     const result = await this.base.createRoom(input);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
     return result;
   }
 
@@ -302,7 +302,7 @@ export class OfflineQueueRepository implements AppRepository {
   // 오프라인 큐에 넣지 않는다.
   async updateRoomSettings(input: UpdateRoomSettingsInput): Promise<Room> {
     const result = await this.base.updateRoomSettings(input);
-    await this.refreshBase();
+    await this.syncBaseAfterMutation();
     return result;
   }
 
@@ -312,7 +312,7 @@ export class OfflineQueueRepository implements AppRepository {
 
   async joinRoom(inviteCode: string, joinedAt?: string): Promise<RoomMember> {
     const result = await this.base.joinRoom(inviteCode, joinedAt);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
     return result;
   }
 
@@ -320,17 +320,17 @@ export class OfflineQueueRepository implements AppRepository {
   // run straight through to the server rather than being queued offline.
   async leaveRoom(roomId: string, successorId?: string): Promise<void> {
     await this.base.leaveRoom(roomId, successorId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async closeRoom(roomId: string): Promise<void> {
     await this.base.closeRoom(roomId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async switchRoom(input: SwitchRoomInput): Promise<RoomMember> {
     const result = await this.base.switchRoom(input);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
     return result;
   }
 
@@ -341,12 +341,12 @@ export class OfflineQueueRepository implements AppRepository {
     decision: ExpenseExceptionResponseDecision,
   ): Promise<void> {
     await this.base.respondToExpenseException(expenseId, decision);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async withdrawExpenseException(expenseId: string): Promise<void> {
     await this.base.withdrawExpenseException(expenseId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async addExpense(input: AddExpenseInput): Promise<Expense> {
@@ -634,63 +634,63 @@ export class OfflineQueueRepository implements AppRepository {
     emoji: CommentReactionEmoji,
   ): Promise<void> {
     await this.base.toggleCommentReaction(commentId, emoji);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   // 냥냥톡톡은 사진·마감 의존이 없는 저빈도 상호작용이라 오프라인 큐에 쌓지 않는다.
   // 서버의 최신 권한과 순서를 바로 반영한 뒤 스냅샷만 갱신한다.
   async addRoomPost(input: AddRoomPostInput): Promise<RoomPost> {
     const post = await this.base.addRoomPost(input);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
     return post;
   }
 
   async updateRoomPost(input: UpdateRoomPostInput): Promise<RoomPost> {
     const post = await this.base.updateRoomPost(input);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
     return post;
   }
 
   async deleteRoomPost(postId: string): Promise<void> {
     await this.base.deleteRoomPost(postId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async addRoomPostComment(input: AddRoomPostCommentInput): Promise<RoomPostComment> {
     const comment = await this.base.addRoomPostComment(input);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
     return comment;
   }
 
   async updateRoomPostComment(commentId: string, body: string): Promise<RoomPostComment> {
     const comment = await this.base.updateRoomPostComment(commentId, body);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
     return comment;
   }
 
   async deleteRoomPostComment(commentId: string): Promise<void> {
     await this.base.deleteRoomPostComment(commentId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async toggleRoomPostReaction(postId: string, emoji: RoomPostReactionEmoji): Promise<void> {
     await this.base.toggleRoomPostReaction(postId, emoji);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async markExpenseRead(expenseId: string): Promise<void> {
     await this.base.markExpenseRead(expenseId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async markRoomPostRead(postId: string): Promise<void> {
     await this.base.markRoomPostRead(postId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async voteRoomPostPoll(postId: string, optionId: string): Promise<void> {
     await this.base.voteRoomPostPoll(postId, optionId);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   // 읽음 처리는 서버의 사용자별 상태만 바꾸므로 오프라인 큐에 재생하지 않는다.
@@ -698,12 +698,12 @@ export class OfflineQueueRepository implements AppRepository {
   async markNotificationsRead(notificationIds: readonly string[]): Promise<void> {
     if (notificationIds.length === 0) return;
     await this.base.markNotificationsRead(notificationIds);
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   async markAllNotificationsRead(): Promise<void> {
     await this.base.markAllNotificationsRead();
-    void this.refreshBase().catch(() => undefined);
+    void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
   subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe {
@@ -944,6 +944,26 @@ export class OfflineQueueRepository implements AppRepository {
       if (changed) await this.persistLocked();
       this.emitLocked();
     });
+  }
+
+  /**
+   * 큐를 거치지 않고 서버로 바로 나간 뮤테이션 뒤에 읽기 모델을 맞춘다.
+   *
+   * base 저장소는 뮤테이션이 끝나기 전에 갱신된 스냅샷을 리스너로 밀어 준다.
+   * 그 알림 처리 작업은 이 시점에 이미 락에 걸려 있으므로, 락이 비기를 기다린
+   * 뒤 baseSnapshot이 실제로 교체됐는지 본다. 교체됐다면 같은 데이터를 위해
+   * 서버를 한 번 더 왕복할 이유가 없다. 알림이 없었을 때(구독 없음, 세션 불일치
+   * 로 무시됨, 알리지 않는 base 구현)만 직접 읽어 온다.
+   */
+  private async syncBaseAfterMutation(): Promise<void> {
+    if (!this.baseUnsubscribe) {
+      await this.refreshBase();
+      return;
+    }
+    const snapshotBeforeNotification = this.baseSnapshot;
+    await this.withLock(async () => undefined);
+    if (this.baseSnapshot !== snapshotBeforeNotification) return;
+    await this.refreshBase();
   }
 
   private newOperationBase<K extends MutationKind>(
@@ -1372,7 +1392,12 @@ export class OfflineQueueRepository implements AppRepository {
       await this.persistLocked();
       this.emitLocked();
     }
-    if (!this.currentUserId()) return;
+    const activeUserId = this.currentUserId();
+    if (!activeUserId) return;
+    // 재생할 작업이 없으면 재생 전 재조회로 확인할 것도 없다. 이 경로는 base가
+    // 알림으로 최신 스냅샷을 막 건네준 직후에도(모든 emit이 flush를 부른다)
+    // 매번 전체 스냅샷을 한 번 더 읽고 있었다.
+    if (!this.queue.operations.some((operation) => operation.userId === activeUserId)) return;
     if (!(await this.network.fetch().catch(() => false))) {
       this.scheduleRetryLocked();
       return;

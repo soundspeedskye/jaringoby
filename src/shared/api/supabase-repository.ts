@@ -196,6 +196,12 @@ export class SupabaseRepository implements AppRepository {
   private realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly realtimeDirtyTables = new Set<RealtimeTable>();
   private readonly realtimeDirtyMentionCommentIds = new Set<string>();
+  /**
+   * comment_mentions 이벤트가 comment_id를 싣지 않고 왔다는 표시.
+   * DELETE는 REPLICA IDENTITY에 따라 기본키만 실려 오므로 어느 댓글의 멘션이
+   * 바뀌었는지 알 수 없다. 그때는 멘션 전체를 다시 읽는다.
+   */
+  private realtimeNeedsAllMentionIds = false;
   private realtimeNeedsFullReload = false;
   private signedUrlRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private reloadJob: ReloadJob | null = null;
@@ -1232,6 +1238,7 @@ export class SupabaseRepository implements AppRepository {
     this.realtimeReloadTimer = null;
     this.realtimeDirtyTables.clear();
     this.realtimeDirtyMentionCommentIds.clear();
+    this.realtimeNeedsAllMentionIds = false;
     this.realtimeNeedsFullReload = false;
     this.signedUrlRefreshTimer = null;
     const channel = this.realtimeChannel;
@@ -1250,23 +1257,34 @@ export class SupabaseRepository implements AppRepository {
     table?: RealtimeTable,
     mentionCommentId?: string,
   ): void {
-    if (table) this.realtimeDirtyTables.add(table);
-    if (mentionCommentId) this.realtimeDirtyMentionCommentIds.add(mentionCommentId);
-    else this.realtimeNeedsFullReload = true;
+    // 테이블 없이 부르는 쪽(재로그인 등)만 전체 재조회를 뜻한다. 테이블이
+    // 있으면 그 테이블만 더럽다고 표시해, 패치 가능한 조합은 부분 조회로 끝낸다.
+    if (!table) {
+      this.realtimeNeedsFullReload = true;
+    } else {
+      this.realtimeDirtyTables.add(table);
+      if (table === "comment_mentions") {
+        if (mentionCommentId) this.realtimeDirtyMentionCommentIds.add(mentionCommentId);
+        else this.realtimeNeedsAllMentionIds = true;
+      }
+    }
     if (this.realtimeReloadTimer) clearTimeout(this.realtimeReloadTimer);
     this.realtimeReloadTimer = setTimeout(() => {
       this.realtimeReloadTimer = null;
       const needsFullReload = this.realtimeNeedsFullReload;
       const dirtyTables = new Set(this.realtimeDirtyTables);
-      const dirtyMentionCommentIds = new Set(this.realtimeDirtyMentionCommentIds);
+      const dirtyMentionCommentIds = this.realtimeNeedsAllMentionIds
+        ? null
+        : new Set(this.realtimeDirtyMentionCommentIds);
       this.realtimeNeedsFullReload = false;
+      this.realtimeNeedsAllMentionIds = false;
       this.realtimeDirtyTables.clear();
       this.realtimeDirtyMentionCommentIds.clear();
       const reload = needsFullReload
         ? this.reloadAndNotify()
         : this.reloadRealtimeTablesAndNotify(
           dirtyTables,
-          dirtyMentionCommentIds.size ? dirtyMentionCommentIds : undefined,
+          dirtyMentionCommentIds?.size ? dirtyMentionCommentIds : undefined,
         );
       void reload.catch((error: unknown) => {
         console.warn("Supabase realtime 데이터 갱신 오류", error);
@@ -1395,11 +1413,13 @@ export class SupabaseRepository implements AppRepository {
     const canPatchSnapshot = [...tables].every(
       (table) =>
         table === "expenses" ||
+        table === "expense_reads" ||
         table === "comments" ||
         table === "comment_mentions" ||
         table === "comment_reactions" ||
         table === "expense_exceptions" ||
-        table === "expense_exception_approvals",
+        table === "expense_exception_approvals" ||
+        table === "room_post_reads",
     );
     const previous = baseSnapshot;
     if (!previous || !canPatchSnapshot || tables.size === 0) {
@@ -1414,6 +1434,8 @@ export class SupabaseRepository implements AppRepository {
     const shouldFetchCommentReactions = tables.has("comment_reactions");
     const shouldFetchExceptions = tables.has("expense_exceptions");
     const shouldFetchResponses = tables.has("expense_exception_approvals");
+    const shouldFetchExpenseReads = tables.has("expense_reads");
+    const shouldFetchRoomPostReads = tables.has("room_post_reads");
     const [
       expenseRows,
       commentRows,
@@ -1421,6 +1443,8 @@ export class SupabaseRepository implements AppRepository {
       commentReactionRows,
       exceptionRows,
       responseRows,
+      expenseReadRows,
+      roomPostReadRows,
     ] = await Promise.all([
       shouldFetchExpenses
         ? fetchExpenseRows(this.client)
@@ -1442,6 +1466,12 @@ export class SupabaseRepository implements AppRepository {
         : Promise.resolve(null),
       shouldFetchResponses
         ? fetchExceptionResponseRows(this.client)
+        : Promise.resolve(null),
+      shouldFetchExpenseReads
+        ? fetchExpenseReadRows(this.client)
+        : Promise.resolve(null),
+      shouldFetchRoomPostReads
+        ? fetchRoomPostReadRows(this.client)
         : Promise.resolve(null),
     ]);
 
@@ -1552,6 +1582,23 @@ export class SupabaseRepository implements AppRepository {
             visibleExpenseIds.has(row.expenseId),
           )
         : previous.expenseExceptionResponses;
+    // 읽음 행은 expense_id/post_id로만 묶이므로, 해당 테이블을 다시 읽었거나
+    // 지출이 줄어 안 보이게 된 경우에만 다시 거른다.
+    const expenseReads = expenseReadRows
+      ? expenseReadRows
+          .filter((row) => visibleExpenseIds.has(row.expense_id))
+          .map(mapExpenseRead)
+      : expensesChanged
+        ? (previous.expenseReads ?? []).filter((read) =>
+            visibleExpenseIds.has(read.expenseId),
+          )
+        : previous.expenseReads;
+    const visibleRoomPostIds = new Set(previous.roomPosts.map((post) => post.id));
+    const roomPostReads = roomPostReadRows
+      ? roomPostReadRows
+          .filter((row) => visibleRoomPostIds.has(row.post_id))
+          .map(mapRoomPostRead)
+      : previous.roomPostReads;
     const processedRequestIds = new Set(previous.processedRequestIds);
     collectProcessedRequestIds(
       expenseRows ?? [],
@@ -1563,11 +1610,13 @@ export class SupabaseRepository implements AppRepository {
       ...previous,
       currentUserId: userId,
       expenses,
+      expenseReads,
       comments,
       commentMentions,
       commentReactions,
       expenseExceptions,
       expenseExceptionResponses,
+      roomPostReads,
       processedRequestIds: [...processedRequestIds],
     };
   }

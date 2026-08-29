@@ -437,6 +437,50 @@ describe('OfflineQueueRepository', () => {
     expect(photos.uris.size).toBe(0);
   });
 
+  it('skips the follow-up reload when the base already pushed the new snapshot', async () => {
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
+    const queue = repository(
+      base,
+      new MemoryStorage(),
+      new FakeNetwork(true),
+      new MemoryPhotoStore(),
+    );
+    await queue.load();
+    const unsubscribe = queue.subscribe(() => undefined);
+    const loadsBefore = base.loadCalls;
+    // 실제 저장소처럼 뮤테이션 안에서 갱신된 스냅샷을 리스너로 민다.
+    const markRoomPostRead = base.markRoomPostRead.bind(base);
+    base.markRoomPostRead = async (postId: string) => {
+      await markRoomPostRead(postId);
+      base.emit();
+    };
+
+    await queue.markRoomPostRead('post-1');
+    await settle();
+
+    expect(base.loadCalls).toBe(loadsBefore);
+    unsubscribe();
+  });
+
+  it('still reloads after a mutation when the base pushes nothing', async () => {
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
+    const queue = repository(
+      base,
+      new MemoryStorage(),
+      new FakeNetwork(true),
+      new MemoryPhotoStore(),
+    );
+    await queue.load();
+    const unsubscribe = queue.subscribe(() => undefined);
+    const loadsBefore = base.loadCalls;
+
+    await queue.markRoomPostRead('post-1');
+    await settle();
+
+    expect(base.loadCalls).toBe(loadsBefore + 1);
+    unsubscribe();
+  });
+
   function repository(
     base: FakeRepository,
     storage: MemoryStorage,
@@ -856,6 +900,17 @@ class FakeRepository implements AppRepository {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+
+  /** 실제 저장소가 뮤테이션 직후 최신 스냅샷을 리스너로 미는 동작을 흉내 낸다. */
+  emit(): void {
+    const snapshot = clone(this.snapshot);
+    this.listeners.forEach((listener) => listener(snapshot));
+  }
+}
+
+/** 뮤테이션이 뒤에 남긴 비동기 후속 작업(알림 반영·재조회)이 끝나게 둔다. */
+function settle(): Promise<void> {
+  return new Promise((resolve) => { setTimeout(resolve, 0); });
 }
 
 function snapshotFixture(userId: string, period: Period): AppSnapshot {
