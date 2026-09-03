@@ -36,6 +36,13 @@ type SessionContextValue = {
   signOut: () => Promise<void>;
 };
 
+/**
+ * 계정 전환 허가가 유효한 시간. 허가는 요청을 보내기 전에 열리므로 네트워크
+ * 왕복을 덮을 만큼 넉넉해야 하고(짧으면 느린 회선에서 정상 로그인이 거부된다),
+ * 그 행동과 무관해질 만큼은 짧아야 한다.
+ */
+const ACCOUNT_CHANGE_GRACE_MS = 30_000;
+
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: PropsWithChildren) {
@@ -49,7 +56,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
   // 런타임 중 다른 계정의 세션이 들어오는 경우(Expo 재시작·딥링크·저장소
   // 경합 포함)를 명시적인 로그인/복구 흐름과 구분한다.
   const activeUserIdRef = useRef<string | null>(null);
-  const accountChangeAllowedRef = useRef(false);
+  // 계정 전환 허가는 "방금 사용자가 한 행동"에만 붙으므로 시간으로 묶는다.
+  // 불리언으로 두면 실제 전환이 일어날 때만 회수돼, 로그아웃 상태에서 로그인한
+  // 뒤에는(전환이 아니라 신규 세션이라 회수 지점을 지나가지 않는다) 앱이 도는
+  // 내내 가드가 풀린 채로 남았다.
+  const accountChangeAllowedUntilRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,7 +122,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
       setAccountSafetyNotice(null);
       setRecoveryMode(true);
-      accountChangeAllowedRef.current = true;
+      accountChangeAllowedUntilRef.current = Date.now() + ACCOUNT_CHANGE_GRACE_MS;
       await client.auth.setSession({
         access_token: link.accessToken,
         refresh_token: link.refreshToken,
@@ -129,11 +140,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
         const accountChanged = Boolean(
           currentUserId && nextUserId && currentUserId !== nextUserId,
         );
-        if (accountChanged && !accountChangeAllowedRef.current) {
+        if (accountChanged && Date.now() >= accountChangeAllowedUntilRef.current) {
           void signOutForUnexpectedAuthLink();
           return;
         }
-        if (accountChanged) accountChangeAllowedRef.current = false;
+        // 허가가 만료를 기다리지 않고 쓰이자마자 닫히도록 창을 더 좁힌다.
+        if (accountChanged) accountChangeAllowedUntilRef.current = 0;
         applySession(event, nextSession);
       },
     ).data.subscription;
@@ -165,13 +177,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const signIn = useCallback(async (email: string, password: string) => {
     validateEmail(email);
     validatePassword(password);
-    accountChangeAllowedRef.current = true;
+    accountChangeAllowedUntilRef.current = Date.now() + ACCOUNT_CHANGE_GRACE_MS;
     setAccountSafetyNotice(null);
     const { error } = await getSupabaseClient().auth.signInWithPassword({
       email: email.trim(),
       password,
     });
-    if (error) accountChangeAllowedRef.current = false;
+    if (error) accountChangeAllowedUntilRef.current = 0;
     if (error) throw authError(error.message);
   }, []);
 
@@ -185,7 +197,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           "닉네임은 앞뒤 공백을 제외하고 2~20자로 입력해 주세요.",
         );
       }
-      accountChangeAllowedRef.current = true;
+      accountChangeAllowedUntilRef.current = Date.now() + ACCOUNT_CHANGE_GRACE_MS;
       setAccountSafetyNotice(null);
       const { data, error } = await getSupabaseClient().auth.signUp({
         email: email.trim(),
@@ -196,10 +208,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
         },
       });
       if (error) {
-        accountChangeAllowedRef.current = false;
+        accountChangeAllowedUntilRef.current = 0;
         throw authError(error.message);
       }
-      if (!data.session) accountChangeAllowedRef.current = false;
+      if (!data.session) accountChangeAllowedUntilRef.current = 0;
       return data.session ? "SIGNED_IN" : "CONFIRM_EMAIL";
     },
     [],
@@ -246,7 +258,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     } finally {
       getRepositoryRuntime().setActiveUserId(null);
       activeUserIdRef.current = null;
-      accountChangeAllowedRef.current = false;
+      accountChangeAllowedUntilRef.current = 0;
       setRecoveryMode(false);
       setSession(null);
     }
@@ -259,7 +271,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     if (error) throw authError(error.message);
     getRepositoryRuntime().setActiveUserId(null);
     activeUserIdRef.current = null;
-    accountChangeAllowedRef.current = false;
+    accountChangeAllowedUntilRef.current = 0;
     setRecoveryMode(false);
   }, []);
 
