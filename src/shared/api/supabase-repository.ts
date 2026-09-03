@@ -814,6 +814,7 @@ export class SupabaseRepository implements AppRepository {
     const { data, error } = await this.client.rpc("add_room_post_comment", {
       p_post_id: input.postId,
       p_body: input.body,
+      p_reply_to_comment_id: input.replyToId ?? null,
       p_client_request_id: toRequestUuid(input.clientRequestId),
     });
     if (error) throw translateError(error, "댓글을 남기지 못했어요.");

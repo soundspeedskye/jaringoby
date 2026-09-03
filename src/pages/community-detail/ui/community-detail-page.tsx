@@ -36,7 +36,7 @@ import {
 } from "@/widgets/comment-thread";
 
 const ROOM_POST_COMMENT_FEATURES: ThreadFeatures = {
-  replies: false,
+  replies: true,
   reactions: false,
   maxLength: 300,
   placeholder: "댓글 남기기…",
@@ -68,6 +68,7 @@ export function CommunityDetailPage() {
         createdAt: comment.createdAt,
         updatedAt: comment.updatedAt,
         deletedAt: comment.deletedAt,
+        replyToId: comment.replyToId,
       })),
     [comments],
   );

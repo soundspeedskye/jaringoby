@@ -212,6 +212,7 @@ export type RoomPostCommentRow = {
   post_id: string;
   author_id: string;
   body: string | null;
+  reply_to_comment_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

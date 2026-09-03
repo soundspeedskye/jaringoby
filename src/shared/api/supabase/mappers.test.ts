@@ -609,6 +609,7 @@ describe('mapRoomPostComment', () => {
     post_id: 'post-1',
     author_id: 'user-b',
     body: '확인했어요',
+    reply_to_comment_id: null,
     created_at: '2026-08-04T02:00:00.000Z',
     updated_at: '2026-08-04T02:00:00.000Z',
     deleted_at: null,
@@ -622,6 +623,7 @@ describe('mapRoomPostComment', () => {
       postId: 'post-1',
       authorId: 'user-b',
       body: '확인했어요',
+      replyToId: undefined,
       createdAt: '2026-08-04T02:00:00.000Z',
       updatedAt: '2026-08-04T02:00:00.000Z',
       deletedAt: undefined,
@@ -632,6 +634,11 @@ describe('mapRoomPostComment', () => {
   it('삭제된 댓글은 원문을 감춘다', () => {
     expect(mapRoomPostComment({ ...row, deleted_at: '2026-08-05T00:00:00.000Z' }).body)
       .toBe('삭제된 댓글입니다.');
+  });
+
+  it('답글 대상을 옮긴다', () => {
+    expect(mapRoomPostComment({ ...row, reply_to_comment_id: 'post-comment-0' }).replyToId)
+      .toBe('post-comment-0');
   });
 });
 

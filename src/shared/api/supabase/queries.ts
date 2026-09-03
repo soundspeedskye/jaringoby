@@ -28,7 +28,7 @@ export const NOTIFICATION_COLUMNS =
 export const ROOM_POST_COLUMNS =
   "id,client_request_id,room_id,period_id,kind,category,author_id,title,body,poll_closes_at,photo_path,secret_purchase_amount,secret_purchase_occurred_at,secret_purchase_category,created_at,updated_at,deleted_at,version";
 export const ROOM_POST_COMMENT_COLUMNS =
-  "id,client_request_id,post_id,author_id,body,created_at,updated_at,deleted_at,version";
+  "id,client_request_id,post_id,author_id,body,reply_to_comment_id,created_at,updated_at,deleted_at,version";
 
 export async function fetchExpenseRows(
   client: SupabaseClient,

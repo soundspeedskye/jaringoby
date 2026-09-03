@@ -390,6 +390,7 @@ export function mapRoomPostComment(row: RoomPostCommentRow): RoomPostComment {
     postId: row.post_id,
     authorId: row.author_id,
     body: row.deleted_at ? "삭제된 댓글입니다." : (row.body ?? ""),
+    replyToId: row.reply_to_comment_id ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,

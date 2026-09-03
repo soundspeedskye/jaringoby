@@ -820,6 +820,7 @@ class FakeRepository implements AppRepository {
       postId: input.postId,
       authorId: this.userId,
       body: input.body,
+      replyToId: input.replyToId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       version: 1,

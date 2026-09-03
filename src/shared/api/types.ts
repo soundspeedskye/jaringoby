@@ -233,13 +233,14 @@ export type RoomPostRead = {
   readAt: string;
 };
 
-/** 냥냥톡톡 글에 붙는 평면 댓글. 지출 댓글과 달리 답글은 없다. */
+/** 커뮤니티 글에 붙는 댓글. 답글은 하나의 댓글만 직접 인용한다. */
 export type RoomPostComment = {
   id: string;
   clientRequestId: string;
   postId: string;
   authorId: string;
   body: string;
+  replyToId?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -437,5 +438,6 @@ export type UpdateRoomPostInput = {
 export type AddRoomPostCommentInput = {
   postId: string;
   body: string;
+  replyToId?: string;
   clientRequestId: string;
 };

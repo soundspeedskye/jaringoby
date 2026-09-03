@@ -637,7 +637,7 @@ export class OfflineQueueRepository implements AppRepository {
     void this.syncBaseAfterMutation().catch(() => undefined);
   }
 
-  // 냥냥톡톡은 사진·마감 의존이 없는 저빈도 상호작용이라 오프라인 큐에 쌓지 않는다.
+  // 커뮤니티는 사진·마감 의존이 없는 저빈도 상호작용이라 오프라인 큐에 쌓지 않는다.
   // 서버의 최신 권한과 순서를 바로 반영한 뒤 스냅샷만 갱신한다.
   async addRoomPost(input: AddRoomPostInput): Promise<RoomPost> {
     const post = await this.base.addRoomPost(input);
