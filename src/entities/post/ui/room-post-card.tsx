@@ -88,7 +88,8 @@ export function RoomPostCard({
       {post.photoUri ? (
         <Image
           accessibilityLabel="게시글 첨부 사진"
-          contentFit="cover"
+          cachePolicy="memory-disk"
+          contentFit={variant === "detail" ? "contain" : "cover"}
           source={{ uri: post.photoUri }}
           style={[styles.photo, variant === "detail" && styles.detailPhoto]}
         />
@@ -210,6 +211,7 @@ const styles = StyleSheet.create({
   categoryLabel: { overflow: "hidden", color: palette.green, fontFamily: fonts.handBold, fontSize: 11, fontWeight: "700", paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radii.pill, backgroundColor: "rgba(47,113,93,0.08)" },
   secretMeta: { color: palette.muted, fontFamily: fonts.hand, fontSize: 11 },
   photo: { width: "100%", aspectRatio: 16 / 10, borderRadius: radii.lg, backgroundColor: palette.line, marginBottom: spacing.md },
-  detailPhoto: { marginBottom: spacing.sm },
+  // 상세는 지출 사진처럼 프레임 안에 원본 전체를 맞춘다. 비율이 다른 영역은 배경색으로 남는다.
+  detailPhoto: { aspectRatio: 4 / 3, marginBottom: spacing.sm },
   noticeBody: { fontFamily: fonts.handBold },
 });

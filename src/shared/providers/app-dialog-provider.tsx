@@ -77,6 +77,15 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
         visible={Boolean(request)}>
         {request ? (
           <View style={styles.backdrop} testID="app-dialog-backdrop">
+            <Pressable
+              aria-hidden
+              accessible={false}
+              focusable={false}
+              onPress={dismiss}
+              style={styles.dismissLayer}
+              tabIndex={-1}
+              testID="app-dialog-dismiss"
+            />
             <View
               accessibilityLabel={
                 [request.title, request.message].filter(Boolean).join('. ') || undefined
@@ -118,15 +127,6 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
                 ))}
               </View>
             </View>
-            <Pressable
-              aria-hidden
-              accessible={false}
-              focusable={false}
-              onPress={dismiss}
-              style={styles.dismissLayer}
-              tabIndex={-1}
-              testID="app-dialog-dismiss"
-            />
           </View>
         ) : null}
       </Modal>
@@ -160,7 +160,6 @@ const styles = StyleSheet.create({
   },
   dialog: {
     position: 'relative',
-    zIndex: 1,
     width: '100%',
     maxWidth: 420,
     padding: spacing.xl,
@@ -176,7 +175,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    zIndex: 0,
   },
   title: {
     color: palette.ink,
