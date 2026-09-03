@@ -13,6 +13,7 @@ import {
 
 import { getRepositoryRuntime } from "@/shared/api/repository-factory";
 import { getSupabaseClient } from "@/shared/api/supabase-client";
+import { parseRecoveryAuthLink } from "@/shared/lib/auth-link";
 
 type SessionContextValue = {
   loading: boolean;
@@ -74,7 +75,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
     };
     const applyAuthUrl = async (url: string | null) => {
-      const link = parseRecoveryAuthLink(url);
+      if (!url) return;
+      const link = parseRecoveryAuthLink(url, Linking.parse(url));
       if (!link) return;
 
       // setSession 전에 서버에서 토큰의 실제 사용자 ID를 확인한다. URL fragment는
@@ -278,35 +280,6 @@ export function useSession(): SessionContextValue {
   if (!context)
     throw new Error("useSession must be used inside SessionProvider");
   return context;
-}
-
-function authUrlParameters(url: string): URLSearchParams {
-  const [, fragment = ""] = url.split("#", 2);
-  const query = url.includes("?")
-    ? url.slice(url.indexOf("?") + 1).split("#", 1)[0]
-    : "";
-  return new URLSearchParams(fragment || query);
-}
-
-function parseRecoveryAuthLink(url: string | null): {
-  accessToken: string;
-  refreshToken: string;
-} | null {
-  if (!url) return null;
-  const parsed = Linking.parse(url);
-  // createURL('/reset-password') can become either the host or the path,
-  // depending on the native scheme form (zaringovy://reset-password vs ///).
-  const route = [parsed.hostname, parsed.path]
-    .filter((part): part is string => Boolean(part))
-    .join("/")
-    .replace(/^\/+|\/+$/gu, "");
-  const params = authUrlParameters(url);
-  if (route !== "reset-password" || params.get("type") !== "recovery") {
-    return null;
-  }
-  const accessToken = params.get("access_token");
-  const refreshToken = params.get("refresh_token");
-  return accessToken && refreshToken ? { accessToken, refreshToken } : null;
 }
 
 function validateEmail(value: string): void {
