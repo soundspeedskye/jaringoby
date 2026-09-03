@@ -6,10 +6,9 @@
  * 여기서는 형식만 본다. 토큰이 진짜인지는 호출부가 서버에 확인한다(getUser).
  */
 
-export type RecoveryAuthLink = {
-  accessToken: string;
-  refreshToken: string;
-};
+export type RecoveryAuthLink =
+  | { kind: "TOKENS"; accessToken: string; refreshToken: string }
+  | { kind: "REJECTED"; code: string | null };
 
 /** `Linking.parse(url)` 결과 중 경로 판정에 쓰는 부분. */
 export type DeepLinkLocation = {
@@ -25,11 +24,30 @@ export function parseRecoveryAuthLink(
 ): RecoveryAuthLink | null {
   if (routeOf(location) !== RECOVERY_ROUTE) return null;
 
+  // 만료·재사용된 링크는 Supabase가 토큰 없이 error 파라미터만 붙여 돌려보낸다.
+  // 이때는 type=recovery도 오지 않으므로 토큰 경로보다 먼저 걸러야 한다.
   const params = authUrlParameters(url);
+  if (params.get("error_code") ?? params.get("error")) {
+    return { kind: "REJECTED", code: params.get("error_code") };
+  }
+
   if (params.get("type") !== "recovery") return null;
   const accessToken = params.get("access_token");
   const refreshToken = params.get("refresh_token");
-  return accessToken && refreshToken ? { accessToken, refreshToken } : null;
+  return accessToken && refreshToken
+    ? { kind: "TOKENS", accessToken, refreshToken }
+    : null;
+}
+
+/**
+ * 링크를 눌렀는데 아무 일도 일어나지 않으면 사용자는 앱이 고장났다고 읽는다.
+ * 만료가 15분이라 실제로 자주 밟는 경로이므로 이유를 반드시 보여준다.
+ */
+export function recoveryLinkError(code: string | null): string {
+  if (code === "otp_expired" || code === "access_denied") {
+    return "재설정 링크가 만료됐거나 이미 사용됐어요. 다시 요청해 주세요.";
+  }
+  return "재설정 링크를 확인하지 못했어요. 다시 요청해 주세요.";
 }
 
 /**

@@ -13,7 +13,10 @@ import {
 
 import { getRepositoryRuntime } from "@/shared/api/repository-factory";
 import { getSupabaseClient } from "@/shared/api/supabase-client";
-import { parseRecoveryAuthLink } from "@/shared/lib/auth-link";
+import {
+  parseRecoveryAuthLink,
+  recoveryLinkError,
+} from "@/shared/lib/auth-link";
 
 type SessionContextValue = {
   loading: boolean;
@@ -78,11 +81,26 @@ export function SessionProvider({ children }: PropsWithChildren) {
       if (!url) return;
       const link = parseRecoveryAuthLink(url, Linking.parse(url));
       if (!link) return;
+      if (link.kind === "REJECTED") {
+        setRecoveryMode(false);
+        setAccountSafetyNotice(recoveryLinkError(link.code));
+        return;
+      }
 
       // setSession 전에 서버에서 토큰의 실제 사용자 ID를 확인한다. URL fragment는
       // 어떤 앱 링크에도 붙을 수 있으므로, 토큰 존재만으로 세션을 바꾸면 안 된다.
       const { data, error } = await client.auth.getUser(link.accessToken);
-      if (error || !data.user) return;
+      if (error || !data.user) {
+        // 4xx는 서버가 토큰을 거절한 것이고, 그 밖(네트워크 실패 등)은 링크가
+        // 멀쩡한데 확인을 못 한 상황이라 사용자가 할 일이 다르다.
+        const rejected = typeof error?.status === "number" && error.status < 500;
+        setAccountSafetyNotice(
+          rejected
+            ? recoveryLinkError("otp_expired")
+            : "연결을 확인한 뒤 링크를 다시 눌러 주세요.",
+        );
+        return;
+      }
       const currentResult = await client.auth.getSession();
       if (currentResult.error) throw currentResult.error;
       const currentUserId = currentResult.data.session?.user.id;
@@ -91,6 +109,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      setAccountSafetyNotice(null);
       setRecoveryMode(true);
       accountChangeAllowedRef.current = true;
       await client.auth.setSession({
@@ -188,6 +207,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const requestPasswordReset = useCallback(async (email: string) => {
     validateEmail(email);
+    // 새 링크를 요청한 순간 이전 링크에 대한 안내는 더 이상 맞지 않는다.
+    setAccountSafetyNotice(null);
     const { error } = await getSupabaseClient().auth.resetPasswordForEmail(
       email.trim(),
       {

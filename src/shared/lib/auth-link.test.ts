@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   parseRecoveryAuthLink,
+  recoveryLinkError,
   type DeepLinkLocation,
 } from '@/shared/lib/auth-link';
 
@@ -18,7 +19,11 @@ describe('parseRecoveryAuthLink', () => {
   it('reads the tokens a store build receives', () => {
     expect(
       parseRecoveryAuthLink(`zaringovy://reset-password#${TOKENS}`, STORE),
-    ).toEqual({ accessToken: 'head.body.sig', refreshToken: 'r-123' });
+    ).toEqual({
+      kind: 'TOKENS',
+      accessToken: 'head.body.sig',
+      refreshToken: 'r-123',
+    });
   });
 
   it.each([
@@ -29,9 +34,25 @@ describe('parseRecoveryAuthLink', () => {
     ['a dev build on a dev server', 'zaringovy://10.0.0.2:8081/reset-password', DEV_BUILD],
   ])('reads the tokens on %s too', (_name, base, location) => {
     expect(parseRecoveryAuthLink(`${base}#${TOKENS}`, location)).toEqual({
+      kind: 'TOKENS',
       accessToken: 'head.body.sig',
       refreshToken: 'r-123',
     });
+  });
+
+  it('reports an expired link, which arrives with no tokens and no type', () => {
+    expect(
+      parseRecoveryAuthLink(
+        'zaringovy://reset-password#error=access_denied&error_code=otp_expired',
+        STORE,
+      ),
+    ).toEqual({ kind: 'REJECTED', code: 'otp_expired' });
+  });
+
+  it('reports a rejection that carries no error_code', () => {
+    expect(
+      parseRecoveryAuthLink('zaringovy://reset-password?error=access_denied', STORE),
+    ).toEqual({ kind: 'REJECTED', code: null });
   });
 
   it('ignores deep links that are not the recovery route', () => {
@@ -43,7 +64,7 @@ describe('parseRecoveryAuthLink', () => {
     ).toBeNull();
   });
 
-  it('ignores a recovery-route link with no recovery payload', () => {
+  it('ignores a recovery-route link that is not a recovery response', () => {
     expect(
       parseRecoveryAuthLink('zaringovy://reset-password', STORE),
     ).toBeNull();
@@ -65,5 +86,17 @@ describe('parseRecoveryAuthLink', () => {
         STORE,
       ),
     ).toBeNull();
+  });
+});
+
+describe('recoveryLinkError', () => {
+  it('names expiry as the cause so the user knows to request a new link', () => {
+    expect(recoveryLinkError('otp_expired')).toContain('만료');
+    expect(recoveryLinkError('access_denied')).toContain('만료');
+  });
+
+  it('still explains an unrecognised rejection', () => {
+    expect(recoveryLinkError(null)).toContain('다시 요청');
+    expect(recoveryLinkError('something_new')).toContain('다시 요청');
   });
 });
