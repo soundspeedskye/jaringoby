@@ -1207,7 +1207,7 @@ export class SupabaseRepository implements AppRepository {
     if (this.realtimeChannel)
       await this.client.removeChannel(this.realtimeChannel);
 
-    let channel = this.client.channel(`jaringoby:${userId}`);
+    let channel = this.client.channel(`zaringovy:${userId}`);
     for (const table of REALTIME_TABLES) {
       channel = channel.on(
         "postgres_changes",

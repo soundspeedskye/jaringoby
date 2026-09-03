@@ -35,6 +35,7 @@ import type {
   UpdateRoomSettingsInput,
   UpdateRoomPostInput,
 } from '@/shared/api/types';
+import { OFFLINE_SNAPSHOT_STORAGE_KEY } from '@/shared/config/storage';
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -142,7 +143,7 @@ describe('OfflineQueueRepository', () => {
     await first.addExpense(expenseInput('cache-read-failure'));
     first.dispose();
 
-    storage.failOnReadKey = 'jaringoby.offline-snapshots.v1';
+    storage.failOnReadKey = OFFLINE_SNAPSHOT_STORAGE_KEY;
     const second = repository(base, storage, new FakeNetwork(false), new MemoryPhotoStore());
     expect(await second.getQueueOperations()).toHaveLength(1);
   });
@@ -186,13 +187,13 @@ describe('OfflineQueueRepository', () => {
     await queue.load();
     await queue.addExpense(expenseInput('delete-account-cache'));
     expect(photos.uris).toHaveLength(1);
-    expect(storage.values.get('jaringoby.offline-snapshots.v1')).toContain('user-a');
+    expect(storage.values.get(OFFLINE_SNAPSHOT_STORAGE_KEY)).toContain('user-a');
 
     await queue.clearDeletedUserData('user-a');
 
     expect(await queue.getQueueOperations()).toEqual([]);
     expect(photos.uris).toHaveLength(0);
-    expect(storage.values.get('jaringoby.offline-snapshots.v1')).toBeUndefined();
+    expect(storage.values.get(OFFLINE_SNAPSHOT_STORAGE_KEY)).toBeUndefined();
   });
 
   it('rebases a version conflict before explicitly reapplying the local patch', async () => {

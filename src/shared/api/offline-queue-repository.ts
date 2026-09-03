@@ -29,10 +29,11 @@ import type {
   UpdateRoomSettingsInput,
   UpdateRoomPostInput,
 } from '@/shared/api/types';
+import {
+  OFFLINE_QUEUE_STORAGE_KEY,
+  OFFLINE_SNAPSHOT_STORAGE_KEY,
+} from '@/shared/config/storage';
 import { createPeriodTimeline } from '@/shared/lib/domain/period';
-
-export const OFFLINE_QUEUE_STORAGE_KEY = 'jaringoby.offline-mutations.v1';
-export const OFFLINE_SNAPSHOT_STORAGE_KEY = 'jaringoby.offline-snapshots.v1';
 
 type QueueStatus = 'PENDING' | 'FAILED';
 type MutationKind =
