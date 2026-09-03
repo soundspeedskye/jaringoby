@@ -2,18 +2,19 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useSession } from "@/shared/providers/session-provider";
 import { Field } from "@/shared/ui/field";
 import { FormMessage } from "@/shared/ui/form-message";
 import { GlassSurface } from "@/shared/ui/glass-surface";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { Screen } from "@/shared/ui/screen";
-import { fonts, palette, radii, spacing } from "@/shared/config/design";
-import { useSession } from "@/shared/providers/session-provider";
 
 type Mode = "SIGN_IN" | "SIGN_UP";
 
 export function SignInPage() {
-  const { accountSafetyNotice, requestPasswordReset, signIn, signUp } = useSession();
+  const { accountSafetyNotice, requestPasswordReset, signIn, signUp } =
+    useSession();
   const [mode, setMode] = useState<Mode>("SIGN_IN");
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
@@ -73,7 +74,7 @@ export function SignInPage() {
           />
         </View>
         <Text style={styles.kicker}> </Text>
-        <Text style={styles.title}>JARINGOBY</Text>
+        <Text style={styles.title}>ZARINGOVY</Text>
         {/* <Text style={styles.subtitle}>
           계정으로 기록을 안전하게 복구하고 여러 기기에서 이어 보세요.
         </Text> */}
@@ -223,12 +224,22 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
   },
   tabActive: { backgroundColor: palette.green },
-  tabText: { color: palette.muted, fontFamily: fonts.handBold, fontSize: 13, fontWeight: "700" },
+  tabText: {
+    color: palette.muted,
+    fontFamily: fonts.handBold,
+    fontSize: 13,
+    fontWeight: "700",
+  },
   tabTextActive: { color: palette.cream },
   resetButton: {
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  resetText: { color: palette.green, fontFamily: fonts.handBold, fontSize: 12, fontWeight: "700" },
+  resetText: {
+    color: palette.green,
+    fontFamily: fonts.handBold,
+    fontSize: 12,
+    fontWeight: "700",
+  },
 });

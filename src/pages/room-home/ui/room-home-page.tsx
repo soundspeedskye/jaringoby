@@ -1,12 +1,12 @@
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { MemberExpenseList } from "@/widgets/room-home";
+import { fonts, palette, spacing } from "@/shared/config/design";
 import { ErrorBanner } from "@/shared/ui/error-banner";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { Screen, ScreenFrame } from "@/shared/ui/screen";
-import { fonts, palette, spacing } from "@/shared/config/design";
-import { useRoomHome } from "../model/use-room-home";
 import type { RoomHomeActions } from "@/widgets/room-home";
+import { MemberExpenseList } from "@/widgets/room-home";
+import { useRoomHome } from "../model/use-room-home";
 
 export function RoomHomePage() {
   const { state, actions } = useRoomHome();
@@ -43,7 +43,7 @@ function RoomHomeEmpty({
     <Screen>
       <ErrorBanner error={error} onDismiss={actions.clearError} />
       <View style={styles.emptyHeader}>
-        <Text style={styles.kicker}>Jaringoby</Text>
+        <Text style={styles.kicker}>ZARINGOVY</Text>
         <Text style={styles.emptyTitle}>
           {error
             ? "기록을 불러오지 못했어요."
