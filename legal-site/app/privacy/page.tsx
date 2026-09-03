@@ -1,0 +1,17 @@
+import Link from 'next/link';
+import { ArticleSection, PolicyCallout } from '@/components/article-elements';
+import { DocumentLayout, type TocItem } from '@/components/document-layout';
+
+const toc: TocItem[] = [{ id: 'overview', label: '처리자와 적용 범위' }, { id: 'collection', label: '수집하는 정보' }, { id: 'purpose', label: '이용 목적과 공개 범위' }, { id: 'retention', label: '보관과 파기' }, { id: 'sharing', label: '제공과 위탁' }, { id: 'rights', label: '이용자의 권리와 문의' }, { id: 'security', label: '보호 조치와 변경' }];
+
+export default function PrivacyPage() {
+  return <DocumentLayout eyebrow="privacy policy" title="개인정보처리방침" intro="zaringovy 개인 운영자는 이용자의 개인정보를 아래 기준에 따라 처리합니다." toc={toc} noticeTitle="개인정보 보호 약속" notice="계정 탈퇴를 요청하면 즉시 서비스 이용을 중지하고, 법령상 보관 의무가 없는 개인정보는 바로 영구 삭제합니다.">
+    <ArticleSection id="overview" number="01" title="처리자와 적용 범위"><p>zaringovy 개인 운영자(이하 “운영자”)는 지출 기록과 챌린지 참여 서비스를 제공하며, 이 방침은 zaringovy 앱과 고객지원 과정에서 처리하는 개인정보에 적용됩니다.</p><p>개인정보 관련 문의는 <a className="text-link" href="mailto:dev.youn.cheon@gmail.com">dev.youn.cheon@gmail.com</a>으로 보내실 수 있습니다.</p></ArticleSection>
+    <ArticleSection id="collection" number="02" title="수집하는 정보"><p>운영자는 서비스 제공에 필요한 최소한의 정보만 수집합니다.</p><PolicyCallout><strong>계정과 프로필</strong><span>이메일 주소, 비밀번호(인증 서비스에서 처리), 닉네임, 선택한 기본 아바타 또는 이용자가 직접 등록한 프로필 이미지</span></PolicyCallout><PolicyCallout><strong>기록과 챌린지 활동</strong><span>방 이름과 기간, 예산, 지출 금액·카테고리·메모·사진, 댓글과 답글, 게시물·반응·투표, 신고·차단 정보</span></PolicyCallout><PolicyCallout><strong>알림</strong><span>이용자가 푸시 알림을 허용한 경우 기기 푸시 토큰과 알림 설정</span></PolicyCallout><p>정보는 이용자가 회원가입·프로필 수정·기록 작성·사진 첨부·챌린지 참여·고객지원 문의를 할 때 직접 입력하거나 업로드하는 방식으로 수집됩니다. 카메라는 이용자가 사진 촬영을 선택할 때만 사용하며, 사진 보관함은 이용자가 사진을 선택할 때만 접근합니다.</p></ArticleSection>
+    <ArticleSection id="purpose" number="03" title="이용 목적과 공개 범위"><p>수집한 정보는 계정 식별과 로그인, 지출 기록 저장과 동기화, 챌린지 진행·결과 계산, 알림 제공, 신고·차단 처리, 고객지원 및 서비스 안정성 확보를 위해 사용합니다.</p><p>챌린지 방에 참여하면 해당 방의 다른 참여자에게 닉네임, 프로필 이미지, 방 안에 작성한 지출 기록·첨부 사진·댓글·게시물·반응이 보일 수 있습니다. 이메일 주소와 비밀번호는 다른 이용자에게 공개되지 않습니다.</p></ArticleSection>
+    <ArticleSection id="retention" number="04" title="보관과 파기"><p>개인정보는 계정이 유지되는 동안 보관하며, 이용자가 앱 안에서 계정 탈퇴를 요청하면 즉시 서비스 이용을 중지하고 관련 개인정보를 영구 삭제합니다.</p><p>다만, 다른 참여자의 기록 흐름을 보존해야 하는 공개 콘텐츠는 작성자 식별 정보와 본문·첨부를 제거하거나 비식별 처리할 수 있으며, 법령에 따라 보관해야 하는 정보가 있는 경우에는 해당 법령이 정한 기간 동안에만 보관합니다.</p></ArticleSection>
+    <ArticleSection id="sharing" number="05" title="제공과 위탁"><p>운영자는 이용자의 개인정보를 판매하지 않으며, 이용자 동의 또는 법령상 근거가 없는 한 제3자에게 제공하지 않습니다.</p><PolicyCallout><strong>Supabase, Inc. · 대한민국 서울(ap-northeast-2)</strong><span>회원 인증, 데이터베이스 운영, 파일 저장, 실시간 데이터 동기화를 위해 위탁합니다. 이메일, 프로필, 지출·챌린지 기록, 첨부 사진, 댓글·게시물, 신고·차단 정보 및 알림 토큰을 계정 삭제 시까지 처리합니다.</span></PolicyCallout><p>프로젝트의 주된 데이터 저장 지역은 대한민국 서울입니다. 비밀번호 재설정 메일 발송, 푸시 알림 등 외부 기능을 정식으로 연결하는 경우에는 실제 이용 서비스와 처리 범위를 이 방침에 추가로 공개합니다.</p></ArticleSection>
+    <ArticleSection id="rights" number="06" title="이용자의 권리와 문의"><p>이용자는 자신의 개인정보에 대해 열람, 정정, 삭제, 처리정지를 요청할 수 있습니다. 프로필과 기록은 앱 안에서 직접 수정·삭제할 수 있고, 계정 탈퇴는 앱의 계정 관리 화면에서 요청할 수 있습니다.</p><p>앱에서 해결되지 않는 요청은 운영자 이메일로 보내 주세요. 본인 확인이 필요한 경우 요청 처리에 필요한 범위에서 확인을 요청할 수 있습니다.</p><Link className="text-link" href="/support#account-deletion">계정 삭제와 지원 안내 보기 →</Link></ArticleSection>
+    <ArticleSection id="security" number="07" title="보호 조치와 변경"><p>운영자는 접근 권한 관리, 인증 기반의 접근 통제, 전송 구간 보호, 비공개 파일 저장 및 점검 절차 등 합리적인 안전 조치를 적용합니다. 이 방침을 변경하는 경우에는 변경 내용과 적용일을 이 페이지 또는 앱 내 공지로 알립니다.</p><p className="updated-note">시행일: 2026년 9월 1일</p></ArticleSection>
+  </DocumentLayout>;
+}
