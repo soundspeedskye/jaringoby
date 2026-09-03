@@ -19,7 +19,6 @@
     },
     "android": {
       "package": "com.zaringovy.app",
-      "versionCode": 5,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#FDF6E3",
