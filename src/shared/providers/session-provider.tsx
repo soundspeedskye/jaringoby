@@ -27,6 +27,7 @@ type SessionContextValue = {
   ) => Promise<"SIGNED_IN" | "CONFIRM_EMAIL">;
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
+  deleteAccount: (currentPassword: string) => Promise<void>;
   completeRecovery: () => void;
   signOut: () => Promise<void>;
 };
@@ -201,6 +202,33 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setRecoveryMode(false);
   }, []);
 
+  const deleteAccount = useCallback(async (currentPassword: string) => {
+    if (!currentPassword) throw new Error("현재 비밀번호를 입력해 주세요.");
+    const currentUserId = session?.user.id;
+    if (!currentUserId) throw new Error("로그인 정보를 다시 확인해 주세요.");
+
+    const { data, error } = await getSupabaseClient().functions.invoke(
+      "delete-account",
+      { body: { password: currentPassword } },
+    );
+    if (error || !data || typeof data !== "object" || data.deleted !== true) {
+      throw await accountDeletionError(error, data);
+    }
+
+    // The server has already invalidated this account. Clear the device's
+    // offline queue and snapshots before switching the navigation gate off.
+    await getRepositoryRuntime().clearDeletedUserData(currentUserId);
+    try {
+      await getSupabaseClient().auth.signOut({ scope: "local" });
+    } finally {
+      getRepositoryRuntime().setActiveUserId(null);
+      activeUserIdRef.current = null;
+      accountChangeAllowedRef.current = false;
+      setRecoveryMode(false);
+      setSession(null);
+    }
+  }, [session?.user.id]);
+
   const signOut = useCallback(async () => {
     const { error } = await getSupabaseClient().auth.signOut({
       scope: "local",
@@ -222,6 +250,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       signUp,
       requestPasswordReset,
       updatePassword,
+      deleteAccount,
       completeRecovery: () => setRecoveryMode(false),
       signOut,
     }),
@@ -235,6 +264,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       signOut,
       signUp,
       updatePassword,
+      deleteAccount,
     ],
   );
 
@@ -301,4 +331,24 @@ function authError(message: string): Error {
   return new Error(
     "계정 요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
   );
+}
+
+async function accountDeletionError(error: unknown, data: unknown): Promise<Error> {
+  let responseData = data;
+  const context = error && typeof error === "object"
+    ? (error as { context?: unknown }).context
+    : null;
+  if (!responseData && context instanceof Response) {
+    responseData = await context.clone().json().catch(() => null);
+  }
+  const payload = responseData && typeof responseData === "object"
+    ? responseData as { error?: unknown }
+    : null;
+  const code = typeof payload?.error === "string" ? payload.error : "";
+  if (code === "invalid_password") return new Error("현재 비밀번호가 맞지 않아요.");
+  if (code === "invalid_request") return new Error("현재 비밀번호를 다시 입력해 주세요.");
+  if (error instanceof Error && /invalid_password/iu.test(error.message)) {
+    return new Error("현재 비밀번호가 맞지 않아요.");
+  }
+  return new Error("계정을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.");
 }

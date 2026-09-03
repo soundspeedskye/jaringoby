@@ -9,6 +9,7 @@ export type RepositoryRuntime = {
   repository: AppRepository;
   offlineQueue: OfflineQueueRepository | null;
   setActiveUserId: (userId: string | null) => void;
+  clearDeletedUserData: (userId: string) => Promise<void>;
 };
 
 let singleton: RepositoryRuntime | null = null;
@@ -32,6 +33,9 @@ export function getRepositoryRuntime(): RepositoryRuntime {
     repository: offlineQueue ?? base,
     offlineQueue,
     setActiveUserId: (userId) => offlineQueue?.setActiveUserId(userId),
+    clearDeletedUserData: async (userId) => {
+      await offlineQueue?.clearDeletedUserData(userId);
+    },
   };
   return singleton;
 }

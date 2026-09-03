@@ -177,6 +177,24 @@ describe('OfflineQueueRepository', () => {
     expect(await queue.getQueueOperations()).toHaveLength(1);
   });
 
+  it('permanently clears a deleted account’s offline snapshots and queued photos', async () => {
+    const storage = new MemoryStorage();
+    const photos = new MemoryPhotoStore();
+    const base = new FakeRepository(snapshotFixture('user-a', FUTURE_PERIOD));
+    const queue = repository(base, storage, new FakeNetwork(false), photos);
+
+    await queue.load();
+    await queue.addExpense(expenseInput('delete-account-cache'));
+    expect(photos.uris).toHaveLength(1);
+    expect(storage.values.get('jaringoby.offline-snapshots.v1')).toContain('user-a');
+
+    await queue.clearDeletedUserData('user-a');
+
+    expect(await queue.getQueueOperations()).toEqual([]);
+    expect(photos.uris).toHaveLength(0);
+    expect(storage.values.get('jaringoby.offline-snapshots.v1')).toBeUndefined();
+  });
+
   it('rebases a version conflict before explicitly reapplying the local patch', async () => {
     const initial = snapshotFixture('user-a', FUTURE_PERIOD);
     initial.expenses.push(expenseFixture({ id: 'expense-1', memo: 'server-v1', version: 1 }));

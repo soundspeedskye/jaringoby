@@ -791,6 +791,45 @@ export class OfflineQueueRepository implements AppRepository {
     });
   }
 
+  /** Permanently removes one account's offline records after server-side deletion. */
+  async clearDeletedUserData(userId: string): Promise<void> {
+    await this.withLock(async () => {
+      await this.ready;
+      const deletedOperations = this.queue.operations.filter(
+        (operation) => operation.userId === userId,
+      );
+      this.queue.operations = this.queue.operations.filter(
+        (operation) => operation.userId !== userId,
+      );
+      for (const operation of deletedOperations) await this.releasePhotoLocked(operation);
+
+      delete this.cachedSnapshots[userId];
+      if (this.baseSnapshot?.currentUserId === userId) this.baseSnapshot = null;
+      if (this.activeUserId === userId) {
+        this.activeUserId = null;
+        this.sessionEpoch += 1;
+      }
+      if (this.retryTimer) clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+
+      await this.persistLocked();
+      const envelope: SnapshotEnvelope = {
+        schemaVersion: 1,
+        snapshots: this.cachedSnapshots,
+      };
+      try {
+        if (Object.keys(this.cachedSnapshots).length === 0) {
+          await this.storage.removeItem(this.snapshotStorageKey);
+        } else {
+          await this.storage.setItem(this.snapshotStorageKey, JSON.stringify(envelope));
+        }
+      } catch {
+        // The account is already gone on the server. A stale display cache is
+        // never used while signed out, and the next successful write replaces it.
+      }
+    });
+  }
+
   /**
    * Monotonic counter that changes only when the queue or active session does.
    * Subscribers compare it to skip re-reading operations on data-only syncs.

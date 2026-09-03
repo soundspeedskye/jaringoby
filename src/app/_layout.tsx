@@ -92,6 +92,7 @@ function AuthenticatedApp() {
           <Stack.Screen name="community/[id]" />
           <Stack.Screen name="community/new" options={{ presentation: 'modal' }} />
           <Stack.Screen name="profile/edit" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="account/delete" options={{ presentation: 'modal' }} />
           <Stack.Screen name="expense/new" options={{ presentation: 'modal' }} />
           <Stack.Screen name="expense/[id]" />
           <Stack.Screen name="notifications" />

@@ -275,6 +275,13 @@ export function ProfilePage() {
         title: "계정",
         data: [
           {
+            key: "delete-account",
+            type: "setting" as const,
+            icon: "account-remove-outline" as const,
+            label: "계정 탈퇴",
+            onPress: () => router.push("/account/delete" as never),
+          },
+          {
             key: "sign-out",
             type: "setting" as const,
             icon: "logout" as const,
