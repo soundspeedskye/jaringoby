@@ -99,6 +99,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      // 검증이 끝나기 전에 복구 모드를 연다. 딥링크가 이미 새 비밀번호 화면으로
+      // 이동시킨 뒤라, 이 값이 늦게 켜지면 아래 getUser를 기다리는 동안 라우팅
+      // 가드가 화면을 로그인으로 되돌려 정상 링크가 끊긴다. 이 값 자체는 어떤
+      // 권한도 주지 않고 화면을 어디 둘지만 정한다.
+      setRecoveryMode(true);
+
       // setSession 전에 서버에서 토큰의 실제 사용자 ID를 확인한다. URL fragment는
       // 어떤 앱 링크에도 붙을 수 있으므로, 토큰 존재만으로 세션을 바꾸면 안 된다.
       const { data, error } = await client.auth.getUser(link.accessToken);
@@ -106,6 +112,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         // 4xx는 서버가 토큰을 거절한 것이고, 그 밖(네트워크 실패 등)은 링크가
         // 멀쩡한데 확인을 못 한 상황이라 사용자가 할 일이 다르다.
         const rejected = typeof error?.status === "number" && error.status < 500;
+        setRecoveryMode(false);
         setAccountSafetyNotice(
           rejected
             ? recoveryLinkError("otp_expired")
@@ -122,7 +129,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
 
       setAccountSafetyNotice(null);
-      setRecoveryMode(true);
       accountChangeAllowedUntilRef.current = Date.now() + ACCOUNT_CHANGE_GRACE_MS;
       await client.auth.setSession({
         access_token: link.accessToken,

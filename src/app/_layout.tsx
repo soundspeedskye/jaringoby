@@ -40,15 +40,23 @@ function AuthenticatedApp() {
   const segments = useSegments();
   const { loading, recoveryMode, session } = useSession();
   const inAuthGroup = segments[0] === '(auth)';
+  // 딥링크는 경로만 보고 이 화면을 띄우므로, 링크가 거절돼 복구 세션이 서지
+  // 않아도 사용자는 새 비밀번호 입력칸 앞에 서게 된다. 입력해봐야 실패한다.
+  const onRecoveryScreen = inAuthGroup && segments[1] === 'reset-password';
   // 세션 부트스트랩 중. 이 구간엔 아직 유저가 확정되지 않아 데이터 계층을
   // 마운트하면 signed-out 마운트에서 전체 조회가 한 번 낭비된다(재방문 사용자).
   const bootstrapping = loading;
 
   useEffect(() => {
     if (loading) return;
-    if (!session && !inAuthGroup) router.replace('/sign-in');
+    // 복구 모드는 검증이 끝나기 전에 켜지므로, 정상 링크가 확인을 기다리는
+    // 동안에는 여기서 되돌리지 않는다. 거절된 링크만 로그인 화면으로 보내고,
+    // 이유는 그 화면의 안내가 말해준다.
+    if (!session && (!inAuthGroup || (onRecoveryScreen && !recoveryMode))) {
+      router.replace('/sign-in');
+    }
     if (session && inAuthGroup && !recoveryMode) router.replace('/');
-  }, [inAuthGroup, loading, recoveryMode, router, session]);
+  }, [inAuthGroup, loading, onRecoveryScreen, recoveryMode, router, session]);
 
   useEffect(() => {
     // 세션 확정까지 스플래시를 유지하고, 준비되면 내린다.
