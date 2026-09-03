@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
@@ -12,6 +12,10 @@ import { Screen } from "@/shared/ui/screen";
 
 type Mode = "SIGN_IN" | "SIGN_UP";
 
+// 서버도 같은 주소로의 재발송을 60초 간격으로 막는다(config.toml max_frequency).
+// 그보다 짧게 두면 사용자는 눌러놓고 실패 메시지만 보게 된다.
+const RESET_COOLDOWN_MS = 60_000;
+
 export function SignInPage() {
   const { accountSafetyNotice, requestPasswordReset, signIn, signUp } =
     useSession();
@@ -20,8 +24,20 @@ export function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetReadyAt, setResetReadyAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 남은 시간은 항상 Date.now()로 다시 계산한다. 카운터를 1씩 깎으면 앱이
+  // 백그라운드에 있는 동안 타이머가 멈춰 실제보다 오래 잠긴다.
+  const resetCooldown = Math.max(0, Math.ceil((resetReadyAt - now) / 1000));
+  useEffect(() => {
+    if (resetReadyAt <= now) return;
+    const timer = setTimeout(() => setNow(Date.now()), 1000);
+    return () => clearTimeout(timer);
+  }, [now, resetReadyAt]);
 
   const submit = async () => {
     setError(null);
@@ -49,19 +65,34 @@ export function SignInPage() {
   };
 
   const resetPassword = async () => {
+    if (resetting || resetCooldown > 0) return;
     setError(null);
     setMessage(null);
+    setResetting(true);
     try {
       await requestPasswordReset(email);
       setMessage("비밀번호 재설정 링크를 이메일로 보냈어요.");
+      // 보내지 못했을 때는 잠그지 않는다. 주소 오타처럼 사용자가 바로 고쳐
+      // 다시 시도할 수 있는 실패가 대부분이다.
+      setResetReadyAt(Date.now() + RESET_COOLDOWN_MS);
+      setNow(Date.now());
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
           : "재설정 메일을 보내지 못했어요.",
       );
+    } finally {
+      setResetting(false);
     }
   };
+
+  const resetLocked = resetting || resetCooldown > 0;
+  const resetLabel = resetting
+    ? "재설정 메일 보내는 중…"
+    : resetCooldown > 0
+      ? `${resetCooldown}초 후 다시 보낼 수 있어요`
+      : "비밀번호를 잊었나요?";
 
   return (
     <Screen testID="sign-in-screen">
@@ -136,10 +167,14 @@ export function SignInPage() {
         {mode === "SIGN_IN" ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: resetLocked }}
+            disabled={resetLocked}
             onPress={() => void resetPassword()}
             style={styles.resetButton}
           >
-            <Text style={styles.resetText}>비밀번호를 잊었나요?</Text>
+            <Text style={[styles.resetText, resetLocked && styles.resetTextLocked]}>
+              {resetLabel}
+            </Text>
           </Pressable>
         ) : null}
       </GlassSurface>
@@ -241,5 +276,8 @@ const styles = StyleSheet.create({
     fontFamily: fonts.handBold,
     fontSize: 12,
     fontWeight: "700",
+  },
+  resetTextLocked: {
+    color: palette.muted,
   },
 });
