@@ -13,6 +13,7 @@ import {
 
 import { getRepositoryRuntime } from "@/shared/api/repository-factory";
 import { getSupabaseClient } from "@/shared/api/supabase-client";
+import { authErrorMessage } from "@/shared/lib/auth-error";
 import {
   parseRecoveryAuthLink,
   recoveryLinkError,
@@ -184,7 +185,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       password,
     });
     if (error) accountChangeAllowedUntilRef.current = 0;
-    if (error) throw authError(error.message);
+    if (error) throw new Error(authErrorMessage(error, "SIGN_IN"));
   }, []);
 
   const signUp = useCallback(
@@ -209,7 +210,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       });
       if (error) {
         accountChangeAllowedUntilRef.current = 0;
-        throw authError(error.message);
+        throw new Error(authErrorMessage(error, "SIGN_UP"));
       }
       if (!data.session) accountChangeAllowedUntilRef.current = 0;
       return data.session ? "SIGNED_IN" : "CONFIRM_EMAIL";
@@ -227,13 +228,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
         redirectTo: Linking.createURL("/reset-password"),
       },
     );
-    if (error) throw authError(error.message);
+    if (error) throw new Error(authErrorMessage(error, "RESET_REQUEST"));
   }, []);
 
   const updatePassword = useCallback(async (password: string) => {
     validatePassword(password);
     const { error } = await getSupabaseClient().auth.updateUser({ password });
-    if (error) throw authError(error.message);
+    if (error) throw new Error(authErrorMessage(error, "PASSWORD_UPDATE"));
     setRecoveryMode(false);
   }, []);
 
@@ -268,7 +269,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const { error } = await getSupabaseClient().auth.signOut({
       scope: "local",
     });
-    if (error) throw authError(error.message);
+    if (error) throw new Error(authErrorMessage(error, "SIGN_OUT"));
     getRepositoryRuntime().setActiveUserId(null);
     activeUserIdRef.current = null;
     accountChangeAllowedUntilRef.current = 0;
@@ -322,21 +323,6 @@ function validateEmail(value: string): void {
 
 function validatePassword(value: string): void {
   if (value.length < 8) throw new Error("비밀번호는 8자 이상이어야 해요.");
-}
-
-function authError(message: string): Error {
-  const normalized = message.toLowerCase();
-  if (normalized.includes("invalid login"))
-    return new Error("이메일 또는 비밀번호를 확인해 주세요.");
-  if (normalized.includes("email not confirmed"))
-    return new Error("이메일 인증을 먼저 완료해 주세요.");
-  if (normalized.includes("already registered"))
-    return new Error("이미 가입된 이메일이에요.");
-  if (normalized.includes("rate limit"))
-    return new Error("요청이 너무 많아요. 잠시 후 다시 시도해 주세요.");
-  return new Error(
-    "계정 요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
-  );
 }
 
 async function accountDeletionError(error: unknown, data: unknown): Promise<Error> {
