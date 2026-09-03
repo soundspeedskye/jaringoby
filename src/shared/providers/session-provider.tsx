@@ -295,7 +295,7 @@ function parseRecoveryAuthLink(url: string | null): {
   if (!url) return null;
   const parsed = Linking.parse(url);
   // createURL('/reset-password') can become either the host or the path,
-  // depending on the native scheme form (jaringoby://reset-password vs ///).
+  // depending on the native scheme form (zaringovy://reset-password vs ///).
   const route = [parsed.hostname, parsed.path]
     .filter((part): part is string => Boolean(part))
     .join("/")

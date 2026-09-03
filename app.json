@@ -5,7 +5,7 @@
     "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "jaringoby",
+    "scheme": "zaringovy",
     "newArchEnabled": true,
     "ios": {
       "icon": "./assets/images/icon.png",
