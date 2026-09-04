@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useCallback, useMemo, useState } from "react";
+import type { Ref } from "react";
+import { useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -19,42 +20,54 @@ import { createUuid } from "@/shared/lib/uuid";
 import type { PeriodPhase } from "@/shared/model/types";
 import { FormMessage } from "@/shared/ui/form-message";
 
+/**
+ * 스레드가 입력 독에 말을 거는 통로. 답글 대상 선택·안내·오류는 모두 독이
+ * 소유하는 상태라, 목록 쪽에서는 이 핸들로 밀어 넣기만 한다. 스레드가 이
+ * 상태를 들고 있으면 오류 한 줄이 뜰 때마다 댓글 목록이 통째로 다시 그려진다.
+ */
+export type CommentComposerDockHandle = {
+  selectReply: (replyDraft: ReplyDraft) => void;
+  showFeedback: (message: string | null) => void;
+  showError: (message: string | null) => void;
+};
+
 export function CommentComposerDock({
   actions,
   canMutate,
-  error,
-  feedback,
-  inputRef,
   mentionMembers,
-  onError,
-  onFeedback,
   onFocus,
-  onReplyChange,
   phase,
-  replyDraft,
+  ref,
   features,
 }: {
   actions: Pick<ThreadActions, "create">;
   canMutate: boolean;
-  error: string | null;
-  feedback: string | null;
   features: ThreadFeatures;
-  inputRef: React.RefObject<TextInput | null>;
   mentionMembers: readonly MentionCandidate[];
-  onError: (message: string | null) => void;
-  onFeedback: (message: string | null) => void;
   onFocus: () => void;
-  onReplyChange: (replyDraft: ReplyDraft | null) => void;
   phase: PeriodPhase | null;
-  replyDraft: ReplyDraft | null;
+  ref?: Ref<CommentComposerDockHandle>;
 }) {
+  const inputRef = useRef<TextInput>(null);
+  const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [mentions, setMentions] = useState<CommentMentionInput[]>([]);
   const [cursor, setCursor] = useState(0);
   const [sending, setSending] = useState(false);
   const [clientRequestId, setClientRequestId] = useState(createUuid);
+  useImperativeHandle(ref, () => ({
+    selectReply: (draft) => {
+      setReplyDraft(draft);
+      setFeedback("답글 대상을 선택했어요.");
+      inputRef.current?.focus();
+    },
+    showFeedback: setFeedback,
+    showError: setError,
+  }), []);
   const sendComment = useCallback(async () => {
-    onError(null);
+    setError(null);
     try {
       const command = createCommentCommand(
         body,
@@ -79,11 +92,11 @@ export function CommentComposerDock({
       setBody("");
       setMentions([]);
       setCursor(0);
-      onReplyChange(null);
-      onFeedback(null);
+      setReplyDraft(null);
+      setFeedback(null);
       setClientRequestId(createUuid());
     } catch (reason) {
-      onError(
+      setError(
         reason instanceof Error
           ? reason.message
           : "댓글을 보내지 못했어요. 다시 시도해 주세요.",
@@ -97,9 +110,6 @@ export function CommentComposerDock({
     clientRequestId,
     features.maxLength,
     features.replies,
-    onError,
-    onFeedback,
-    onReplyChange,
     replyDraft,
     mentions,
   ]);
@@ -151,7 +161,7 @@ export function CommentComposerDock({
             onBodyChange={changeBody}
             onFocus={onFocus}
             onMentionSelect={selectMention}
-            onReplyChange={onReplyChange}
+            onReplyChange={setReplyDraft}
             onSelectionChange={setCursor}
             onSend={sendComment}
             placeholder={features.placeholder}

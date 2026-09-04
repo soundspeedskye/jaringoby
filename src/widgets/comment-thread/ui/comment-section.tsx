@@ -14,17 +14,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
-import { useDerivedValue } from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 import type {
   MentionCandidate,
   ThreadActions,
   ThreadFeatures,
   ThreadMessage,
 } from "../model/types";
+import { SelectedCommentStore } from "../model/selected-comment-store";
 
 import type {
   CommentMention,
@@ -32,13 +32,15 @@ import type {
   Profile,
 } from "@/shared/api/types";
 import { fonts, palette, spacing } from "@/shared/config/design";
-import type { ReplyDraft } from "@/shared/lib/domain/replies";
 import { prepareReplyDraft } from "@/shared/lib/domain/replies";
 import { InputFocusContext } from "@/shared/lib/input-focus-context";
 import type { PeriodPhase } from "@/shared/model/types";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { CommentChatScrollView } from "./comment-chat-scroll-view";
-import { CommentComposerDock } from "./comment-composer-dock";
+import {
+  CommentComposerDock,
+  type CommentComposerDockHandle,
+} from "./comment-composer-dock";
 import { CommentItem } from "./comment-item";
 
 const EMPTY_COMMENT_REACTIONS: CommentReaction[] = [];
@@ -79,13 +81,12 @@ export function CommentThread({
   refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const listRef = useRef<FlatList<ThreadMessage>>(null);
-  const composerRef = useRef<TextInput>(null);
-  const [composerHeight, setComposerHeight] = useState(0);
+  const dockRef = useRef<CommentComposerDockHandle>(null);
   // 입력 독 높이만큼 목록 아래 여백을 준다. 워크릿에서 읽히므로 shared value다.
-  const composerContentPadding = useDerivedValue(
-    () => composerHeight,
-    [composerHeight],
-  );
+  // state로 두면 독이 한 줄 늘고 줄 때마다(멀티라인·답글 칩·오류 문구) 스레드가
+  // 통째로 다시 렌더된다. 이 값을 읽는 곳은 스크롤 컴포넌트와 포커스 보정뿐이라
+  // React 렌더를 거칠 이유가 없다.
+  const composerHeight = useSharedValue(0);
   // 독 높이가 0에서 실제값으로 처음 뛸 때, 스크롤 컴포넌트는 그 증가분을
   // "키보드가 올라왔다"와 똑같이 보고 목록을 그만큼 밀어 내린다. 그래서 화면에
   // 들어오자마자 글 상단이 독 높이만큼 잘린 채로 시작한다.
@@ -98,10 +99,13 @@ export function CommentThread({
   // 여백(contentInset) 확장은 freeze와 무관하게 적용되어 아래 공간은 계속 확보된다.
   const [chatScrollFrozen, setChatScrollFrozen] = useState(true);
   const unfreezeChatScroll = useCallback(() => setChatScrollFrozen(false), []);
-  const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  // 편집 중·강조 중인 줄은 스레드의 state가 아니라 줄이 직접 구독하는 스토어에
+  // 둔다. state로 두면 값이 바뀔 때마다 renderItem identity가 바뀌어, 실제로
+  // 달라지는 줄은 둘뿐인데도 보이는 셀이 전부 다시 그려진다.
+  const [editingStore] = useState(() => new SelectedCommentStore());
+  const [highlightStore] = useState(
+    () => new SelectedCommentStore(highlightCommentId ?? null),
+  );
   const commentsById = useMemo(
     () => new Map(comments.map((comment) => [comment.id, comment])),
     [comments],
@@ -118,7 +122,7 @@ export function CommentThread({
         | undefined;
       responder?.scrollResponderScrollNativeHandleToKeyboard(
         event.target,
-        composerHeight + spacing.lg,
+        composerHeight.get() + spacing.lg,
         true,
       );
     },
@@ -126,9 +130,6 @@ export function CommentThread({
   );
   // 소식함에서 특정 댓글로 들어오면 그 댓글까지 데려가고 잠시 강조한다.
   // 목록이 한 번 그려진 뒤에야 인덱스를 잡을 수 있어 다음 프레임에 실행한다.
-  const [highlightedCommentId, setHighlightedCommentId] = useState<
-    string | null
-  >(highlightCommentId ?? null);
   const highlightHandled = useRef(false);
   useEffect(() => {
     if (!highlightCommentId || highlightHandled.current) return;
@@ -146,12 +147,12 @@ export function CommentThread({
       });
     }, 250);
     // 강조는 잠깐만 둔다. 계속 켜 두면 읽는 데 방해가 된다.
-    const fadeTimer = setTimeout(() => setHighlightedCommentId(null), 2600);
+    const fadeTimer = setTimeout(() => highlightStore.set(null), 2600);
     return () => {
       clearTimeout(scrollTimer);
       clearTimeout(fadeTimer);
     };
-  }, [comments, highlightCommentId]);
+  }, [comments, highlightCommentId, highlightStore]);
   // scrollToIndex는 아직 그려지지 않은 항목으로는 바로 가지 못하고, 이 콜백이
   // 없으면 조용히 아무 일도 하지 않는다. 대략 위치로 먼저 옮긴 뒤 한 번만
   // 다시 시도한다.
@@ -192,42 +193,51 @@ export function CommentThread({
     },
     [comments, scrollInputAboveKeyboard, unfreezeChatScroll],
   );
-  const handleComposerLayout = useCallback((event: LayoutChangeEvent) => {
-    setComposerHeight(event.nativeEvent.layout.height);
-  }, []);
+  const handleComposerLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      composerHeight.set(event.nativeEvent.layout.height);
+    },
+    [composerHeight],
+  );
   const renderScrollComponent = useCallback(
     (props: ScrollViewProps) => (
       <CommentChatScrollView
         {...props}
-        extraContentPadding={composerContentPadding}
+        extraContentPadding={composerHeight}
         freeze={chatScrollFrozen}
       />
     ),
-    [chatScrollFrozen, composerContentPadding],
+    [chatScrollFrozen, composerHeight],
   );
+  // 아래 넷은 독이 소유한 상태를 밀어 넣기만 하는 통로다. 의존성이 없어
+  // renderItem이 이것들 때문에 다시 만들어지는 일이 없다.
+  // 답글 대상의 닉네임은 줄이 이미 들고 있는 profile에서 받아 온다. 여기서
+  // profilesById를 조회하면 프로필이 한 번 갱신될 때마다 목록이 다시 그려진다.
   const selectReply = useCallback(
-    (comment: ThreadMessage) => {
-      const profile = profilesById.get(comment.authorId);
-      setReplyDraft(
+    (comment: ThreadMessage, authorNickname: string) => {
+      dockRef.current?.selectReply(
         prepareReplyDraft({
           messageId: comment.id,
-          authorNickname: profile?.nickname ?? "알 수 없음",
+          authorNickname,
           body: comment.body,
           deleted: Boolean(comment.deletedAt),
           replyToMessageId: comment.replyToId,
         }),
       );
-      setFeedback("답글 대상을 선택했어요.");
-      composerRef.current?.focus();
     },
-    [profilesById],
+    [],
   );
-  const beginEdit = useCallback((comment: ThreadMessage) => {
-    setEditingCommentId(comment.id);
+  const reportError = useCallback((message: string | null) => {
+    dockRef.current?.showError(message);
   }, []);
-  const finishEdit = useCallback(() => {
-    setEditingCommentId(null);
+  const reportFeedback = useCallback((message: string | null) => {
+    dockRef.current?.showFeedback(message);
   }, []);
+  const beginEdit = useCallback(
+    (comment: ThreadMessage) => editingStore.set(comment.id),
+    [editingStore],
+  );
+  const finishEdit = useCallback(() => editingStore.set(null), [editingStore]);
   const renderComment = useCallback(
     ({ item: comment }: ListRenderItemInfo<ThreadMessage>) => {
       const replied = comment.replyToId
@@ -242,12 +252,12 @@ export function CommentThread({
           canMutate={canMutate}
           comment={comment}
           currentUserId={currentUserId}
-          editing={editingCommentId === comment.id && editable}
+          editingStore={editingStore}
           features={features}
-          highlighted={highlightedCommentId === comment.id}
+          highlightStore={highlightStore}
           onBeginEdit={beginEdit}
-          onError={setError}
-          onFeedback={setFeedback}
+          onError={reportError}
+          onFeedback={reportFeedback}
           onFocusEdit={focusCommentEditor}
           onFinishEdit={finishEdit}
           onReply={selectReply}
@@ -276,14 +286,16 @@ export function CommentThread({
       canMutate,
       commentsById,
       currentUserId,
-      editingCommentId,
+      editingStore,
       features,
       finishEdit,
       focusCommentEditor,
-      highlightedCommentId,
+      highlightStore,
       mentionsByCommentId,
       profilesById,
       reactionsByCommentId,
+      reportError,
+      reportFeedback,
       selectReply,
     ],
   );
@@ -338,17 +350,11 @@ export function CommentThread({
           <CommentComposerDock
             actions={actions}
             canMutate={canMutate}
-            error={error}
-            feedback={feedback}
             features={features}
-            inputRef={composerRef}
             mentionMembers={mentionMembers}
-            onError={setError}
-            onFeedback={setFeedback}
             onFocus={unfreezeChatScroll}
-            onReplyChange={setReplyDraft}
             phase={phase ?? null}
-            replyDraft={replyDraft}
+            ref={dockRef}
           />
         </KeyboardStickyView>
       </View>

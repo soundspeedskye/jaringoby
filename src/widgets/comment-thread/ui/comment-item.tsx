@@ -5,6 +5,10 @@ import type { FocusEvent } from "react-native";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { formatCommentTime } from "../lib/format-comment-time";
+import {
+  useIsSelectedComment,
+  type SelectedCommentStore,
+} from "../model/selected-comment-store";
 import type { ThreadActions, ThreadFeatures, ThreadMessage } from "../model/types";
 import { validateCommentBody } from "@/shared/lib/domain/replies";
 import { isRenderableMention } from "@/shared/lib/domain/comment-mentions";
@@ -34,8 +38,8 @@ export const CommentItem = memo(function CommentItem({
   canMutate,
   comment,
   currentUserId,
-  editing,
-  highlighted,
+  editingStore,
+  highlightStore,
   onBeginEdit,
   onError,
   onFeedback,
@@ -56,16 +60,18 @@ export const CommentItem = memo(function CommentItem({
   canEdit: boolean;
   canMutate: boolean;
   comment: ThreadMessage;
-  highlighted?: boolean;
   currentUserId?: string;
-  editing: boolean;
+  /** 편집 중인 줄. 스레드가 아니라 줄이 직접 구독해 옮겨 갈 때 둘만 다시 그린다. */
+  editingStore: SelectedCommentStore;
+  /** 소식함에서 들어와 잠시 강조되는 줄. 구독 이유는 editingStore와 같다. */
+  highlightStore: SelectedCommentStore;
   features: ThreadFeatures;
   onBeginEdit: (comment: ThreadMessage) => void;
   onError: (message: string | null) => void;
   onFeedback: (message: string | null) => void;
   onFocusEdit: (commentId: string, event: FocusEvent) => void;
   onFinishEdit: () => void;
-  onReply: (comment: ThreadMessage) => void;
+  onReply: (comment: ThreadMessage, authorNickname: string) => void;
   profile?: Profile;
   reactions: CommentReaction[];
   mentions?: readonly import("@/shared/api/types").CommentMention[];
@@ -73,6 +79,9 @@ export const CommentItem = memo(function CommentItem({
   repliedProfile?: Profile;
 }) {
   const { showDialog } = useAppDialog();
+  const editing = useIsSelectedComment(editingStore, comment.id) && canEdit;
+  const highlighted = useIsSelectedComment(highlightStore, comment.id);
+  const authorNickname = profile?.nickname ?? "알 수 없음";
   const [editingBody, setEditingBody] = useState(comment.body);
   const [reactingEmoji, setReactingEmoji] =
     useState<CommentReactionEmoji | null>(null);
@@ -103,7 +112,7 @@ export const CommentItem = memo(function CommentItem({
   const openMessageMenu = useCallback(() => {
     const buttons = [
       ...(features.replies
-        ? [{ text: "답글", onPress: () => onReply(comment) }]
+        ? [{ text: "답글", onPress: () => onReply(comment, authorNickname) }]
         : []),
       ...(!comment.deletedAt
         ? [{ text: "복사", onPress: () => void copyMessage() }]
@@ -117,7 +126,7 @@ export const CommentItem = memo(function CommentItem({
         : "댓글을 복사할 수 있어요.",
       buttons,
     );
-  }, [comment, copyMessage, features.replies, onReply, showDialog]);
+  }, [authorNickname, comment, copyMessage, features.replies, onReply, showDialog]);
   const saveEdit = async () => {
     const validation = validateCommentBody(editingBody, features.maxLength);
     if (!validation.valid) {
@@ -205,7 +214,7 @@ export const CommentItem = memo(function CommentItem({
       <View style={[styles.messageGroup, mine && styles.messageGroupMine]}>
         {!mine ? (
           <Text style={styles.messageAuthor}>
-            {profile?.nickname ?? "알 수 없음"}
+            {authorNickname}
           </Text>
         ) : null}
         <Pressable
