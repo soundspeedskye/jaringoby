@@ -2,7 +2,8 @@ import { useCallback, useMemo } from 'react';
 import type { Expense } from '@/shared/api/types';
 import type { AppStoreState } from '@/shared/model/app-store';
 import { shallowSetEqual, useAppStoreSelector } from '@/shared/providers/app-store-provider';
-import { useIndexedArray } from '@/shared/providers/store-hooks';
+import type { AppIndexes } from '@/shared/model/app-indexes';
+import { useIndexedArray, useIndexedList } from '@/shared/providers/store-hooks';
 
 const EMPTY_EXPENSES: Expense[] = [];
 
@@ -10,15 +11,10 @@ const EMPTY_UNREAD_IDS: ReadonlySet<string> = new Set<string>();
 
 const EMPTY_UNREAD_COUNTS: ReadonlyMap<string, number> = new Map<string, number>();
 
+const pickExpensesByPeriodId = (indexes: AppIndexes) => indexes.expensesByPeriodId;
+
 export function usePeriodExpenses(periodId: string | undefined): Expense[] {
-  return useIndexedArray(
-    useCallback(
-      (state: AppStoreState) => (
-        periodId ? state.indexes.expensesByPeriodId.get(periodId) ?? EMPTY_EXPENSES : EMPTY_EXPENSES
-      ),
-      [periodId],
-    ),
-  );
+  return useIndexedList(pickExpensesByPeriodId, periodId);
 }
 
 /**

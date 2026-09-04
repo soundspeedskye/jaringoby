@@ -1,42 +1,28 @@
-import { useCallback } from 'react';
 import type { Comment, CommentMention, CommentReaction, Expense } from '@/shared/api/types';
-import type { AppStoreState } from '@/shared/model/app-store';
+import type { AppIndexes } from '@/shared/model/app-indexes';
 import {
-  shallowMapEqual,
-  useAppStoreSelector,
-} from '@/shared/providers/app-store-provider';
-import {
-  shallowArrayMapEqual,
-  useIndexedArray,
-  useStableIds,
+  useIndexedCounts,
+  useIndexedList,
+  useIndexedListMap,
 } from '@/shared/providers/store-hooks';
 
-const EMPTY_COMMENTS: Comment[] = [];
+const pickCommentsByExpenseId = (indexes: AppIndexes) => indexes.commentsByExpenseId;
 
-const EMPTY_REACTIONS_BY_COMMENT: ReadonlyMap<string, CommentReaction[]> = new Map();
-const EMPTY_MENTIONS_BY_COMMENT: ReadonlyMap<string, CommentMention[]> = new Map();
+const pickCommentCountByExpenseId = (indexes: AppIndexes) => indexes.commentCountByExpenseId;
+
+const pickReactionsByCommentId = (indexes: AppIndexes) => indexes.reactionsByCommentId;
+
+const pickMentionsByCommentId = (indexes: AppIndexes) => indexes.mentionsByCommentId;
 
 export function useExpenseComments(expenseId: string | undefined): Comment[] {
-  return useIndexedArray(
-    useCallback(
-      (state: AppStoreState) => (
-        expenseId ? state.indexes.commentsByExpenseId.get(expenseId) ?? EMPTY_COMMENTS : EMPTY_COMMENTS
-      ),
-      [expenseId],
-    ),
-  );
+  return useIndexedList(pickCommentsByExpenseId, expenseId);
 }
 
 export function useCommentCounts(expenses: readonly Expense[]): ReadonlyMap<string, number> {
-  const selector = useCallback((state: AppStoreState) => {
-    const counts = new Map<string, number>();
-    expenses.forEach((expense) => {
-      const count = state.indexes.commentCountByExpenseId.get(expense.id);
-      if (count) counts.set(expense.id, count);
-    });
-    return counts;
-  }, [expenses]);
-  return useAppStoreSelector(selector, shallowMapEqual);
+  return useIndexedCounts(
+    pickCommentCountByExpenseId,
+    expenses.map((expense) => expense.id),
+  );
 }
 
 /**
@@ -48,32 +34,12 @@ export function useCommentCounts(expenses: readonly Expense[]): ReadonlyMap<stri
 export function useReactionsByCommentId(
   commentIds: readonly string[],
 ): ReadonlyMap<string, CommentReaction[]> {
-  const normalizedIds = useStableIds(commentIds);
-  const selector = useCallback((state: AppStoreState) => {
-    if (normalizedIds.length === 0) return EMPTY_REACTIONS_BY_COMMENT;
-    const grouped = new Map<string, CommentReaction[]>();
-    normalizedIds.forEach((commentId) => {
-      const reactions = state.indexes.reactionsByCommentId.get(commentId);
-      if (reactions) grouped.set(commentId, reactions);
-    });
-    return grouped.size ? grouped : EMPTY_REACTIONS_BY_COMMENT;
-  }, [normalizedIds]);
-  return useAppStoreSelector(selector, shallowArrayMapEqual);
+  return useIndexedListMap(pickReactionsByCommentId, commentIds);
 }
 
 /** 현재 상세 화면 댓글의 멘션을 comment별로 묶어 노출한다. */
 export function useMentionsByCommentId(
   commentIds: readonly string[],
 ): ReadonlyMap<string, CommentMention[]> {
-  const normalizedIds = useStableIds(commentIds);
-  const selector = useCallback((state: AppStoreState) => {
-    if (normalizedIds.length === 0) return EMPTY_MENTIONS_BY_COMMENT;
-    const grouped = new Map<string, CommentMention[]>();
-    normalizedIds.forEach((commentId) => {
-      const mentions = state.indexes.mentionsByCommentId.get(commentId);
-      if (mentions) grouped.set(commentId, mentions);
-    });
-    return grouped.size ? grouped : EMPTY_MENTIONS_BY_COMMENT;
-  }, [normalizedIds]);
-  return useAppStoreSelector(selector, shallowArrayMapEqual);
+  return useIndexedListMap(pickMentionsByCommentId, commentIds);
 }

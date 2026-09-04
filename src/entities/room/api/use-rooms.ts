@@ -1,50 +1,36 @@
 import { useCallback } from 'react';
 import type { Room, RoomMemberStats } from '@/shared/api/types';
+import type { AppIndexes } from '@/shared/model/app-indexes';
 import type { AppStoreState } from '@/shared/model/app-store';
+import { useAppStoreSelector } from '@/shared/providers/app-store-provider';
 import {
-  shallowMapEqual,
-  useAppStoreSelector,
-} from '@/shared/providers/app-store-provider';
-import { useIndexedArray, useStableIds } from '@/shared/providers/store-hooks';
+  useIndexedList,
+  useIndexedMap,
+  useIndexedValue,
+} from '@/shared/providers/store-hooks';
 
 const EMPTY_CLOSED_ROOMS: ClosedRoomSummary[] = [];
 
 const selectActiveRoom = (state: AppStoreState) => state.activeRoom;
+
+const pickRoomById = (indexes: AppIndexes) => indexes.roomById;
+
+const pickStatsByRoomId = (indexes: AppIndexes) => indexes.statsByRoomId;
 
 export function useActiveRoom(): Room | null {
   return useAppStoreSelector(selectActiveRoom);
 }
 
 export function useRoom(roomId: string | undefined): Room | undefined {
-  const selector = useCallback(
-    (state: AppStoreState) => roomId ? state.indexes.roomById.get(roomId) : undefined,
-    [roomId],
-  );
-  return useAppStoreSelector(selector);
+  return useIndexedValue(pickRoomById, roomId);
 }
 
 export function useRooms(roomIds: readonly string[]): ReadonlyMap<string, Room> {
-  const normalizedIds = useStableIds(roomIds);
-  const selector = useCallback((state: AppStoreState) => {
-    const rooms = new Map<string, Room>();
-    normalizedIds.forEach((roomId) => {
-      const room = state.indexes.roomById.get(roomId);
-      if (room) rooms.set(roomId, room);
-    });
-    return rooms;
-  }, [normalizedIds]);
-  return useAppStoreSelector(selector, shallowMapEqual);
+  return useIndexedMap(pickRoomById, roomIds);
 }
 
 export function useRoomStats(roomId: string | undefined): RoomMemberStats[] {
-  return useIndexedArray(
-    useCallback(
-      (state: AppStoreState) => (
-        roomId ? state.indexes.statsByRoomId.get(roomId) ?? [] : []
-      ),
-      [roomId],
-    ),
-  );
+  return useIndexedList(pickStatsByRoomId, roomId);
 }
 
 export type ClosedRoomSummary = {
