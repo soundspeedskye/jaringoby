@@ -11,6 +11,7 @@ import { GlassSurface } from "@/shared/ui/glass-surface";
 import { NoticeBanner } from "@/shared/ui/notice-banner";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useCurrentUser } from "@/entities/member/api/use-members";
 import { useActiveRoom } from "@/entities/room/api/use-rooms";
@@ -38,8 +39,9 @@ export function RoomLeavePage() {
   const { showDialog } = useAppDialog();
 
   const [successorId, setSuccessorId] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { error: message, submit, submitting } = useSubmit(
+    mode === "switch" ? "방을 옮기지 못했어요." : "방을 나가지 못했어요.",
+  );
 
   const goHome = useCallback(() => router.dismissTo("/"), [router]);
 
@@ -50,47 +52,37 @@ export function RoomLeavePage() {
   const soloOwner = isOwner && otherMembers.length === 0;
   const needsSuccessor = isOwner && otherMembers.length > 0;
 
-  const submit = useCallback(async () => {
-    if (!activeRoom) return;
-    if (needsSuccessor && !successorId) {
-      setMessage("방장을 넘길 참여자를 선택해 주세요.");
-      return;
-    }
-    setMessage(null);
-    setSubmitting(true);
-    try {
-      const successor = needsSuccessor ? (successorId ?? undefined) : undefined;
-      if (mode === "switch") {
-        await switchRoom({
-          leaveRoomId: activeRoom.id,
-          successorId: successor,
-          joinCode,
-        });
-      } else {
-        await leaveRoom(activeRoom.id, successor);
-      }
-      goHome();
-    } catch (reason) {
-      setMessage(
-        reason instanceof Error
-          ? reason.message
-          : mode === "switch"
-            ? "방을 옮기지 못했어요."
-            : "방을 나가지 못했어요.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }, [
-    activeRoom,
-    goHome,
-    joinCode,
-    leaveRoom,
-    mode,
-    needsSuccessor,
-    successorId,
-    switchRoom,
-  ]);
+  const leaveCurrentRoom = useCallback(
+    () =>
+      submit(async () => {
+        if (!activeRoom) return;
+        if (needsSuccessor && !successorId) {
+          return "방장을 넘길 참여자를 선택해 주세요.";
+        }
+        const successor = needsSuccessor ? (successorId ?? undefined) : undefined;
+        if (mode === "switch") {
+          await switchRoom({
+            leaveRoomId: activeRoom.id,
+            successorId: successor,
+            joinCode,
+          });
+        } else {
+          await leaveRoom(activeRoom.id, successor);
+        }
+        goHome();
+      }),
+    [
+      activeRoom,
+      goHome,
+      joinCode,
+      leaveRoom,
+      mode,
+      needsSuccessor,
+      submit,
+      successorId,
+      switchRoom,
+    ],
+  );
 
   const closeSoloRoom = useCallback(() => {
     if (!activeRoom) return;
@@ -103,24 +95,14 @@ export function RoomLeavePage() {
           text: "방 닫기",
           style: "destructive",
           onPress: () =>
-            void (async () => {
-              setMessage(null);
-              setSubmitting(true);
-              try {
-                await closeRoom(activeRoom.id);
-                goHome();
-              } catch (reason) {
-                setMessage(
-                  reason instanceof Error ? reason.message : "방을 닫지 못했어요.",
-                );
-              } finally {
-                setSubmitting(false);
-              }
-            })(),
+            void submit(async () => {
+              await closeRoom(activeRoom.id);
+              goHome();
+            }, "방을 닫지 못했어요."),
         },
       ],
     );
-  }, [activeRoom, closeRoom, goHome, showDialog]);
+  }, [activeRoom, closeRoom, goHome, showDialog, submit]);
 
   const title = mode === "switch" ? "방 옮기기" : "방 나가기";
 
@@ -227,7 +209,7 @@ export function RoomLeavePage() {
           disabled={needsSuccessor && !successorId}
           label={mode === "switch" ? "나가고 새 방 참여" : "방 나가기"}
           loading={submitting}
-          onPress={() => void submit()}
+          onPress={() => void leaveCurrentRoom()}
           style={styles.submitButton}
           variant="danger"
         />

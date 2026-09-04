@@ -29,6 +29,7 @@ import type { InvitePreview } from "@/shared/api/types";
 import { createPeriodTimeline, getPeriodPhase } from "@/shared/lib/domain/period";
 import { isValidInviteCodeFormat, normalizeInviteCode } from "@/shared/lib/domain/invites";
 import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useActiveRoom } from "@/entities/room/api/use-rooms";
 import { useAppStatus } from "@/shared/providers/app-status-provider";
@@ -41,9 +42,16 @@ export function RoomJoinPage() {
   const { loading } = useAppStatus();
   const [code, setCode] = useState("");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [joining, setJoining] = useState(false);
+  // 코드 확인과 참여는 각자 진행 표시를 가지지만 안내 문구 자리는 하나다.
+  const lookup = useSubmit("코드와 일치하는 방을 찾지 못했어요.");
+  const joinFlow = useSubmit("방에 참여하지 못했어요.");
+  const message = lookup.error ?? joinFlow.error;
+  const previewing = lookup.submitting;
+  const joining = joinFlow.submitting;
+  const clearMessage = () => {
+    lookup.setError(null);
+    joinFlow.setError(null);
+  };
   const timeline = useMemo(
     () =>
       preview?.currentPeriod
@@ -75,29 +83,22 @@ export function RoomJoinPage() {
     return () => subscription.remove();
   }, [returnToRoomHome]);
 
-  const lookUp = async () => {
-    setMessage(null);
-    // Reject impossible codes locally: preview_invite is rate limited server-side,
-    // so a typo should not spend one of the user's lookup attempts.
-    if (!isValidInviteCodeFormat(normalizedCode)) {
-      setPreview(null);
-      setMessage("참여 코드는 영문·숫자 6자리예요.");
-      return;
-    }
-    setPreviewing(true);
-    try {
-      setPreview(await previewInvite(normalizedCode));
-    } catch (reason) {
-      setPreview(null);
-      setMessage(
-        reason instanceof Error
-          ? reason.message
-          : "코드와 일치하는 방을 찾지 못했어요.",
-      );
-    } finally {
-      setPreviewing(false);
-    }
-  };
+  const lookUp = () =>
+    lookup.submit(async () => {
+      joinFlow.setError(null);
+      // Reject impossible codes locally: preview_invite is rate limited server-side,
+      // so a typo should not spend one of the user's lookup attempts.
+      if (!isValidInviteCodeFormat(normalizedCode)) {
+        setPreview(null);
+        return "참여 코드는 영문·숫자 6자리예요.";
+      }
+      try {
+        setPreview(await previewInvite(normalizedCode));
+      } catch (reason) {
+        setPreview(null);
+        throw reason;
+      }
+    });
 
   // 한 사람은 한 방에만 참여할 수 있다. 이미 방에 있으면 새 방으로 곧장 참여하지
   // 않고, 현재 방을 나가고 참여하는 화면(원자적 전환)으로 넘긴다.
@@ -121,18 +122,11 @@ export function RoomJoinPage() {
       });
       return;
     }
-    setMessage(null);
-    setJoining(true);
-    try {
+    return joinFlow.submit(async () => {
+      lookup.setError(null);
       await joinRoom(preview.code);
       router.dismissTo("/");
-    } catch (reason) {
-      setMessage(
-        reason instanceof Error ? reason.message : "방에 참여하지 못했어요.",
-      );
-    } finally {
-      setJoining(false);
-    }
+    });
   };
 
   if (loading) {
@@ -166,7 +160,7 @@ export function RoomJoinPage() {
             onChangeText={(value) => {
               setCode(normalizeInviteCode(value));
               setPreview(null);
-              setMessage(null);
+              clearMessage();
             }}
             placeholder="SAVE55"
             value={code}

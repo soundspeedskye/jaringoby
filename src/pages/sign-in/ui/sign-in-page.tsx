@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useSession } from "@/shared/providers/session-provider";
 import { Field } from "@/shared/ui/field";
 import { FormMessage } from "@/shared/ui/form-message";
@@ -23,12 +24,16 @@ export function SignInPage() {
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [resetting, setResetting] = useState(false);
   const [resetReadyAt, setResetReadyAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // 로그인/가입과 재설정 메일은 각자 진행 표시를 가지지만 오류 자리는 하나다.
+  // 새 시도를 시작할 때 상대 쪽 오류도 함께 지워 두 문구가 겹치지 않게 한다.
+  const account = useSubmit("계정 요청을 처리하지 못했어요.");
+  const reset = useSubmit("재설정 메일을 보내지 못했어요.");
+  const error = account.error ?? reset.error;
+  const submitting = account.submitting;
+  const resetting = reset.submitting;
 
   // 남은 시간은 항상 Date.now()로 다시 계산한다. 카운터를 1씩 깎으면 앱이
   // 백그라운드에 있는 동안 타이머가 멈춰 실제보다 오래 잠긴다.
@@ -39,53 +44,34 @@ export function SignInPage() {
     return () => clearTimeout(timer);
   }, [now, resetReadyAt]);
 
-  const submit = async () => {
-    setError(null);
-    setMessage(null);
-    setSubmitting(true);
-    try {
+  const submitAccount = () =>
+    account.submit(async () => {
+      reset.setError(null);
+      setMessage(null);
       if (mode === "SIGN_IN") {
         await signIn(email, password);
-      } else {
-        const result = await signUp(email, password, nickname);
-        if (result === "CONFIRM_EMAIL")
-          setMessage(
-            "인증 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.",
-          );
+        return;
       }
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "계정 요청을 처리하지 못했어요.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      const result = await signUp(email, password, nickname);
+      if (result === "CONFIRM_EMAIL") {
+        setMessage(
+          "인증 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.",
+        );
+      }
+    });
 
-  const resetPassword = async () => {
-    if (resetting || resetCooldown > 0) return;
-    setError(null);
-    setMessage(null);
-    setResetting(true);
-    try {
+  const resetPassword = () =>
+    reset.submit(async () => {
+      if (resetCooldown > 0) return;
+      account.setError(null);
+      setMessage(null);
       await requestPasswordReset(email);
       setMessage("비밀번호 재설정 링크를 이메일로 보냈어요.");
       // 보내지 못했을 때는 잠그지 않는다. 주소 오타처럼 사용자가 바로 고쳐
       // 다시 시도할 수 있는 실패가 대부분이다.
       setResetReadyAt(Date.now() + RESET_COOLDOWN_MS);
       setNow(Date.now());
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "재설정 메일을 보내지 못했어요.",
-      );
-    } finally {
-      setResetting(false);
-    }
-  };
+    });
 
   const resetLocked = resetting || resetCooldown > 0;
   const resetLabel = resetting
@@ -162,7 +148,7 @@ export function SignInPage() {
         <PrimaryButton
           label={mode === "SIGN_IN" ? "로그인" : "계정 만들기"}
           loading={submitting}
-          onPress={() => void submit()}
+          onPress={() => void submitAccount()}
         />
         {mode === "SIGN_IN" ? (
           <Pressable

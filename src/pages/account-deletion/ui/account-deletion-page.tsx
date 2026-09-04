@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { fonts, palette, radii, shadow, spacing } from "@/shared/config/design";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useSession } from "@/shared/providers/session-provider";
 import { Field } from "@/shared/ui/field";
 import { FormMessage } from "@/shared/ui/form-message";
@@ -18,26 +19,27 @@ export function AccountDeletionPage() {
   const [password, setPassword] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  // 삭제가 성공하면 SessionProvider가 곧바로 로그인 화면으로 넘긴다. 그 사이
+  // 스피너가 잠깐 꺼지지 않도록, 성공 이후로는 이 화면을 계속 loading으로 둔다.
+  const [deleted, setDeleted] = useState(false);
+  const {
+    error: message,
+    setError: setMessage,
+    submit,
+    submitting,
+  } = useSubmit("계정을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.");
 
   const goBack = useCallback(() => router.dismissTo("/profile"), [router]);
 
-  const submitDeletion = useCallback(async () => {
-    setMessage(null);
-    setSubmitting(true);
-    try {
-      await deleteAccount(password);
-      // SessionProvider immediately switches the auth gate to the login screen.
-    } catch (reason) {
-      setMessage(
-        reason instanceof Error
-          ? reason.message
-          : "계정을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.",
-      );
-      setSubmitting(false);
-    }
-  }, [deleteAccount, password]);
+  const submitDeletion = useCallback(
+    () =>
+      submit(async () => {
+        await deleteAccount(password);
+        // SessionProvider immediately switches the auth gate to the login screen.
+        setDeleted(true);
+      }),
+    [deleteAccount, password, submit],
+  );
 
   const confirmDeletion = useCallback(() => {
     if (!password) {
@@ -49,7 +51,7 @@ export function AccountDeletionPage() {
       return;
     }
     setConfirmationOpen(true);
-  }, [confirmed, password]);
+  }, [confirmed, password, setMessage]);
 
   const cancelConfirmation = useCallback(() => setConfirmationOpen(false), []);
 
@@ -61,7 +63,7 @@ export function AccountDeletionPage() {
   return (
     <ModalFormScreen
       headerBottomSpacing="md"
-      loading={submitting}
+      loading={submitting || deleted}
       onBack={goBack}
       testID="account-deletion-screen"
       title="계정 탈퇴"
@@ -143,7 +145,7 @@ export function AccountDeletionPage() {
         <FormMessage message={message} />
         <PrimaryButton
           label="계정 영구 삭제"
-          loading={submitting}
+          loading={submitting || deleted}
           onPress={confirmDeletion}
           variant="danger"
         />

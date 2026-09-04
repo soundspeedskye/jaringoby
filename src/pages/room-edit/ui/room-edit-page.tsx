@@ -20,6 +20,7 @@ import {
 import { useCurrentUser } from "@/entities/member/api/use-members";
 import { useActiveRoom } from "@/entities/room/api/use-rooms";
 import { useActiveRoomMembers } from "@/shared/providers/app-data-hooks";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { formatWon } from "@/shared/lib/format";
 import type { Room } from "@/shared/api/types";
@@ -71,8 +72,9 @@ function EditRoomForm({
   const { updateRoomSettings } = useAppActions();
   const [name, setName] = useState(activeRoom.name);
   const [capacityText, setCapacityText] = useState(String(activeRoom.capacity));
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const { error: formError, submit, submitting } = useSubmit(
+    "방 설정을 저장하지 못했어요.",
+  );
   const capacity = Number(capacityText);
   const validationError = useMemo(
     () => validate({ name, capacity, currentCapacity: activeRoom.capacity }),
@@ -81,30 +83,16 @@ function EditRoomForm({
   const hasChanges =
     name.trim() !== activeRoom.name || capacity !== activeRoom.capacity;
 
-  const submit = async () => {
-    const error = validate({ name, capacity, currentCapacity: activeRoom.capacity });
-    if (error) {
-      setFormError(error);
-      return;
-    }
-
-    setFormError(null);
-    setSubmitting(true);
-    try {
+  const saveRoomSettings = () =>
+    submit(async () => {
+      if (validationError) return validationError;
       await updateRoomSettings({
         roomId: activeRoom.id,
         name: name.trim(),
         capacity,
       });
       router.back();
-    } catch (reason) {
-      setFormError(
-        reason instanceof Error ? reason.message : "방 설정을 저장하지 못했어요.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    });
 
   return (
     <ModalFormScreen
@@ -114,7 +102,7 @@ function EditRoomForm({
             disabled={!hasChanges || Boolean(validationError)}
             label="저장하기"
             loading={submitting}
-            onPress={() => void submit()}
+            onPress={() => void saveRoomSettings()}
           />
         </View>
       }

@@ -8,6 +8,7 @@ import { FormMessage } from '@/shared/ui/form-message';
 import { PrimaryButton } from '@/shared/ui/primary-button';
 import { Screen } from '@/shared/ui/screen';
 import { palette, spacing } from '@/shared/config/design';
+import { useSubmit } from '@/shared/lib/use-submit';
 import { useSession } from '@/shared/providers/session-provider';
 
 export function ResetPasswordPage() {
@@ -15,26 +16,15 @@ export function ResetPasswordPage() {
   const { completeRecovery, updatePassword } = useSession();
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { error, submit, submitting } = useSubmit('비밀번호를 바꾸지 못했어요.');
 
-  const submit = async () => {
-    if (password !== confirmation) {
-      setError('두 비밀번호가 같지 않아요.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
+  const changePassword = () =>
+    submit(async () => {
+      if (password !== confirmation) return '두 비밀번호가 같지 않아요.';
       await updatePassword(password);
       completeRecovery();
       router.replace('/');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '비밀번호를 바꾸지 못했어요.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    });
 
   return (
     <Screen testID="reset-password-screen">
@@ -47,7 +37,7 @@ export function ResetPasswordPage() {
         <Field autoComplete="new-password" label="새 비밀번호" onChangeText={setPassword} secureTextEntry value={password} />
         <Field autoComplete="new-password" label="새 비밀번호 확인" onChangeText={setConfirmation} secureTextEntry value={confirmation} />
         <FormMessage message={error} />
-        <PrimaryButton label="비밀번호 변경" loading={submitting} onPress={() => void submit()} />
+        <PrimaryButton label="비밀번호 변경" loading={submitting} onPress={() => void changePassword()} />
       </View>
     </Screen>
   );

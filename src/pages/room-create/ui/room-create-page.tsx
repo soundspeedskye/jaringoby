@@ -27,6 +27,7 @@ import {
 import { toSeoulLocalDate } from "@/shared/lib/domain/date-time";
 import { createKoreanHolidaySnapshot } from "@/shared/lib/domain/holidays";
 import { isWeekend, resolveFirstWeekStart } from "@/shared/lib/domain/week";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { formatKrwInput, formatWon } from "@/shared/lib/format";
 import { createUuid } from "@/shared/lib/uuid";
@@ -48,8 +49,9 @@ export function RoomCreatePage() {
   const [amountText, setAmountText] = useState("50,000");
   const [capacityText, setCapacityText] = useState("4");
   const [confirmedImmutable, setConfirmedImmutable] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const { error: formError, submit, submitting } = useSubmit(
+    "방을 만들지 못했어요.",
+  );
   const [clientRequestId] = useState(createUuid);
 
   const baseAmount = parseKrw(amountText);
@@ -70,16 +72,10 @@ export function RoomCreatePage() {
     });
   }, [baseAmount, firstWeekStart, today]);
 
-  const submit = async () => {
-    setFormError(null);
-    const error = validate({ name, baseAmount, capacity, confirmedImmutable });
-    if (error) {
-      setFormError(error);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
+  const createRoomWithSettings = () =>
+    submit(async () => {
+      const invalid = validate({ name, baseAmount, capacity, confirmedImmutable });
+      if (invalid) return invalid;
       await createRoom({
         name: name.trim(),
         baseAmount,
@@ -87,14 +83,7 @@ export function RoomCreatePage() {
         clientRequestId,
       });
       router.dismissTo("/");
-    } catch (reason) {
-      setFormError(
-        reason instanceof Error ? reason.message : "방을 만들지 못했어요.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    });
 
   return (
     <ModalFormScreen
@@ -102,7 +91,7 @@ export function RoomCreatePage() {
         <PrimaryButton
           label="이 조건으로 방 만들기"
           loading={submitting}
-          onPress={() => void submit()}
+          onPress={() => void createRoomWithSettings()}
         />
       }
       headerBottomSpacing="xl"

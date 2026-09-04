@@ -36,6 +36,7 @@ import {
   type LocalDate,
 } from "@/shared/model/types";
 import { useDeadlineNow } from "@/shared/lib/use-deadline-now";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { usePeriodMembers } from "@/entities/period/api/use-periods";
 import { useCurrentRoom } from "@/shared/providers/app-data-hooks";
@@ -87,8 +88,12 @@ export function ExpenseCreatePage() {
   const [occurredAt, setOccurredAt] = useState(() =>
     chooseInitialOccurrence(currentPeriod, currentMember),
   );
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const {
+    error: formError,
+    setError: setFormError,
+    submit,
+    submitting,
+  } = useSubmit("지출을 저장하지 못했어요.");
   const [clientRequestId] = useState(createUuid);
 
   if (!activeRoom || !currentPeriod || !currentMember) {
@@ -135,64 +140,45 @@ export function ExpenseCreatePage() {
     }
   };
 
-  const submit = async () => {
-    setFormError(null);
-    const normalizedAmount = amountText.replace(/[^0-9]/gu, "");
-    const amount = Number(normalizedAmount);
-    if (!normalizedAmount || !Number.isSafeInteger(amount) || amount < 0) {
-      setFormError("금액을 0원 이상의 정수로 입력해 주세요.");
-      return;
-    }
-    const normalizedPointAmount = pointAmountText.replace(/[^0-9]/gu, "");
-    const pointAmount = usesPoints ? Number(normalizedPointAmount) : 0;
-    if (
-      usesPoints &&
-      (!normalizedPointAmount ||
-        !Number.isSafeInteger(pointAmount) ||
-        pointAmount < 1)
-    ) {
-      setFormError("포인트 사용 금액을 1원 이상의 정수로 입력해 주세요.");
-      return;
-    }
-    if (!photoUri) {
-      setFormError("챌린지 지출에는 사진이 정확히 1장 필요해요.");
-      return;
-    }
-    if (memo.trim().length > 200) {
-      setFormError("메모는 200자 이내로 입력해 주세요.");
-      return;
-    }
-    const trimmedReason = exceptionReason.trim();
-    if (isException && !trimmedReason) {
-      setFormError("예외 사유를 입력해 주세요.");
-      return;
-    }
-    if (trimmedReason.length > EXPENSE_EXCEPTION_REASON_MAX_LENGTH) {
-      setFormError(
-        `예외 사유는 ${EXPENSE_EXCEPTION_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`,
-      );
-      return;
-    }
-    const occurredOn = toSeoulLocalDate(occurredAt);
-    if (!effectiveDates.includes(occurredOn)) {
-      setFormError("주말이나 공휴일 지출은 주차 한도에 넣을 수 없어요.");
-      return;
-    }
-    // D3: 합류일 포함 — 같은 날 합류 전 시각의 지출도 유효 (day 단위 판정).
-    if (occurredOn < currentMember.joinedDate) {
-      setFormError("합류 전 지출은 주차에 소급 등록할 수 없어요.");
-      return;
-    }
-    if (
-      occurredAt.getTime() < timeline.S ||
-      occurredAt.getTime() >= timeline.E
-    ) {
-      setFormError("이번 주차 기간 안에서 발생한 지출만 등록할 수 있어요.");
-      return;
-    }
+  const saveExpense = () =>
+    submit(async () => {
+      const normalizedAmount = amountText.replace(/[^0-9]/gu, "");
+      const amount = Number(normalizedAmount);
+      if (!normalizedAmount || !Number.isSafeInteger(amount) || amount < 0) {
+        return "금액을 0원 이상의 정수로 입력해 주세요.";
+      }
+      const normalizedPointAmount = pointAmountText.replace(/[^0-9]/gu, "");
+      const pointAmount = usesPoints ? Number(normalizedPointAmount) : 0;
+      if (
+        usesPoints &&
+        (!normalizedPointAmount ||
+          !Number.isSafeInteger(pointAmount) ||
+          pointAmount < 1)
+      ) {
+        return "포인트 사용 금액을 1원 이상의 정수로 입력해 주세요.";
+      }
+      if (!photoUri) return "챌린지 지출에는 사진이 정확히 1장 필요해요.";
+      if (memo.trim().length > 200) return "메모는 200자 이내로 입력해 주세요.";
+      const trimmedReason = exceptionReason.trim();
+      if (isException && !trimmedReason) return "예외 사유를 입력해 주세요.";
+      if (trimmedReason.length > EXPENSE_EXCEPTION_REASON_MAX_LENGTH) {
+        return `예외 사유는 ${EXPENSE_EXCEPTION_REASON_MAX_LENGTH}자 이내로 입력해 주세요.`;
+      }
+      const occurredOn = toSeoulLocalDate(occurredAt);
+      if (!effectiveDates.includes(occurredOn)) {
+        return "주말이나 공휴일 지출은 주차 한도에 넣을 수 없어요.";
+      }
+      // D3: 합류일 포함 — 같은 날 합류 전 시각의 지출도 유효 (day 단위 판정).
+      if (occurredOn < currentMember.joinedDate) {
+        return "합류 전 지출은 주차에 소급 등록할 수 없어요.";
+      }
+      if (
+        occurredAt.getTime() < timeline.S ||
+        occurredAt.getTime() >= timeline.E
+      ) {
+        return "이번 주차 기간 안에서 발생한 지출만 등록할 수 있어요.";
+      }
 
-    setSubmitting(true);
-    try {
       const expense = await addExpense({
         periodId: currentPeriod.id,
         amount,
@@ -210,14 +196,7 @@ export function ExpenseCreatePage() {
         pathname: "/expense/[id]",
         params: { id: expense.id, rid: expense.clientRequestId },
       });
-    } catch (reason) {
-      setFormError(
-        reason instanceof Error ? reason.message : "지출을 저장하지 못했어요.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    });
 
   return (
     <ModalFormScreen
@@ -226,7 +205,7 @@ export function ExpenseCreatePage() {
           disabled={!canMutate}
           label="저장"
           loading={submitting}
-          onPress={() => void submit()}
+          onPress={() => void saveExpense()}
         />
       }
       onBack={() => router.back()}

@@ -22,6 +22,7 @@ import {
 import { formatFullDate, formatKrwInput } from "@/shared/lib/format";
 import { createUuid } from "@/shared/lib/uuid";
 import type { ExpenseCategory } from "@/shared/model/types";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import {
   pickSanitizedExpensePhoto,
@@ -91,8 +92,9 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
   const [photoMode, setPhotoMode] = useState<"keep" | "remove" | "replace">(
     "keep",
   );
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, submit, submitting } = useSubmit(
+    "기록을 남기지 못했어요.",
+  );
   const isSecretPurchase = category === "뒷구매";
   const isOwner = Boolean(
     room && currentUser && room.ownerId === currentUser.id,
@@ -140,27 +142,22 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
     }
   };
 
-  const submit = async () => {
-    const trimmedBody = body.trim();
-    const amountDigits = amountText.replace(/[^0-9]/gu, "");
-    const amount = Number(amountDigits);
-    const submittedTitle = isSecretPurchase ? "뒷구매 고해성사" : title.trim();
-    if (!room || !trimmedBody || !submittedTitle || submitting || !canEdit)
-      return;
-    if (!isEditing && isPoll && !hasValidPollOptions) {
-      setError("서로 다른 선택지를 2개 이상 입력해 주세요.");
-      return;
-    }
-    if (
-      isSecretPurchase &&
-      (!amountDigits || !Number.isSafeInteger(amount) || amount < 1)
-    ) {
-      setError("뒷구매 금액을 1원 이상의 정수로 입력해 주세요.");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
+  const savePost = () =>
+    submit(async () => {
+      const trimmedBody = body.trim();
+      const amountDigits = amountText.replace(/[^0-9]/gu, "");
+      const amount = Number(amountDigits);
+      const submittedTitle = isSecretPurchase ? "뒷구매 고해성사" : title.trim();
+      if (!room || !trimmedBody || !submittedTitle || !canEdit) return;
+      if (!isEditing && isPoll && !hasValidPollOptions) {
+        return "서로 다른 선택지를 2개 이상 입력해 주세요.";
+      }
+      if (
+        isSecretPurchase &&
+        (!amountDigits || !Number.isSafeInteger(amount) || amount < 1)
+      ) {
+        return "뒷구매 금액을 1원 이상의 정수로 입력해 주세요.";
+      }
       const secretPurchase = isSecretPurchase
         ? { amount, occurredAt: occurredAt.toISOString(), expenseCategory }
         : undefined;
@@ -184,28 +181,21 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
           secretPurchase,
         });
         router.replace(`/community/${post.id}`);
-      } else {
-        await addRoomPost({
-          roomId: room.id,
-          kind: isNotice ? "NOTICE" : isPoll ? "POLL" : "POST",
-          category: isPoll ? undefined : category,
-          title: submittedTitle,
-          body: trimmedBody,
-          options: isPoll ? normalizedOptions : undefined,
-          photoUri: photoUri ?? undefined,
-          secretPurchase,
-          clientRequestId: createUuid(),
-        });
-        router.back();
+        return;
       }
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "기록을 남기지 못했어요.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      await addRoomPost({
+        roomId: room.id,
+        kind: isNotice ? "NOTICE" : isPoll ? "POLL" : "POST",
+        category: isPoll ? undefined : category,
+        title: submittedTitle,
+        body: trimmedBody,
+        options: isPoll ? normalizedOptions : undefined,
+        photoUri: photoUri ?? undefined,
+        secretPurchase,
+        clientRequestId: createUuid(),
+      });
+      router.back();
+    });
 
   const canSubmit = Boolean(
     room &&
@@ -371,7 +361,7 @@ function BoardPostForm({ post }: { post?: RoomPost }) {
               ? "수정 완료"
               : "등록"
         }
-        onPress={() => void submit()}
+        onPress={() => void savePost()}
         style={styles.submit}
       />
     </ModalFormScreen>

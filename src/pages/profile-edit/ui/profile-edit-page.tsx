@@ -11,6 +11,7 @@ import { FormSection } from "@/shared/ui/form-section";
 import { PrimaryButton } from "@/shared/ui/primary-button";
 import { ANIMAL_AVATARS } from "@/shared/config/animals";
 import { fonts, palette, radii, spacing } from "@/shared/config/design";
+import { useSubmit } from "@/shared/lib/use-submit";
 import { useAppActions } from "@/shared/providers/app-actions-provider";
 import { useCurrentUser } from "@/entities/member/api/use-members";
 import { useAppDialog } from "@/shared/providers/app-dialog-provider";
@@ -33,8 +34,12 @@ export function ProfileEditPage() {
   const [photoChange, setPhotoChange] = useState<PhotoChange>({
     kind: "unchanged",
   });
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const {
+    error: message,
+    setError: setMessage,
+    submit,
+    submitting: saving,
+  } = useSubmit("프로필을 저장하지 못했어요.");
   // 화면을 연 시점만 사용한다. 최종 제한 판단은 항상 서버가 한다.
   const [openedAt] = useState(() => Date.now());
 
@@ -77,7 +82,7 @@ export function ProfileEditPage() {
         );
       }
     },
-    [showDialog],
+    [setMessage, showDialog],
   );
 
   const choosePhoto = useCallback(() => {
@@ -101,22 +106,17 @@ export function ProfileEditPage() {
     );
   }, [currentUser?.avatarUri, photoChange.kind, pickPhoto, showDialog]);
 
-  const save = useCallback(async () => {
-    if (!currentUser) return;
-    const nextNickname = nickname.trim();
-    if (nextNickname.length < 2 || nextNickname.length > 20) {
-      setMessage("닉네임은 앞뒤 공백을 제외하고 2~20자로 입력해 주세요.");
-      return;
-    }
-    if (cooldownActive) {
-      setMessage(nicknameHint);
-      return;
-    }
-    setSaving(true);
-    setMessage(null);
-    try {
-      if (nextNickname !== currentUser.nickname)
+  const save = () =>
+    submit(async () => {
+      if (!currentUser) return;
+      const nextNickname = nickname.trim();
+      if (nextNickname.length < 2 || nextNickname.length > 20) {
+        return "닉네임은 앞뒤 공백을 제외하고 2~20자로 입력해 주세요.";
+      }
+      if (cooldownActive) return nicknameHint;
+      if (nextNickname !== currentUser.nickname) {
         await updateNickname(nextNickname);
+      }
       if (
         avatarKey !== currentUser.avatar ||
         photoChange.kind !== "unchanged"
@@ -132,26 +132,7 @@ export function ProfileEditPage() {
         });
       }
       router.back();
-    } catch (reason) {
-      setMessage(
-        reason instanceof Error
-          ? reason.message
-          : "프로필을 저장하지 못했어요.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    avatarKey,
-    cooldownActive,
-    currentUser,
-    nickname,
-    nicknameHint,
-    photoChange,
-    router,
-    updateAvatar,
-    updateNickname,
-  ]);
+    });
 
   if (!currentUser) {
     return (

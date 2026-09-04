@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { AddExpenseInput, Expense } from "@/shared/api/types";
 import { ExpensePaymentFields } from "@/entities/expense/ui/expense-payment-fields";
 import { useInputFocus } from "@/shared/lib/input-focus-context";
+import { useSubmit } from "@/shared/lib/use-submit";
 import {
   fonts,
   palette,
@@ -56,8 +57,9 @@ export function ExpenseEditor({
   const [draftOccurredAt, setDraftOccurredAt] = useState(
     () => new Date(expense.occurredAt),
   );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, submit, submitting: saving } = useSubmit(
+    "지출을 수정하지 못했어요.",
+  );
 
   const replacePhoto = async () => {
     try {
@@ -72,31 +74,24 @@ export function ExpenseEditor({
     }
   };
 
-  const save = async () => {
-    const amountText = draftAmount.replace(/[^0-9]/gu, "");
-    const amount = Number(amountText);
-    if (!amountText || !Number.isSafeInteger(amount) || amount < 0) {
-      setError("금액을 0원 이상의 정수로 입력해 주세요.");
-      return;
-    }
-    const pointAmountText = draftPointAmount.replace(/[^0-9]/gu, "");
-    const pointAmount = usesPoints ? Number(pointAmountText) : 0;
-    if (
-      usesPoints &&
-      (!pointAmountText ||
-        !Number.isSafeInteger(pointAmount) ||
-        pointAmount < 1)
-    ) {
-      setError("포인트 사용 금액을 1원 이상의 정수로 입력해 주세요.");
-      return;
-    }
-    if (!draftPhoto) {
-      setError("챌린지 지출에는 사진이 정확히 1장 필요해요.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
+  const save = () =>
+    submit(async () => {
+      const amountText = draftAmount.replace(/[^0-9]/gu, "");
+      const amount = Number(amountText);
+      if (!amountText || !Number.isSafeInteger(amount) || amount < 0) {
+        return "금액을 0원 이상의 정수로 입력해 주세요.";
+      }
+      const pointAmountText = draftPointAmount.replace(/[^0-9]/gu, "");
+      const pointAmount = usesPoints ? Number(pointAmountText) : 0;
+      if (
+        usesPoints &&
+        (!pointAmountText ||
+          !Number.isSafeInteger(pointAmount) ||
+          pointAmount < 1)
+      ) {
+        return "포인트 사용 금액을 1원 이상의 정수로 입력해 주세요.";
+      }
+      if (!draftPhoto) return "챌린지 지출에는 사진이 정확히 1장 필요해요.";
       await updateExpense(expense.id, {
         amount,
         pointAmount,
@@ -106,14 +101,7 @@ export function ExpenseEditor({
         occurredAt: draftOccurredAt.toISOString(),
       });
       onClose();
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "지출을 수정하지 못했어요.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+    });
 
   return (
     <GlassSurface style={styles.editorCard} testID="expense-inline-editor">
